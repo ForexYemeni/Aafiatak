@@ -25,7 +25,6 @@ function cleanup() {
 }
 
 function getClientIP(request: NextRequest): string {
-  // Try various headers for the real IP
   const forwarded = request.headers.get('x-forwarded-for')
   if (forwarded) {
     return forwarded.split(',')[0].trim()
@@ -48,7 +47,6 @@ function checkRateLimit(
   const entry = rateLimitStore.get(key)
 
   if (!entry || now > entry.resetTime) {
-    // New window
     const resetTime = now + windowMs
     rateLimitStore.set(key, { count: 1, resetTime })
     return { allowed: true, remaining: limit - 1, resetTime }
@@ -64,11 +62,8 @@ function checkRateLimit(
 
 // Rate limit configurations
 const RATE_LIMITS: Record<string, { limit: number; windowMs: number }> = {
-  // Login: 5 per minute
   login: { limit: 5, windowMs: 60 * 1000 },
-  // Registration: 3 per minute
   register: { limit: 3, windowMs: 60 * 1000 },
-  // General API: 100 per minute
   api: { limit: 100, windowMs: 60 * 1000 },
 }
 
@@ -82,7 +77,8 @@ function getRateLimitCategory(pathname: string): string {
   return 'api'
 }
 
-export function middleware(request: NextRequest) {
+// Next.js 16 proxy format
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   // Only rate limit API routes
