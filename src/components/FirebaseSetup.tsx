@@ -50,7 +50,7 @@ export default function FirebaseSetup() {
           <ol className="text-sm space-y-2 list-decimal list-inside">
             <li>افتح <a href="https://console.firebase.google.com" target="_blank" className="text-emerald-600 underline" rel="noreferrer">Firebase Console</a></li>
             <li>اضغط على &quot;Add Project&quot; (إضافة مشروع)</li>
-            <li>أدخل اسم المشروع (مثلاً: aafiatak)</li>
+            <li>أدخل اسم المشروع</li>
             <li>اختر عدم تفعيل Analytics (اختياري)</li>
             <li>اضغط &quot;Create Project&quot;</li>
           </ol>
@@ -68,7 +68,7 @@ export default function FirebaseSetup() {
             <li>من القائمة الجانبية، اضغط على &quot;Firestore Database&quot;</li>
             <li>اضغط &quot;Create Database&quot;</li>
             <li>اختر <strong>&quot;Start in test mode&quot;</strong> (للتجربة)</li>
-            <li>اختر أقرب موقع جغرافي (مثلاً: europe-west1)</li>
+            <li>اختر أقرب موقع جغرافي</li>
             <li>اضغط &quot;Done&quot;</li>
           </ol>
           <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-2">
@@ -88,7 +88,7 @@ export default function FirebaseSetup() {
             هذا المفتاح يسمح للتطبيق بالاتصال بقاعدة البيانات بشكل آمن.
           </p>
           <ol className="text-sm space-y-2 list-decimal list-inside">
-            <li>اذهب إلى <strong>Project Settings</strong> (⚙️ إعدادات المشروع)</li>
+            <li>اذهب إلى <strong>Project Settings</strong> (إعدادات المشروع)</li>
             <li>اختر تبويب &quot;Service Accounts&quot;</li>
             <li>اضغط &quot;Generate New Private Key&quot;</li>
             <li>سيتم تحميل ملف JSON - افتحه</li>
@@ -104,46 +104,47 @@ export default function FirebaseSetup() {
           <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-2">
             <AlertTriangle className="w-5 h-5 text-amber-600 mt-0.5 shrink-0" />
             <p className="text-sm text-amber-800">
-              إذا كنت تستخدم Vercel، أضف هذه المتغيرات في Settings → Environment Variables. أما محلياً، أضفها في ملف .env.local
+              أضف هذه المتغيرات في منصة الاستضافة (Environment Variables) أو في ملف .env.local محلياً
             </p>
           </div>
 
           <div className="space-y-3">
             <div className="space-y-1">
               <div className="flex items-center justify-between">
-                <Label className="font-bold text-sm">FIREBASE_PROJECT_ID</Label>
-                <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => copyToClipboard('FIREBASE_PROJECT_ID=')}>
-                  <Copy className="w-3 h-3 ml-1" /> نسخ
+                <span className="font-bold text-sm">FIREBASE_PROJECT_ID</span>
+                <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => copyToClipboard('FIREBASE_PROJECT_ID')}>
+                  <Copy className="w-3 h-3 ml-1" /> نسخ الاسم
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground">من ملف JSON: project_id</p>
-              <div className="bg-gray-50 border rounded p-2 text-xs font-mono text-left" dir="ltr">
-                aafiatak-26439
-              </div>
             </div>
 
             <div className="space-y-1">
               <div className="flex items-center justify-between">
-                <Label className="font-bold text-sm">FIREBASE_CLIENT_EMAIL</Label>
-                <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => copyToClipboard('FIREBASE_CLIENT_EMAIL=')}>
-                  <Copy className="w-3 h-3 ml-1" /> نسخ
+                <span className="font-bold text-sm">FIREBASE_CLIENT_EMAIL</span>
+                <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => copyToClipboard('FIREBASE_CLIENT_EMAIL')}>
+                  <Copy className="w-3 h-3 ml-1" /> نسخ الاسم
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground">من ملف JSON: client_email</p>
-              <div className="bg-gray-50 border rounded p-2 text-xs font-mono text-left break-all" dir="ltr">
-                firebase-adminsdk-fbsvc@aafiatak-26439.iam.gserviceaccount.com
-              </div>
             </div>
 
             <div className="space-y-1">
               <div className="flex items-center justify-between">
-                <Label className="font-bold text-sm">FIREBASE_PRIVATE_KEY</Label>
-                <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => copyToClipboard('FIREBASE_PRIVATE_KEY=')}>
-                  <Copy className="w-3 h-3 ml-1" /> نسخ
+                <span className="font-bold text-sm">FIREBASE_PRIVATE_KEY</span>
+                <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => copyToClipboard('FIREBASE_PRIVATE_KEY')}>
+                  <Copy className="w-3 h-3 ml-1" /> نسخ الاسم
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground">من ملف JSON: private_key - انسخه بالكامل بما فيه -----BEGIN و -----END</p>
             </div>
+          </div>
+
+          <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+            <p className="text-sm text-red-800 font-bold">تحذير أمني</p>
+            <p className="text-xs text-red-700 mt-1">
+              لا تشارك مفتاح الخدمة الخاص مع أي شخص. هذا المفتاح يعطي صلاحية كاملة لقاعدة البيانات.
+            </p>
           </div>
         </div>
       ),
@@ -177,7 +178,7 @@ export default function FirebaseSetup() {
               {firebaseStatus === 'connected' && (
                 <div className="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-full text-xs font-medium">
                   <CheckCircle2 className="w-3 h-3" />
-                  متصل بنجاح ✅
+                  متصل بنجاح
                 </div>
               )}
               {firebaseStatus === 'checking' && (
@@ -193,7 +194,6 @@ export default function FirebaseSetup() {
             </div>
           </CardHeader>
           <CardContent className="p-6">
-            {/* Step progress */}
             <div className="flex items-center justify-center gap-2 mb-6">
               {steps.map((_, i) => (
                 <button
@@ -250,8 +250,4 @@ export default function FirebaseSetup() {
       </motion.div>
     </div>
   )
-}
-
-function Label({ className, children }: { className?: string; children: React.ReactNode }) {
-  return <label className={className}>{children}</label>
 }
