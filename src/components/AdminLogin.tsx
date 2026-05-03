@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { Shield, ArrowRight, Loader2, AlertTriangle, Database } from 'lucide-react'
+import { Shield, ArrowRight, Loader2, AlertTriangle, Database, RefreshCw } from 'lucide-react'
 import { useAppStore } from '@/lib/store'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -16,7 +16,9 @@ export default function AdminLogin() {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
-  const [firebaseStatus, setFirebaseStatus] = useState<{ connected: boolean; error: string | null } | null>(null)
+  const [firebaseStatus, setFirebaseStatus] = useState<'checking' | 'connected' | 'disconnected'>('checking')
+  const [firebaseError, setFirebaseError] = useState<string | null>(null)
+  const [serverError, setServerError] = useState<string | null>(null)
 
   // Check Firebase connection on mount
   useEffect(() => {
@@ -24,16 +26,25 @@ export default function AdminLogin() {
   }, [])
 
   const checkFirebase = async () => {
+    setFirebaseStatus('checking')
     try {
       const res = await fetch('/api/firebase-status')
       if (res.ok) {
         const data = await res.json()
-        setFirebaseStatus(data)
+        if (data.connected) {
+          setFirebaseStatus('connected')
+          setFirebaseError(null)
+        } else {
+          setFirebaseStatus('disconnected')
+          setFirebaseError(data.error)
+        }
       } else {
-        setFirebaseStatus({ connected: false, error: 'فشل الاتصال بالخادم' })
+        setFirebaseStatus('disconnected')
+        setFirebaseError('فشل الاتصال بالخادم')
       }
     } catch {
-      setFirebaseStatus({ connected: false, error: 'فشل الاتصال بالخادم' })
+      setFirebaseStatus('disconnected')
+      setFirebaseError('فشل الاتصال بالخادم')
     }
   }
 
@@ -43,20 +54,9 @@ export default function AdminLogin() {
       return
     }
 
-    // Check Firebase first
-    if (firebaseStatus && !firebaseStatus.connected) {
-      toast({
-        title: 'خطأ في قاعدة البيانات',
-        description: firebaseStatus.error || 'Firebase غير متصل. تأكد من إعدادات قاعدة البيانات.',
-        variant: 'destructive',
-        duration: 8000,
-      })
-      return
-    }
-
+    setServerError(null)
     setLoading(true)
     try {
-      // Try login first
       const loginRes = await fetch('/api/admin/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -77,38 +77,45 @@ export default function AdminLogin() {
           toast({ title: 'تم تسجيل الدخول بنجاح', description: 'مرحباً ' + loginData.name })
         }
       } else if (loginRes.status === 401) {
-        // Wrong credentials - try init if no admin exists yet
-        const initRes = await fetch('/api/admin/init', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username, password, name: 'المدير' }),
+        // Wrong credentials
+        setServerError(loginData.error || 'اسم المستخدم أو كلمة المرور غير صحيحة')
+        toast({
+          title: 'خطأ في تسجيل الدخول',
+          description: loginData.error || 'اسم المستخدم أو كلمة المرور غير صحيحة',
+          variant: 'destructive',
+          duration: 8000,
         })
-
-        const initData = await initRes.json()
-
-        if (initRes.ok) {
-          setUser(initData, 'admin')
-          setView('admin-change-password')
-          toast({ title: 'تم إنشاء حساب المدير', description: 'يجب تغيير كلمة المرور الافتراضية' })
-        } else {
-          // Show the specific error
-          toast({
-            title: 'خطأ',
-            description: initData.error || initData.firebaseError || 'اسم المستخدم أو كلمة المرور غير صحيحة',
-            variant: 'destructive',
-            duration: 8000,
-          })
-        }
+      } else if (loginData.isFirestoreNotCreated) {
+        // Firestore not created yet
+        setServerError(loginData.error)
+        toast({
+          title: 'قاعدة البيانات غير مفعلة',
+          description: loginData.error,
+          variant: 'destructive',
+          duration: 15000,
+        })
+      } else if (loginData.isFirebaseError) {
+        // Firebase not configured
+        setServerError(loginData.error)
+        toast({
+          title: 'خطأ في قاعدة البيانات',
+          description: loginData.error,
+          variant: 'destructive',
+          duration: 15000,
+        })
+        setFirebaseStatus('disconnected')
       } else {
-        // Other error (500, etc.)
+        // Other server error
+        setServerError(loginData.error || 'حدث خطأ غير متوقع')
         toast({
           title: 'خطأ في الخادم',
-          description: loginData.error || loginData.firebaseError || 'حدث خطأ غير متوقع',
+          description: loginData.error || 'حدث خطأ غير متوقع',
           variant: 'destructive',
           duration: 8000,
         })
       }
     } catch (error) {
+      setServerError('تعذر الاتصال بالخادم. تأكد من اتصالك بالإنترنت.')
       toast({
         title: 'خطأ في الاتصال',
         description: 'تعذر الاتصال بالخادم. تأكد من اتصالك بالإنترنت.',
@@ -141,25 +148,59 @@ export default function AdminLogin() {
             </div>
             <CardTitle className="text-2xl font-bold">تسجيل دخول الإدارة</CardTitle>
             <p className="text-muted-foreground text-sm mt-1">أدخل بيانات المدير للوصول إلى لوحة التحكم</p>
+            
+            {/* Firebase connection indicator */}
+            <div className="flex items-center justify-center gap-2 mt-3">
+              {firebaseStatus === 'connected' && (
+                <div className="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-full text-xs font-medium">
+                  <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  قاعدة البيانات متصلة
+                </div>
+              )}
+              {firebaseStatus === 'disconnected' && (
+                <div className="inline-flex items-center gap-1.5 bg-red-50 text-red-700 px-3 py-1.5 rounded-full text-xs font-medium">
+                  <div className="w-2 h-2 rounded-full bg-red-500" />
+                  قاعدة البيانات غير متصلة
+                </div>
+              )}
+              {firebaseStatus === 'checking' && (
+                <div className="inline-flex items-center gap-1.5 bg-gray-50 text-gray-600 px-3 py-1.5 rounded-full text-xs font-medium">
+                  <RefreshCw className="w-3 h-3 animate-spin" />
+                  جاري التحقق...
+                </div>
+              )}
+              <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={checkFirebase}>
+                <RefreshCw className="w-3 h-3" />
+              </Button>
+            </div>
           </CardHeader>
           <CardContent className="p-6 space-y-4">
-            {/* Firebase status warning */}
-            {firebaseStatus && !firebaseStatus.connected && (
+            {/* Firebase status warning - show but DON'T block login */}
+            {firebaseStatus === 'disconnected' && (
               <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-start gap-2">
                 <AlertTriangle className="w-5 h-5 text-red-600 mt-0.5 shrink-0" />
                 <div className="text-sm">
                   <p className="font-bold text-red-800">قاعدة البيانات غير متصلة</p>
-                  <p className="text-red-700 mt-1">{firebaseStatus.error}</p>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="mt-2 border-red-300 text-red-700"
-                    onClick={() => setView('firebase-setup')}
-                  >
-                    <Database className="w-4 h-4 ml-1" />
-                    إعداد قاعدة البيانات
-                  </Button>
+                  <p className="text-red-700 mt-1">{firebaseError || 'لا يمكن الاتصال بـ Firebase'}</p>
+                  <div className="flex gap-2 mt-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="border-red-300 text-red-700"
+                      onClick={() => setView('firebase-setup')}
+                    >
+                      <Database className="w-4 h-4 ml-1" />
+                      إعداد قاعدة البيانات
+                    </Button>
+                  </div>
                 </div>
+              </div>
+            )}
+
+            {/* Server error display */}
+            {serverError && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                <p className="text-sm text-red-800 font-medium">{serverError}</p>
               </div>
             )}
 
@@ -198,7 +239,7 @@ export default function AdminLogin() {
             <Button
               className="w-full bg-gradient-to-r from-emerald-500 to-emerald-700 text-white hover:opacity-90 h-12 text-base"
               onClick={handleLogin}
-              disabled={loading || (firebaseStatus !== null && !firebaseStatus.connected)}
+              disabled={loading}
             >
               {loading ? (
                 <Loader2 className="w-5 h-5 animate-spin" />

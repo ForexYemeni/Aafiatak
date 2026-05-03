@@ -7,7 +7,10 @@ let firestoreInstance: admin.firestore.Firestore | null = null
 const firebaseConfig = {
   projectId: process.env.FIREBASE_PROJECT_ID,
   clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-  privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+  privateKey: process.env.FIREBASE_PRIVATE_KEY
+    ?.replace(/\\n/g, '\n')
+    ?.replace(/\\r\\n/g, '\n')
+    ?.trim(),
 }
 
 // Only initialize if ALL required credentials are present AND look valid
@@ -41,11 +44,11 @@ if (!admin.apps.length) {
     if (!firebaseConfig.projectId) missing.push('FIREBASE_PROJECT_ID')
     if (!firebaseConfig.clientEmail) missing.push('FIREBASE_CLIENT_EMAIL')
     if (!firebaseConfig.privateKey) missing.push('FIREBASE_PRIVATE_KEY')
-    
+
     if (missing.length > 0) {
       initializationError = `بيانات Firebase غير مكتملة. المتغيرات الناقصة: ${missing.join(', ')}`
     } else {
-      initializationError = 'بيانات Firebase غير صالحة. تأكد من صحة المفتاح الخاص.'
+      initializationError = 'بيانات Firebase غير صالحة. تأكد من صحة المفتاح الخاص أنه يحتوي على -----BEGIN PRIVATE KEY-----'
     }
     console.warn('⚠️ Firebase Admin SDK: Missing or invalid credentials.', missing.length > 0 ? `Missing: ${missing.join(', ')}` : '')
   }
