@@ -4,13 +4,41 @@ let firebaseInitialized = false
 let initializationError: string | null = null
 let firestoreInstance: admin.firestore.Firestore | null = null
 
+function parsePrivateKey(key: string | undefined): string | undefined {
+  if (!key) return undefined
+
+  let parsed = key.trim()
+
+  // If the key is base64 encoded (for Netlify compatibility)
+  if (!parsed.includes('-----BEGIN')) {
+    try {
+      const decoded = Buffer.from(parsed, 'base64').toString('utf-8')
+      if (decoded.includes('-----BEGIN')) {
+        parsed = decoded
+      }
+    } catch {
+      // Not base64, continue with as-is
+    }
+  }
+
+  // Replace escaped newlines with actual newlines
+  parsed = parsed
+    .replace(/\\n/g, '\n')
+    .replace(/\\r\\n/g, '\n')
+    .replace(/\r\n/g, '\n')
+
+  // Clean up any extra whitespace around the header/footer
+  parsed = parsed
+    .replace(/-----BEGIN PRIVATE KEY-----\s+/g, '-----BEGIN PRIVATE KEY-----\n')
+    .replace(/\s+-----END PRIVATE KEY-----/g, '\n-----END PRIVATE KEY-----')
+
+  return parsed.trim()
+}
+
 const firebaseConfig = {
   projectId: process.env.FIREBASE_PROJECT_ID,
   clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-  privateKey: process.env.FIREBASE_PRIVATE_KEY
-    ?.replace(/\\n/g, '\n')
-    ?.replace(/\\r\\n/g, '\n')
-    ?.trim(),
+  privateKey: parsePrivateKey(process.env.FIREBASE_PRIVATE_KEY),
 }
 
 // Only initialize if ALL required credentials are present AND look valid
@@ -18,7 +46,6 @@ const hasValidConfig = firebaseConfig.projectId &&
   firebaseConfig.clientEmail &&
   firebaseConfig.privateKey &&
   firebaseConfig.projectId !== 'your-project-id' &&
-  firebaseConfig.privateKey !== 'your-private-key' &&
   firebaseConfig.privateKey.includes('-----BEGIN')
 
 if (!admin.apps.length) {
