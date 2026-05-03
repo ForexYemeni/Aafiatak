@@ -177,6 +177,16 @@ export async function createBeneficiary(data: {
   return { id: docRef.id, ...data }
 }
 
+export async function updateBeneficiary(id: string, data: Record<string, any>) {
+  checkFirebase()
+  await firestore.collection('beneficiaries').doc(id).update({
+    ...data,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  })
+  const doc = await firestore.collection('beneficiaries').doc(id).get()
+  return docToObject(doc)
+}
+
 export async function countBeneficiaries() {
   checkFirebase()
   const snapshot = await firestore.collection('beneficiaries').get()
@@ -652,4 +662,304 @@ export async function updatePaymentMethod(id: string, data: Record<string, any>)
 export async function deletePaymentMethod(id: string) {
   checkFirebase()
   await firestore.collection('paymentMethods').doc(id).delete()
+}
+
+// ==================== ACTIVITY LOG ====================
+
+export async function createActivityLog(data: {
+  type: string
+  description: string
+  userId?: string
+  userName?: string
+  metadata?: Record<string, any>
+}) {
+  checkFirebase()
+  const docRef = await firestore.collection('activityLog').add({
+    ...data,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  })
+  return { id: docRef.id, ...data }
+}
+
+export async function getActivityLogs(limitCount: number = 20) {
+  checkFirebase()
+  const snapshot = await firestore.collection('activityLog')
+    .orderBy('createdAt', 'desc')
+    .limit(limitCount)
+    .get()
+  return snapshot.docs.map(docToObject)
+}
+
+// ==================== ALL BENEFICIARIES WITH DETAILS ====================
+
+export async function getAllBeneficiaries() {
+  checkFirebase()
+  const snapshot = await firestore.collection('beneficiaries')
+    .orderBy('createdAt', 'desc')
+    .get()
+  return snapshot.docs.map(doc => {
+    const data = doc.data()
+    const { password, ...rest } = data
+    return { id: doc.id, ...rest }
+  })
+}
+
+// ==================== CHAT SYSTEM ====================
+
+export async function getChatMessages(requestId: string, limitCount: number = 50) {
+  checkFirebase()
+  const snapshot = await firestore.collection('chats')
+    .where('requestId', '==', requestId)
+    .orderBy('createdAt', 'asc')
+    .limit(limitCount)
+    .get()
+  return snapshot.docs.map(docToObject)
+}
+
+export async function sendChatMessage(data: {
+  requestId: string
+  senderId: string
+  senderName: string
+  senderType: 'nurse' | 'beneficiary' | 'admin'
+  message: string
+}) {
+  checkFirebase()
+  const docRef = await firestore.collection('chats').add({
+    ...data,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  })
+  return { id: docRef.id, ...data }
+}
+
+// ==================== COUPONS ====================
+
+export async function createCoupon(data: {
+  code: string
+  discountPercent: number
+  maxUses: number
+  expiresAt: string
+  isActive: boolean
+}) {
+  checkFirebase()
+  const docRef = await firestore.collection('coupons').add({
+    ...data,
+    usedCount: 0,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  })
+  return { id: docRef.id, ...data, usedCount: 0 }
+}
+
+export async function getAllCoupons() {
+  checkFirebase()
+  const snapshot = await firestore.collection('coupons')
+    .orderBy('createdAt', 'desc')
+    .get()
+  return snapshot.docs.map(docToObject)
+}
+
+export async function getCouponById(id: string) {
+  checkFirebase()
+  const doc = await firestore.collection('coupons').doc(id).get()
+  if (!doc.exists) return null
+  return docToObject(doc)
+}
+
+export async function updateCoupon(id: string, data: Record<string, any>) {
+  checkFirebase()
+  await firestore.collection('coupons').doc(id).update({
+    ...data,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  })
+  const doc = await firestore.collection('coupons').doc(id).get()
+  return docToObject(doc)
+}
+
+export async function deleteCoupon(id: string) {
+  checkFirebase()
+  await firestore.collection('coupons').doc(id).delete()
+}
+
+export async function validateCoupon(code: string) {
+  checkFirebase()
+  const snapshot = await firestore.collection('coupons')
+    .where('code', '==', code)
+    .where('isActive', '==', true)
+    .limit(1)
+    .get()
+  if (snapshot.empty) return null
+
+  const coupon = docToObject(snapshot.docs[0])
+  const now = new Date()
+
+  // Check expiry
+  if (coupon.expiresAt && new Date(coupon.expiresAt) < now) {
+    return null
+  }
+
+  // Check max uses
+  if (coupon.maxUses && coupon.usedCount >= coupon.maxUses) {
+    return null
+  }
+
+  return coupon
+}
+
+export async function incrementCouponUsage(couponId: string) {
+  checkFirebase()
+  await firestore.collection('coupons').doc(couponId).update({
+    usedCount: admin.firestore.FieldValue.increment(1),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  })
+}
+
+// ==================== LOYALTY PROGRAM ====================
+
+export async function getLoyaltyPoints(beneficiaryId: string) {
+  checkFirebase()
+  const snapshot = await firestore.collection('loyaltyPoints')
+    .where('beneficiaryId', '==', beneficiaryId)
+    .orderBy('createdAt', 'desc')
+    .get()
+  return snapshot.docs.map(docToObject)
+}
+
+export async function addLoyaltyPoints(beneficiaryId: string, points: number, reason: string) {
+  checkFirebase()
+  const docRef = await firestore.collection('loyaltyPoints').add({
+    beneficiaryId,
+    points,
+    reason,
+    type: 'earn',
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  })
+
+  // Update beneficiary total points
+  const benefDoc = await firestore.collection('beneficiaries').doc(beneficiaryId).get()
+  if (benefDoc.exists) {
+    const currentPoints = benefDoc.data()!.loyaltyPoints || 0
+    await firestore.collection('beneficiaries').doc(beneficiaryId).update({
+      loyaltyPoints: currentPoints + points,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    })
+  }
+
+  return { id: docRef.id, beneficiaryId, points, reason, type: 'earn' as const }
+}
+
+export async function redeemLoyaltyPoints(beneficiaryId: string, points: number) {
+  checkFirebase()
+  // Check current balance
+  const benefDoc = await firestore.collection('beneficiaries').doc(beneficiaryId).get()
+  if (!benefDoc.exists) throw new Error('المستفيد غير موجود')
+
+  const currentPoints = benefDoc.data()!.loyaltyPoints || 0
+  if (currentPoints < points) throw new Error('رصيد النقاط غير كافٍ')
+
+  const docRef = await firestore.collection('loyaltyPoints').add({
+    beneficiaryId,
+    points: -points,
+    reason: `استبدال ${points} نقطة`,
+    type: 'redeem',
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  })
+
+  await firestore.collection('beneficiaries').doc(beneficiaryId).update({
+    loyaltyPoints: currentPoints - points,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  })
+
+  return { id: docRef.id, beneficiaryId, points: -points, reason: `استبدال ${points} نقطة`, type: 'redeem' as const }
+}
+
+export async function getLoyaltyBalance(beneficiaryId: string) {
+  checkFirebase()
+  const doc = await firestore.collection('beneficiaries').doc(beneficiaryId).get()
+  if (!doc.exists) return 0
+  return doc.data()!.loyaltyPoints || 0
+}
+
+// ==================== EMERGENCY REQUESTS ====================
+
+export async function createEmergencyRequest(data: {
+  beneficiaryId: string
+  serviceType: string
+  address: string
+  notes?: string
+}) {
+  checkFirebase()
+  const benefDoc = await firestore.collection('beneficiaries').doc(data.beneficiaryId).get()
+  const beneficiaryName = benefDoc.exists ? benefDoc.data()!.name : 'غير معروف'
+
+  const docRef = await firestore.collection('emergencyRequests').add({
+    ...data,
+    beneficiaryName,
+    status: 'pending',
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  })
+  return { id: docRef.id, ...data, beneficiaryName, status: 'pending' }
+}
+
+// ==================== REFERRAL SYSTEM ====================
+
+export async function generateReferralCode(beneficiaryId: string) {
+  checkFirebase()
+  // Check if already has a code
+  const snapshot = await firestore.collection('referrals')
+    .where('beneficiaryId', '==', beneficiaryId)
+    .limit(1)
+    .get()
+
+  if (!snapshot.empty) {
+    return docToObject(snapshot.docs[0])
+  }
+
+  // Generate unique code
+  const code = 'AFY-' + Math.random().toString(36).substring(2, 8).toUpperCase()
+  const docRef = await firestore.collection('referrals').add({
+    beneficiaryId,
+    code,
+    uses: 0,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  })
+  return { id: docRef.id, beneficiaryId, code, uses: 0 }
+}
+
+export async function applyReferralCode(code: string, newBeneficiaryId: string) {
+  checkFirebase()
+  const snapshot = await firestore.collection('referrals')
+    .where('code', '==', code)
+    .limit(1)
+    .get()
+
+  if (snapshot.empty) return null
+
+  const referral = docToObject(snapshot.docs[0])
+
+  // Can't use own code
+  if (referral.beneficiaryId === newBeneficiaryId) {
+    throw new Error('لا يمكنك استخدام كود الإحالة الخاص بك')
+  }
+
+  // Increment uses
+  await firestore.collection('referrals').doc(referral.id).update({
+    uses: admin.firestore.FieldValue.increment(1),
+  })
+
+  // Give both parties loyalty points
+  await addLoyaltyPoints(referral.beneficiaryId, 50, 'مكافأة إحالة - شخص جديد استخدم كودك')
+  await addLoyaltyPoints(newBeneficiaryId, 25, 'مكافأة إحالة - استخدمت كود إحالة')
+
+  return { ...referral, uses: referral.uses + 1 }
+}
+
+export async function getReferralByBeneficiary(beneficiaryId: string) {
+  checkFirebase()
+  const snapshot = await firestore.collection('referrals')
+    .where('beneficiaryId', '==', beneficiaryId)
+    .limit(1)
+    .get()
+  if (snapshot.empty) return null
+  return docToObject(snapshot.docs[0])
 }

@@ -8,7 +8,7 @@ export async function PUT(
   try {
     const { id } = await params
     const body = await request.json()
-    const { status } = body
+    const { status, notes } = body
 
     if (!['in_progress', 'completed'].includes(status)) {
       return NextResponse.json({ error: 'حالة غير صالحة' }, { status: 400 })
@@ -19,7 +19,10 @@ export async function PUT(
       return NextResponse.json({ error: 'التعيين غير موجود' }, { status: 404 })
     }
 
-    const assignment = await updateAssignment(id, { status })
+    const updateData: Record<string, any> = { status }
+    if (notes !== undefined) updateData.notes = notes
+
+    const assignment = await updateAssignment(id, updateData)
 
     if (status === 'completed') {
       await updateServiceRequest(existing.requestId, { status: 'completed' })

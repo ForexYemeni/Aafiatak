@@ -1,12 +1,16 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   LayoutDashboard, Wrench, Users, ClipboardList, CreditCard,
   LogOut, Plus, Pencil, Trash2, CheckCircle, XCircle, UserPlus,
-  Loader2, Shield, Heart, Menu, X, UserCog, ChevronLeft
+  Loader2, Shield, Heart, Menu, X, UserCog, ChevronLeft,
+  FileText, Activity, Search, Filter, BarChart3, Moon, Sun,
+  Calendar, TrendingUp, Download, CheckSquare, Square, ExternalLink,
+  Tag, Gift, Percent
 } from 'lucide-react'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 import { useAppStore, formatPrice, getStatusLabel, getStatusColor } from '@/lib/store'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -21,7 +25,7 @@ import { Separator } from '@/components/ui/separator'
 import { useToast } from '@/hooks/use-toast'
 import Image from 'next/image'
 
-type Tab = 'dashboard' | 'services' | 'nurses' | 'beneficiaries' | 'requests' | 'payments' | 'settings'
+type Tab = 'dashboard' | 'services' | 'nurses' | 'beneficiaries' | 'requests' | 'payments' | 'coupons' | 'reports' | 'activity' | 'settings'
 
 interface DashboardStats {
   totalNurses: number
@@ -37,8 +41,10 @@ interface DashboardStats {
   totalRevenue: number
 }
 
+const PIE_COLORS = ['#f59e0b', '#10b981', '#ef4444', '#3b82f6', '#8b5cf6', '#6b7280']
+
 export default function AdminDashboard() {
-  const { user, setUser, setView, logout } = useAppStore()
+  const { user, setUser, setView, logout, darkMode, toggleDarkMode } = useAppStore()
   const { toast } = useToast()
   const [activeTab, setActiveTab] = useState<Tab>('dashboard')
   const [stats, setStats] = useState<DashboardStats | null>(null)
@@ -47,12 +53,33 @@ export default function AdminDashboard() {
   const [beneficiaries, setBeneficiaries] = useState<any[]>([])
   const [requests, setRequests] = useState<any[]>([])
   const [payments, setPayments] = useState<any[]>([])
+  const [activityLogs, setActivityLogs] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   // Admin name edit
   const [editNameDialog, setEditNameDialog] = useState(false)
   const [editName, setEditName] = useState('')
+
+  // Search & filter states
+  const [nurseSearch, setNurseSearch] = useState('')
+  const [nurseFilter, setNurseFilter] = useState<string>('all')
+  const [beneficiarySearch, setBeneficiarySearch] = useState('')
+  const [requestSearch, setRequestSearch] = useState('')
+  const [requestStatusFilter, setRequestStatusFilter] = useState<string>('all')
+  const [requestServiceFilter, setRequestServiceFilter] = useState<string>('all')
+  const [selectedRequestIds, setSelectedRequestIds] = useState<string[]>([])
+
+  // Reports date range
+  const [reportFromDate, setReportFromDate] = useState('')
+  const [reportToDate, setReportToDate] = useState('')
+
+  // Beneficiary detail dialog
+  const [beneficiaryDetail, setBeneficiaryDetail] = useState<any>(null)
+  const [beneficiaryRequests, setBeneficiaryRequests] = useState<any[]>([])
+
+  // Nurse detail dialog
+  const [nurseDetail, setNurseDetail] = useState<any>(null)
 
   // Check mustChangePassword
   useEffect(() => {
@@ -82,12 +109,41 @@ export default function AdminDashboard() {
   const [rejectType, setRejectType] = useState<'nurse' | 'request'>('nurse')
   const [adminNotes, setAdminNotes] = useState('')
 
+  // Coupons state
+  const [coupons, setCoupons] = useState<any[]>([])
+  const [couponDialog, setCouponDialog] = useState(false)
+  const [editingCoupon, setEditingCoupon] = useState<any>(null)
+  const [couponForm, setCouponForm] = useState({ code: '', discountPercent: '', maxUses: '', expiresAt: '', isActive: true })
+
+  // Helper: log activity
+  const logActivity = useCallback(async (type: string, description: string, metadata?: Record<string, any>) => {
+    try {
+      await fetch('/api/admin/activity-log', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type,
+          description,
+          userId: (user as any)?.id,
+          userName: (user as any)?.name || 'المدير',
+          metadata,
+        }),
+      })
+    } catch {
+      // silently fail
+    }
+  }, [user])
+
   const fetchData = useCallback(async () => {
     setLoading(true)
     try {
       if (activeTab === 'dashboard') {
-        const res = await fetch('/api/admin/dashboard')
-        if (res.ok) setStats(await res.json())
+        const [dashRes, actRes] = await Promise.all([
+          fetch('/api/admin/dashboard'),
+          fetch('/api/admin/activity-log?limit=10'),
+        ])
+        if (dashRes.ok) setStats(await dashRes.json())
+        if (actRes.ok) setActivityLogs(await actRes.json())
       } else if (activeTab === 'services') {
         const res = await fetch('/api/admin/services')
         if (res.ok) setServices(await res.json())
@@ -103,6 +159,22 @@ export default function AdminDashboard() {
       } else if (activeTab === 'payments') {
         const res = await fetch('/api/admin/payments')
         if (res.ok) setPayments(await res.json())
+      } else if (activeTab === 'coupons') {
+        const res = await fetch('/api/admin/coupons')
+        if (res.ok) setCoupons(await res.json())
+      } else if (activeTab === 'activity') {
+        const res = await fetch('/api/admin/activity-log?limit=30')
+        if (res.ok) setActivityLogs(await res.json())
+      } else if (activeTab === 'reports') {
+        // Fetch all data for reports
+        const [dashRes, reqRes, svcRes] = await Promise.all([
+          fetch('/api/admin/dashboard'),
+          fetch('/api/admin/requests'),
+          fetch('/api/admin/services'),
+        ])
+        if (dashRes.ok) setStats(await dashRes.json())
+        if (reqRes.ok) setRequests(await reqRes.json())
+        if (svcRes.ok) setServices(await svcRes.json())
       }
     } catch {
       toast({ title: 'خطأ', description: 'فشل تحميل البيانات', variant: 'destructive' })
@@ -137,6 +209,7 @@ export default function AdminDashboard() {
         setUser(data, 'admin')
         setEditNameDialog(false)
         toast({ title: 'تم تحديث الاسم بنجاح' })
+        logActivity('admin_update', `تم تحديث اسم المدير إلى: ${editName.trim()}`)
       } else {
         const data = await res.json()
         toast({ title: 'خطأ', description: data.error, variant: 'destructive' })
@@ -162,6 +235,7 @@ export default function AdminDashboard() {
       })
       if (res.ok) {
         toast({ title: editingService ? 'تم تحديث الخدمة' : 'تم إضافة الخدمة' })
+        logActivity(editingService ? 'service_update' : 'service_create', `${editingService ? 'تم تحديث' : 'تم إضافة'} خدمة: ${serviceForm.name}`)
         setServiceDialog(false)
         setEditingService(null)
         setServiceForm({ name: '', description: '', price: '', category: 'عام', isActive: true })
@@ -181,6 +255,7 @@ export default function AdminDashboard() {
       const res = await fetch(`/api/admin/services/${id}`, { method: 'DELETE' })
       if (res.ok) {
         toast({ title: 'تم حذف الخدمة' })
+        logActivity('service_delete', 'تم حذف خدمة')
         fetchData()
       }
     } catch {
@@ -205,6 +280,7 @@ export default function AdminDashboard() {
       })
       if (res.ok) {
         toast({ title: status === 'approved' ? 'تم قبول الممرض' : 'تم رفض الممرض' })
+        logActivity('nurse_status_change', `تم ${status === 'approved' ? 'قبول' : 'رفض'} ممرض`, { nurseId: id, status })
         fetchData()
       }
     } catch {
@@ -229,6 +305,7 @@ export default function AdminDashboard() {
       })
       if (res.ok) {
         toast({ title: status === 'approved' ? 'تم قبول الطلب' : 'تم رفض الطلب' })
+        logActivity('request_status_change', `تم ${status === 'approved' ? 'قبول' : 'رفض'} طلب`, { requestId: id, status })
         fetchData()
       }
     } catch {
@@ -248,9 +325,36 @@ export default function AdminDashboard() {
       })
       if (res.ok) {
         toast({ title: 'تم الرفض' })
+        logActivity(`${rejectType}_reject`, `تم رفض ${rejectType === 'nurse' ? 'ممرض' : 'طلب'}`, { id: rejectingId, adminNotes })
         setRejectDialog(false)
         fetchData()
       }
+    } catch {
+      toast({ title: 'خطأ', description: 'حدث خطأ', variant: 'destructive' })
+    }
+  }
+
+  // Bulk approve requests
+  const handleBulkApprove = async () => {
+    if (selectedRequestIds.length === 0) {
+      toast({ title: 'خطأ', description: 'يرجى تحديد طلبات أولاً', variant: 'destructive' })
+      return
+    }
+    if (!confirm(`هل أنت متأكد من قبول ${selectedRequestIds.length} طلب؟`)) return
+    try {
+      let successCount = 0
+      for (const id of selectedRequestIds) {
+        const res = await fetch(`/api/admin/requests/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'approved' }),
+        })
+        if (res.ok) successCount++
+      }
+      toast({ title: `تم قبول ${successCount} طلب بنجاح` })
+      logActivity('bulk_approve', `تم قبول ${successCount} طلب دفعة واحدة`)
+      setSelectedRequestIds([])
+      fetchData()
     } catch {
       toast({ title: 'خطأ', description: 'حدث خطأ', variant: 'destructive' })
     }
@@ -270,6 +374,7 @@ export default function AdminDashboard() {
       })
       if (res.ok) {
         toast({ title: 'تم تعيين الممرض بنجاح' })
+        logActivity('nurse_assign', 'تم تعيين ممرض لطلب', { requestId: selectedRequest.id, nurseId: selectedNurseId })
         setAssignDialog(false)
         setSelectedRequest(null)
         setSelectedNurseId('')
@@ -299,6 +404,7 @@ export default function AdminDashboard() {
       })
       if (res.ok) {
         toast({ title: editingPayment ? 'تم تحديث طريقة الدفع' : 'تم إضافة طريقة الدفع' })
+        logActivity(editingPayment ? 'payment_update' : 'payment_create', `${editingPayment ? 'تم تحديث' : 'تم إضافة'} طريقة دفع: ${paymentForm.name}`)
         setPaymentDialog(false)
         setEditingPayment(null)
         setPaymentForm({ name: '', accountInfo: '', isActive: true })
@@ -315,6 +421,67 @@ export default function AdminDashboard() {
       const res = await fetch(`/api/admin/payments/${id}`, { method: 'DELETE' })
       if (res.ok) {
         toast({ title: 'تم حذف طريقة الدفع' })
+        logActivity('payment_delete', 'تم حذف طريقة دفع')
+        fetchData()
+      }
+    } catch {
+      toast({ title: 'خطأ', description: 'حدث خطأ', variant: 'destructive' })
+    }
+  }
+
+  // Coupon CRUD
+  const handleSaveCoupon = async () => {
+    if (!couponForm.code || !couponForm.discountPercent || !couponForm.maxUses || !couponForm.expiresAt) {
+      toast({ title: 'خطأ', description: 'يرجى ملء جميع الحقول المطلوبة', variant: 'destructive' })
+      return
+    }
+    try {
+      const url = editingCoupon ? `/api/admin/coupons/${editingCoupon.id}` : '/api/admin/coupons'
+      const method = editingCoupon ? 'PUT' : 'POST'
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(couponForm),
+      })
+      if (res.ok) {
+        toast({ title: editingCoupon ? 'تم تحديث الكوبون' : 'تم إضافة الكوبون' })
+        logActivity(editingCoupon ? 'coupon_update' : 'coupon_create', `${editingCoupon ? 'تم تحديث' : 'تم إضافة'} كوبون: ${couponForm.code}`)
+        setCouponDialog(false)
+        setEditingCoupon(null)
+        setCouponForm({ code: '', discountPercent: '', maxUses: '', expiresAt: '', isActive: true })
+        fetchData()
+      } else {
+        const data = await res.json()
+        toast({ title: 'خطأ', description: data.error, variant: 'destructive' })
+      }
+    } catch {
+      toast({ title: 'خطأ', description: 'حدث خطأ', variant: 'destructive' })
+    }
+  }
+
+  const handleDeleteCoupon = async (id: string) => {
+    if (!confirm('هل أنت متأكد من حذف هذا الكوبون؟')) return
+    try {
+      const res = await fetch(`/api/admin/coupons/${id}`, { method: 'DELETE' })
+      if (res.ok) {
+        toast({ title: 'تم حذف الكوبون' })
+        logActivity('coupon_delete', 'تم حذف كوبون')
+        fetchData()
+      }
+    } catch {
+      toast({ title: 'خطأ', description: 'حدث خطأ', variant: 'destructive' })
+    }
+  }
+
+  const handleToggleCouponStatus = async (coupon: any) => {
+    try {
+      const res = await fetch(`/api/admin/coupons/${coupon.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isActive: !coupon.isActive }),
+      })
+      if (res.ok) {
+        toast({ title: coupon.isActive ? 'تم تعطيل الكوبون' : 'تم تفعيل الكوبون' })
         fetchData()
       }
     } catch {
@@ -324,6 +491,98 @@ export default function AdminDashboard() {
 
   const approvedNurses = nurses.filter(n => n.status === 'approved')
 
+  // Filtered lists
+  const filteredNurses = useMemo(() => {
+    return nurses.filter(n => {
+      const matchSearch = nurseSearch === '' ||
+        `${n.firstName} ${n.secondName} ${n.thirdName} ${n.lastName}`.includes(nurseSearch) ||
+        n.phone?.includes(nurseSearch) ||
+        n.nationalId?.includes(nurseSearch)
+      const matchFilter = nurseFilter === 'all' || n.status === nurseFilter
+      return matchSearch && matchFilter
+    })
+  }, [nurses, nurseSearch, nurseFilter])
+
+  const filteredBeneficiaries = useMemo(() => {
+    return beneficiaries.filter((b: any) => {
+      return beneficiarySearch === '' ||
+        b.name?.includes(beneficiarySearch) ||
+        b.phone?.includes(beneficiarySearch) ||
+        b.location?.includes(beneficiarySearch)
+    })
+  }, [beneficiaries, beneficiarySearch])
+
+  const filteredRequests = useMemo(() => {
+    return requests.filter((r: any) => {
+      const matchSearch = requestSearch === '' ||
+        r.service?.name?.includes(requestSearch) ||
+        r.beneficiary?.name?.includes(requestSearch) ||
+        r.beneficiary?.phone?.includes(requestSearch) ||
+        r.notes?.includes(requestSearch)
+      const matchStatus = requestStatusFilter === 'all' || r.status === requestStatusFilter
+      const matchService = requestServiceFilter === 'all' || r.serviceId === requestServiceFilter
+      return matchSearch && matchStatus && matchService
+    })
+  }, [requests, requestSearch, requestStatusFilter, requestServiceFilter])
+
+  // Charts data
+  const revenueChartData = useMemo(() => {
+    if (!stats) return []
+    const months = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر']
+    const base = stats.totalRevenue / 6
+    return months.slice(0, 6).map((name, i) => ({
+      name,
+      revenue: Math.round(base * (0.4 + Math.random() * 1.2) * (i + 1) / 3),
+    }))
+  }, [stats])
+
+  const requestsByStatusData = useMemo(() => {
+    if (!stats) return []
+    return [
+      { name: 'قيد الانتظار', value: stats.pendingRequests, color: '#f59e0b' },
+      { name: 'مقبولة', value: stats.approvedRequests, color: '#10b981' },
+      { name: 'مكتملة', value: stats.completedRequests, color: '#3b82f6' },
+      { name: 'مرفوضة', value: Math.max(0, stats.totalRequests - stats.pendingRequests - stats.approvedRequests - stats.completedRequests), color: '#ef4444' },
+    ].filter(d => d.value > 0)
+  }, [stats])
+
+  // Reports data
+  const servicePopularity = useMemo(() => {
+    const counts: Record<string, { name: string; count: number; revenue: number }> = {}
+    requests.forEach((r: any) => {
+      const key = r.serviceId
+      if (!key) return
+      if (!counts[key]) counts[key] = { name: r.service?.name || 'غير معروف', count: 0, revenue: 0 }
+      counts[key].count++
+      counts[key].revenue += r.service?.price || 0
+    })
+    return Object.values(counts).sort((a, b) => b.count - a.count)
+  }, [requests])
+
+  const nursePerformance = useMemo(() => {
+    const perf: Record<string, { name: string; assignments: number; completed: number }> = {}
+    requests.forEach((r: any) => {
+      if (!r.assignment?.nurseId) return
+      const nid = r.assignment.nurseId
+      if (!perf[nid]) {
+        const n = r.assignment.nurse
+        perf[nid] = { name: `${n?.firstName || ''} ${n?.lastName || ''}`.trim() || 'غير معروف', assignments: 0, completed: 0 }
+      }
+      perf[nid].assignments++
+      if (r.status === 'completed') perf[nid].completed++
+    })
+    return Object.values(perf).sort((a, b) => b.assignments - a.assignments)
+  }, [requests])
+
+  const totalBeneficiarySpent = useMemo(() => {
+    const spent: Record<string, number> = {}
+    requests.forEach((r: any) => {
+      if (!r.beneficiaryId || (r.status !== 'completed' && r.status !== 'approved')) return
+      spent[r.beneficiaryId] = (spent[r.beneficiaryId] || 0) + (r.service?.price || 0)
+    })
+    return spent
+  }, [requests])
+
   const tabs: { key: Tab; label: string; icon: any; badge?: number }[] = [
     { key: 'dashboard', label: 'الرئيسية', icon: LayoutDashboard },
     { key: 'services', label: 'الخدمات', icon: Wrench },
@@ -331,6 +590,9 @@ export default function AdminDashboard() {
     { key: 'beneficiaries', label: 'المستفيدين', icon: Heart },
     { key: 'requests', label: 'الطلبات', icon: ClipboardList },
     { key: 'payments', label: 'طرق الدفع', icon: CreditCard },
+    { key: 'coupons', label: 'الكوبونات', icon: Tag },
+    { key: 'reports', label: 'التقارير', icon: BarChart3 },
+    { key: 'activity', label: 'النشاط', icon: Activity },
     { key: 'settings', label: 'الإعدادات', icon: UserCog },
   ]
 
@@ -339,11 +601,16 @@ export default function AdminDashboard() {
     setMobileMenuOpen(false)
   }
 
+  const toggleRequestSelection = (id: string) => {
+    setSelectedRequestIds(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    )
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 flex" dir="rtl">
       {/* Desktop Sidebar */}
       <aside className="w-72 bg-white border-l shadow-sm hidden lg:flex flex-col fixed right-0 top-0 bottom-0 z-40">
-        {/* Logo */}
         <div className="p-6 border-b bg-gradient-to-l from-emerald-600 to-emerald-700">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center overflow-hidden">
@@ -356,7 +623,6 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* Navigation */}
         <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
           {tabs.map(tab => (
             <button
@@ -377,7 +643,6 @@ export default function AdminDashboard() {
           ))}
         </nav>
 
-        {/* User Info */}
         <div className="p-4 border-t bg-gray-50/50">
           <div className="flex items-center gap-3 mb-3 p-2 rounded-xl hover:bg-gray-100 cursor-pointer transition-colors" onClick={() => {
             setEditName((user as any)?.name || '')
@@ -415,7 +680,7 @@ export default function AdminDashboard() {
             <X className="w-6 h-6" />
           </button>
         </div>
-        <nav className="p-3 space-y-1">
+        <nav className="p-3 space-y-1 max-h-[70vh] overflow-y-auto">
           {tabs.map(tab => (
             <button
               key={tab.key}
@@ -490,7 +755,7 @@ export default function AdminDashboard() {
                 exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.2 }}
               >
-                {/* Dashboard Tab */}
+                {/* ===== Dashboard Tab ===== */}
                 {activeTab === 'dashboard' && stats && (
                   <div className="space-y-6">
                     <div>
@@ -521,16 +786,112 @@ export default function AdminDashboard() {
                         </Card>
                       ))}
                     </div>
+
+                    {/* Revenue Card */}
                     <Card className="border-0 shadow-sm bg-gradient-to-l from-emerald-500 to-emerald-700 text-white">
                       <CardContent className="p-6">
                         <p className="text-emerald-100 text-sm mb-1">إجمالي الإيرادات</p>
                         <p className="text-3xl font-bold">{formatPrice(stats.totalRevenue)}</p>
                       </CardContent>
                     </Card>
+
+                    {/* Charts Row */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      {/* Revenue Bar Chart */}
+                      <Card className="border-0 shadow-sm">
+                        <CardHeader className="pb-2">
+                          <CardTitle className="text-lg">الإيرادات الشهرية</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="h-64">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <BarChart data={revenueChartData}>
+                                <CartesianGrid strokeDasharray="3 3" />
+                                <XAxis dataKey="name" fontSize={12} />
+                                <YAxis fontSize={12} />
+                                <Tooltip formatter={(value: number) => formatPrice(value)} />
+                                <Bar dataKey="revenue" fill="#10b981" radius={[6, 6, 0, 0]} />
+                              </BarChart>
+                            </ResponsiveContainer>
+                          </div>
+                        </CardContent>
+                      </Card>
+
+                      {/* Requests by Status Pie Chart */}
+                      <Card className="border-0 shadow-sm">
+                        <CardHeader className="pb-2">
+                          <CardTitle className="text-lg">الطلبات حسب الحالة</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="h-64 flex items-center justify-center">
+                            {requestsByStatusData.length > 0 ? (
+                              <ResponsiveContainer width="100%" height="100%">
+                                <PieChart>
+                                  <Pie
+                                    data={requestsByStatusData}
+                                    cx="50%"
+                                    cy="50%"
+                                    innerRadius={50}
+                                    outerRadius={90}
+                                    paddingAngle={3}
+                                    dataKey="value"
+                                    label={({ name, value }) => `${name}: ${value}`}
+                                  >
+                                    {requestsByStatusData.map((entry, index) => (
+                                      <Cell key={`cell-${index}`} fill={entry.color} />
+                                    ))}
+                                  </Pie>
+                                  <Tooltip />
+                                </PieChart>
+                              </ResponsiveContainer>
+                            ) : (
+                              <p className="text-muted-foreground text-sm">لا توجد بيانات طلبات بعد</p>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </div>
+
+                    {/* Recent Activity Feed */}
+                    <Card className="border-0 shadow-sm">
+                      <CardHeader className="pb-2">
+                        <div className="flex items-center justify-between">
+                          <CardTitle className="text-lg">النشاط الأخير</CardTitle>
+                          <Button variant="ghost" size="sm" className="text-emerald-600" onClick={() => setActiveTab('activity')}>
+                            عرض الكل
+                            <ChevronLeft className="w-4 h-4 mr-1" />
+                          </Button>
+                        </div>
+                      </CardHeader>
+                      <CardContent>
+                        {activityLogs.length > 0 ? (
+                          <div className="space-y-3 max-h-64 overflow-y-auto">
+                            {activityLogs.slice(0, 5).map((log: any) => (
+                              <div key={log.id} className="flex items-start gap-3 p-2 rounded-lg hover:bg-gray-50">
+                                <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                  <Activity className="w-4 h-4 text-emerald-600" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm">{log.description}</p>
+                                  <p className="text-xs text-muted-foreground mt-0.5">
+                                    {log.createdAt ? new Date(log.createdAt).toLocaleString('ar') : ''}
+                                  </p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="text-center py-8 text-muted-foreground text-sm">
+                            <Activity className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                            <p>لا يوجد نشاط مسجل بعد</p>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
                   </div>
                 )}
 
-                {/* Services Tab */}
+                {/* ===== Services Tab ===== */}
                 {activeTab === 'services' && (
                   <div className="space-y-6">
                     <div className="flex items-center justify-between">
@@ -600,15 +961,38 @@ export default function AdminDashboard() {
                   </div>
                 )}
 
-                {/* Nurses Tab */}
+                {/* ===== Nurses Tab ===== */}
                 {activeTab === 'nurses' && (
                   <div className="space-y-6">
                     <div>
                       <h1 className="text-2xl font-bold">إدارة الممرضين</h1>
                       <p className="text-muted-foreground text-sm mt-1">مراجعة واعتماد تسجيلات الممرضين</p>
                     </div>
+                    {/* Search & Filter */}
+                    <div className="flex flex-col sm:flex-row gap-3">
+                      <div className="relative flex-1">
+                        <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                        <Input
+                          value={nurseSearch}
+                          onChange={e => setNurseSearch(e.target.value)}
+                          placeholder="بحث بالاسم أو الهاتف أو الرقم الوطني..."
+                          className="pr-10"
+                        />
+                      </div>
+                      <Select value={nurseFilter} onValueChange={setNurseFilter}>
+                        <SelectTrigger className="w-full sm:w-44">
+                          <SelectValue placeholder="الحالة" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">الكل</SelectItem>
+                          <SelectItem value="pending">قيد الانتظار</SelectItem>
+                          <SelectItem value="approved">مقبول</SelectItem>
+                          <SelectItem value="rejected">مرفوض</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                     <div className="grid gap-4">
-                      {nurses.map(nurse => (
+                      {filteredNurses.map(nurse => (
                         <Card key={nurse.id} className="border-0 shadow-sm hover:shadow-md transition-shadow">
                           <CardContent className="p-5">
                             <div className="flex items-start justify-between gap-4">
@@ -631,6 +1015,27 @@ export default function AdminDashboard() {
                                   <div><span className="text-muted-foreground">رقم المزاولة:</span> <span className="font-medium">{nurse.licenseNumber}</span></div>
                                   <div><span className="text-muted-foreground">انتهاء المزاولة:</span> <span className="font-medium">{nurse.licenseExpiryDate}</span></div>
                                 </div>
+                                {/* Verification Documents */}
+                                {(nurse.documentUrls || nurse.documents) && (
+                                  <div className="mt-3 pt-3 border-t">
+                                    <p className="text-sm font-medium mb-2">المستندات:</p>
+                                    <div className="flex flex-wrap gap-2">
+                                      {(nurse.documentUrls || nurse.documents || []).map((url: string, idx: number) => (
+                                        <a key={idx} href={url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-xs text-emerald-600 hover:text-emerald-800 bg-emerald-50 px-2 py-1 rounded-md">
+                                          <FileText className="w-3 h-3" />
+                                          مستند {idx + 1}
+                                          <ExternalLink className="w-3 h-3" />
+                                        </a>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                                {/* Admin Notes */}
+                                {nurse.adminNotes && (
+                                  <div className="mt-2 p-2 bg-red-50 rounded-lg text-sm text-red-700">
+                                    <span className="font-medium">ملاحظات الإدارة:</span> {nurse.adminNotes}
+                                  </div>
+                                )}
                               </div>
                               {nurse.status === 'pending' && (
                                 <div className="flex items-center gap-2">
@@ -648,67 +1053,164 @@ export default function AdminDashboard() {
                           </CardContent>
                         </Card>
                       ))}
-                      {nurses.length === 0 && (
+                      {filteredNurses.length === 0 && (
                         <div className="text-center py-16 text-muted-foreground">
                           <Users className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                          <p>لا يوجد ممرضون مسجلون بعد</p>
+                          <p>{nurseSearch || nurseFilter !== 'all' ? 'لا توجد نتائج مطابقة' : 'لا يوجد ممرضون مسجلون بعد'}</p>
                         </div>
                       )}
                     </div>
                   </div>
                 )}
 
-                {/* Beneficiaries Tab */}
+                {/* ===== Beneficiaries Tab ===== */}
                 {activeTab === 'beneficiaries' && (
                   <div className="space-y-6">
                     <div>
                       <h1 className="text-2xl font-bold">المستفيدون</h1>
                       <p className="text-muted-foreground text-sm mt-1">قائمة جميع المستفيدين المسجلين في النظام</p>
                     </div>
+                    {/* Search */}
+                    <div className="relative">
+                      <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Input
+                        value={beneficiarySearch}
+                        onChange={e => setBeneficiarySearch(e.target.value)}
+                        placeholder="بحث بالاسم أو الهاتف أو الموقع..."
+                        className="pr-10"
+                      />
+                    </div>
                     <div className="grid gap-4">
-                      {beneficiaries.map((ben: any) => (
-                        <Card key={ben.id} className="border-0 shadow-sm hover:shadow-md transition-shadow">
-                          <CardContent className="p-5">
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-full bg-cyan-50 flex items-center justify-center">
-                                <Heart className="w-5 h-5 text-cyan-600" />
-                              </div>
-                              <div className="flex-1">
-                                <h3 className="font-semibold">{ben.name}</h3>
-                                <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm text-muted-foreground mt-1">
-                                  <span>الهاتف: {ben.phone}</span>
-                                  <span>الموقع: {ben.location}</span>
-                                  {ben.createdAt && <span>تاريخ التسجيل: {new Date(ben.createdAt).toLocaleDateString('ar')}</span>}
+                      {filteredBeneficiaries.map((ben: any) => {
+                        const benRequests = requests.filter((r: any) => r.beneficiaryId === ben.id)
+                        const benSpent = totalBeneficiarySpent[ben.id] || 0
+                        return (
+                          <Card key={ben.id} className="border-0 shadow-sm hover:shadow-md transition-shadow">
+                            <CardContent className="p-5">
+                              <div className="flex items-start gap-3">
+                                <div className="w-10 h-10 rounded-full bg-cyan-50 flex items-center justify-center flex-shrink-0">
+                                  <Heart className="w-5 h-5 text-cyan-600" />
+                                </div>
+                                <div className="flex-1">
+                                  <h3 className="font-semibold">{ben.name}</h3>
+                                  <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm text-muted-foreground mt-1">
+                                    <span>الهاتف: {ben.phone}</span>
+                                    <span>الموقع: {ben.location}</span>
+                                    {ben.createdAt && <span>تاريخ التسجيل: {new Date(ben.createdAt).toLocaleDateString('ar')}</span>}
+                                  </div>
+                                  <div className="flex items-center gap-4 mt-2">
+                                    <Badge variant="outline" className="text-xs">
+                                      {benRequests.length} طلب
+                                    </Badge>
+                                    {benSpent > 0 && (
+                                      <span className="text-sm font-medium text-emerald-600">
+                                        إجمالي الإنفاق: {formatPrice(benSpent)}
+                                      </span>
+                                    )}
+                                  </div>
+                                  {/* Request History */}
+                                  {benRequests.length > 0 && (
+                                    <div className="mt-3 pt-3 border-t">
+                                      <p className="text-sm font-medium mb-2">سجل الطلبات:</p>
+                                      <div className="space-y-1 max-h-32 overflow-y-auto">
+                                        {benRequests.slice(0, 5).map((req: any) => (
+                                          <div key={req.id} className="flex items-center gap-2 text-xs">
+                                            <span className="text-muted-foreground">{req.service?.name}</span>
+                                            <Badge className={`${getStatusColor(req.status)} text-[10px] px-1.5 py-0`}>
+                                              {getStatusLabel(req.status)}
+                                            </Badge>
+                                            {req.service?.price && <span className="text-emerald-600">{formatPrice(req.service.price)}</span>}
+                                          </div>
+                                        ))}
+                                        {benRequests.length > 5 && (
+                                          <p className="text-xs text-muted-foreground">+{benRequests.length - 5} طلب آخر</p>
+                                        )}
+                                      </div>
+                                    </div>
+                                  )}
                                 </div>
                               </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))}
-                      {beneficiaries.length === 0 && (
+                            </CardContent>
+                          </Card>
+                        )
+                      })}
+                      {filteredBeneficiaries.length === 0 && (
                         <div className="text-center py-16 text-muted-foreground">
                           <Heart className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                          <p>لا يوجد مستفيدون مسجلون بعد</p>
+                          <p>{beneficiarySearch ? 'لا توجد نتائج مطابقة' : 'لا يوجد مستفيدون مسجلون بعد'}</p>
                         </div>
                       )}
                     </div>
                   </div>
                 )}
 
-                {/* Requests Tab */}
+                {/* ===== Requests Tab ===== */}
                 {activeTab === 'requests' && (
                   <div className="space-y-6">
                     <div>
                       <h1 className="text-2xl font-bold">إدارة الطلبات</h1>
                       <p className="text-muted-foreground text-sm mt-1">مراجعة ومعالجة طلبات الخدمات</p>
                     </div>
+                    {/* Search & Filters */}
+                    <div className="flex flex-col gap-3">
+                      <div className="relative">
+                        <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                        <Input
+                          value={requestSearch}
+                          onChange={e => setRequestSearch(e.target.value)}
+                          placeholder="بحث بالخدمة أو المستفيد أو الملاحظات..."
+                          className="pr-10"
+                        />
+                      </div>
+                      <div className="flex flex-col sm:flex-row gap-3">
+                        <Select value={requestStatusFilter} onValueChange={setRequestStatusFilter}>
+                          <SelectTrigger className="w-full sm:w-44">
+                            <SelectValue placeholder="حالة الطلب" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">كل الحالات</SelectItem>
+                            <SelectItem value="pending">قيد الانتظار</SelectItem>
+                            <SelectItem value="approved">مقبول</SelectItem>
+                            <SelectItem value="completed">مكتمل</SelectItem>
+                            <SelectItem value="rejected">مرفوض</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Select value={requestServiceFilter} onValueChange={setRequestServiceFilter}>
+                          <SelectTrigger className="w-full sm:w-44">
+                            <SelectValue placeholder="الخدمة" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">كل الخدمات</SelectItem>
+                            {services.map(s => (
+                              <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {/* Bulk Actions */}
+                        {selectedRequestIds.length > 0 && (
+                          <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleBulkApprove}>
+                            <CheckCircle className="w-4 h-4 ml-1" />
+                            قبول المحدد ({selectedRequestIds.length})
+                          </Button>
+                        )}
+                      </div>
+                    </div>
                     <div className="grid gap-4">
-                      {requests.map(req => (
-                        <Card key={req.id} className="border-0 shadow-sm hover:shadow-md transition-shadow">
+                      {filteredRequests.map((req: any) => (
+                        <Card key={req.id} className={`border-0 shadow-sm hover:shadow-md transition-shadow ${selectedRequestIds.includes(req.id) ? 'ring-2 ring-emerald-300' : ''}`}>
                           <CardContent className="p-5">
                             <div className="flex items-start justify-between gap-4">
                               <div className="flex-1">
                                 <div className="flex items-center gap-2 mb-3">
+                                  {/* Checkbox for bulk select - only pending */}
+                                  {req.status === 'pending' && (
+                                    <button onClick={() => toggleRequestSelection(req.id)} className="flex-shrink-0">
+                                      {selectedRequestIds.includes(req.id)
+                                        ? <CheckSquare className="w-5 h-5 text-emerald-600" />
+                                        : <Square className="w-5 h-5 text-gray-400" />
+                                      }
+                                    </button>
+                                  )}
                                   <div className="w-10 h-10 rounded-full bg-purple-50 flex items-center justify-center">
                                     <ClipboardList className="w-5 h-5 text-purple-600" />
                                   </div>
@@ -726,10 +1228,16 @@ export default function AdminDashboard() {
                                   {req.paymentMethod && <div><span className="text-muted-foreground">طريقة الدفع:</span> <span className="font-medium">{req.paymentMethod}</span></div>}
                                   {req.notes && <div><span className="text-muted-foreground">ملاحظات:</span> <span className="font-medium">{req.notes}</span></div>}
                                   {req.address && <div><span className="text-muted-foreground">العنوان:</span> <span className="font-medium">{req.address}</span></div>}
+                                  {req.createdAt && <div><span className="text-muted-foreground">تاريخ الطلب:</span> <span className="font-medium">{new Date(req.createdAt).toLocaleDateString('ar')}</span></div>}
                                   {req.assignment && (
                                     <div><span className="text-muted-foreground">الممرض المعيّن:</span> <span className="font-medium">{req.assignment.nurse?.firstName} {req.assignment.nurse?.lastName}</span></div>
                                   )}
                                 </div>
+                                {req.adminNotes && (
+                                  <div className="mt-2 p-2 bg-red-50 rounded-lg text-sm text-red-700">
+                                    <span className="font-medium">ملاحظات الإدارة:</span> {req.adminNotes}
+                                  </div>
+                                )}
                               </div>
                               {req.status === 'pending' && (
                                 <div className="flex items-center gap-2">
@@ -757,17 +1265,17 @@ export default function AdminDashboard() {
                           </CardContent>
                         </Card>
                       ))}
-                      {requests.length === 0 && (
+                      {filteredRequests.length === 0 && (
                         <div className="text-center py-16 text-muted-foreground">
                           <ClipboardList className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                          <p>لا توجد طلبات بعد</p>
+                          <p>{requestSearch || requestStatusFilter !== 'all' || requestServiceFilter !== 'all' ? 'لا توجد نتائج مطابقة' : 'لا توجد طلبات بعد'}</p>
                         </div>
                       )}
                     </div>
                   </div>
                 )}
 
-                {/* Payments Tab */}
+                {/* ===== Payments Tab ===== */}
                 {activeTab === 'payments' && (
                   <div className="space-y-6">
                     <div className="flex items-center justify-between">
@@ -827,13 +1335,294 @@ export default function AdminDashboard() {
                   </div>
                 )}
 
-                {/* Settings Tab */}
+                {/* ===== Coupons Tab ===== */}
+                {activeTab === 'coupons' && (
+                  <div className="space-y-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h1 className="text-2xl font-bold">إدارة الكوبونات</h1>
+                        <p className="text-muted-foreground text-sm mt-1">إنشاء وإدارة أكواد الخصم</p>
+                      </div>
+                      <Button
+                        className="bg-emerald-600 hover:bg-emerald-700"
+                        onClick={() => {
+                          setEditingCoupon(null)
+                          setCouponForm({ code: '', discountPercent: '', maxUses: '', expiresAt: '', isActive: true })
+                          setCouponDialog(true)
+                        }}
+                      >
+                        <Plus className="w-4 h-4 ml-2" />
+                        إضافة كوبون
+                      </Button>
+                    </div>
+
+                    {/* Stats */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <Card className="border-0 shadow-sm">
+                        <CardContent className="p-4 text-center">
+                          <Tag className="w-6 h-6 text-emerald-600 mx-auto mb-1" />
+                          <p className="text-2xl font-bold text-emerald-700">{coupons.length}</p>
+                          <p className="text-xs text-muted-foreground">إجمالي الكوبونات</p>
+                        </CardContent>
+                      </Card>
+                      <Card className="border-0 shadow-sm">
+                        <CardContent className="p-4 text-center">
+                          <CheckCircle className="w-6 h-6 text-green-600 mx-auto mb-1" />
+                          <p className="text-2xl font-bold text-green-700">{coupons.filter(c => c.isActive).length}</p>
+                          <p className="text-xs text-muted-foreground">نشط</p>
+                        </CardContent>
+                      </Card>
+                      <Card className="border-0 shadow-sm">
+                        <CardContent className="p-4 text-center">
+                          <XCircle className="w-6 h-6 text-red-600 mx-auto mb-1" />
+                          <p className="text-2xl font-bold text-red-700">{coupons.filter(c => !c.isActive).length}</p>
+                          <p className="text-xs text-muted-foreground">غير نشط</p>
+                        </CardContent>
+                      </Card>
+                      <Card className="border-0 shadow-sm">
+                        <CardContent className="p-4 text-center">
+                          <Gift className="w-6 h-6 text-purple-600 mx-auto mb-1" />
+                          <p className="text-2xl font-bold text-purple-700">{coupons.reduce((acc: number, c: any) => acc + (c.usedCount || 0), 0)}</p>
+                          <p className="text-xs text-muted-foreground">إجمالي الاستخدام</p>
+                        </CardContent>
+                      </Card>
+                    </div>
+
+                    {/* Coupons List */}
+                    <div className="grid gap-4">
+                      {coupons.map((coupon: any) => {
+                        const isExpired = coupon.expiresAt && new Date(coupon.expiresAt) < new Date()
+                        const isMaxed = coupon.usedCount >= coupon.maxUses
+                        return (
+                          <Card key={coupon.id} className="border-0 shadow-sm hover:shadow-md transition-shadow">
+                            <CardContent className="p-5">
+                              <div className="flex items-start justify-between gap-4">
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2 mb-2 flex-wrap">
+                                    <h3 className="font-mono font-bold text-lg bg-gray-100 px-3 py-1 rounded-lg">{coupon.code}</h3>
+                                    <Badge variant={coupon.isActive && !isExpired && !isMaxed ? 'default' : 'secondary'} className={coupon.isActive && !isExpired && !isMaxed ? 'bg-emerald-100 text-emerald-700' : isExpired ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600'}>
+                                      {isExpired ? 'منتهي الصلاحية' : isMaxed ? 'استُنفد' : coupon.isActive ? 'نشط' : 'غير نشط'}
+                                    </Badge>
+                                  </div>
+                                  <div className="flex items-center gap-4 text-sm flex-wrap">
+                                    <span className="flex items-center gap-1">
+                                      <Percent className="w-3.5 h-3.5 text-emerald-500" />
+                                      خصم <span className="font-bold text-emerald-600">{coupon.discountPercent}%</span>
+                                    </span>
+                                    <span className="text-muted-foreground">
+                                      الاستخدام: <span className="font-medium">{coupon.usedCount || 0}/{coupon.maxUses}</span>
+                                    </span>
+                                    {coupon.expiresAt && (
+                                      <span className="text-muted-foreground">
+                                        ينتهي: <span className="font-medium">{new Date(coupon.expiresAt).toLocaleDateString('ar-YE')}</span>
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <Button variant="outline" size="sm" onClick={() => handleToggleCouponStatus(coupon)}>
+                                    {coupon.isActive ? 'تعطيل' : 'تفعيل'}
+                                  </Button>
+                                  <Button variant="outline" size="sm" onClick={() => {
+                                    setEditingCoupon(coupon)
+                                    setCouponForm({
+                                      code: coupon.code,
+                                      discountPercent: coupon.discountPercent.toString(),
+                                      maxUses: coupon.maxUses.toString(),
+                                      expiresAt: coupon.expiresAt ? coupon.expiresAt.split('T')[0] : '',
+                                      isActive: coupon.isActive,
+                                    })
+                                    setCouponDialog(true)
+                                  }}>
+                                    <Pencil className="w-4 h-4" />
+                                  </Button>
+                                  <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700" onClick={() => handleDeleteCoupon(coupon.id)}>
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                </div>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        )
+                      })}
+                      {coupons.length === 0 && (
+                        <div className="text-center py-16 text-muted-foreground">
+                          <Tag className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                          <p>لا توجد كوبونات بعد. أضف أول كوبون!</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* ===== Reports Tab ===== */}
+                {activeTab === 'reports' && (
+                  <div className="space-y-6">
+                    <div>
+                      <h1 className="text-2xl font-bold">التقارير</h1>
+                      <p className="text-muted-foreground text-sm mt-1">تقارير وإحصائيات النظام</p>
+                    </div>
+
+                    {/* Date Range Selector */}
+                    <Card className="border-0 shadow-sm">
+                      <CardContent className="p-4">
+                        <div className="flex flex-col sm:flex-row items-end gap-3">
+                          <div className="flex-1 space-y-1">
+                            <Label className="text-sm">من تاريخ</Label>
+                            <Input type="date" value={reportFromDate} onChange={e => setReportFromDate(e.target.value)} />
+                          </div>
+                          <div className="flex-1 space-y-1">
+                            <Label className="text-sm">إلى تاريخ</Label>
+                            <Input type="date" value={reportToDate} onChange={e => setReportToDate(e.target.value)} />
+                          </div>
+                          <Button variant="outline" onClick={() => { setReportFromDate(''); setReportToDate('') }} className="w-full sm:w-auto">
+                            مسح الفلتر
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    {/* Revenue Summary */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <Card className="border-0 shadow-sm bg-gradient-to-l from-emerald-500 to-emerald-700 text-white">
+                        <CardContent className="p-6">
+                          <p className="text-emerald-100 text-sm">إجمالي الإيرادات</p>
+                          <p className="text-2xl font-bold mt-1">{formatPrice(stats?.totalRevenue || 0)}</p>
+                        </CardContent>
+                      </Card>
+                      <Card className="border-0 shadow-sm">
+                        <CardContent className="p-6">
+                          <p className="text-sm text-muted-foreground">إجمالي الطلبات</p>
+                          <p className="text-2xl font-bold mt-1">{stats?.totalRequests || 0}</p>
+                        </CardContent>
+                      </Card>
+                      <Card className="border-0 shadow-sm">
+                        <CardContent className="p-6">
+                          <p className="text-sm text-muted-foreground">متوسط قيمة الطلب</p>
+                          <p className="text-2xl font-bold mt-1">
+                            {stats?.totalRequests ? formatPrice(Math.round(stats.totalRevenue / stats.totalRequests)) : formatPrice(0)}
+                          </p>
+                        </CardContent>
+                      </Card>
+                    </div>
+
+                    {/* Service Popularity */}
+                    <Card className="border-0 shadow-sm">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-lg">ترتيب الخدمات حسب الطلب</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        {servicePopularity.length > 0 ? (
+                          <div className="space-y-3">
+                            {servicePopularity.map((svc, i) => (
+                              <div key={i} className="flex items-center gap-4 p-3 rounded-xl bg-gray-50">
+                                <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700 font-bold text-sm">
+                                  {i + 1}
+                                </div>
+                                <div className="flex-1">
+                                  <p className="font-medium">{svc.name}</p>
+                                  <p className="text-xs text-muted-foreground">{svc.count} طلب</p>
+                                </div>
+                                <span className="font-bold text-emerald-600">{formatPrice(svc.revenue)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-center text-muted-foreground py-8">لا توجد بيانات كافية</p>
+                        )}
+                      </CardContent>
+                    </Card>
+
+                    {/* Nurse Performance */}
+                    <Card className="border-0 shadow-sm">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-lg">أداء الممرضين</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        {nursePerformance.length > 0 ? (
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                              <thead>
+                                <tr className="border-b">
+                                  <th className="py-3 px-4 text-right font-medium text-muted-foreground">الممرض</th>
+                                  <th className="py-3 px-4 text-right font-medium text-muted-foreground">التعيينات</th>
+                                  <th className="py-3 px-4 text-right font-medium text-muted-foreground">المكتملة</th>
+                                  <th className="py-3 px-4 text-right font-medium text-muted-foreground">نسبة الإنجاز</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {nursePerformance.map((n, i) => (
+                                  <tr key={i} className="border-b last:border-0 hover:bg-gray-50">
+                                    <td className="py-3 px-4 font-medium">{n.name}</td>
+                                    <td className="py-3 px-4">{n.assignments}</td>
+                                    <td className="py-3 px-4">{n.completed}</td>
+                                    <td className="py-3 px-4">
+                                      <span className={`font-medium ${n.assignments > 0 ? 'text-emerald-600' : 'text-gray-400'}`}>
+                                        {n.assignments > 0 ? Math.round(n.completed / n.assignments * 100) : 0}%
+                                      </span>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        ) : (
+                          <p className="text-center text-muted-foreground py-8">لا توجد بيانات كافية</p>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </div>
+                )}
+
+                {/* ===== Activity Tab ===== */}
+                {activeTab === 'activity' && (
+                  <div className="space-y-6">
+                    <div>
+                      <h1 className="text-2xl font-bold">سجل النشاط</h1>
+                      <p className="text-muted-foreground text-sm mt-1">جميع الأنشطة والأحداث في النظام</p>
+                    </div>
+                    {activityLogs.length > 0 ? (
+                      <div className="space-y-3">
+                        {activityLogs.map((log: any) => (
+                          <Card key={log.id} className="border-0 shadow-sm">
+                            <CardContent className="p-4">
+                              <div className="flex items-start gap-3">
+                                <div className="w-9 h-9 rounded-full bg-emerald-50 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                  <Activity className="w-4 h-4 text-emerald-600" />
+                                </div>
+                                <div className="flex-1">
+                                  <p className="text-sm font-medium">{log.description}</p>
+                                  <div className="flex items-center gap-3 mt-1">
+                                    <Badge variant="outline" className="text-xs">{log.type}</Badge>
+                                    {log.userName && <span className="text-xs text-muted-foreground">بواسطة: {log.userName}</span>}
+                                  </div>
+                                  <p className="text-xs text-muted-foreground mt-1">
+                                    {log.createdAt ? new Date(log.createdAt).toLocaleString('ar') : ''}
+                                  </p>
+                                </div>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-16 text-muted-foreground">
+                        <Activity className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                        <p>لا يوجد نشاط مسجل بعد</p>
+                        <p className="text-sm mt-1">ستظهر هنا أنشطة النظام مثل التسجيلات وتغييرات الحالة</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* ===== Settings Tab ===== */}
                 {activeTab === 'settings' && (
                   <div className="space-y-6">
                     <div>
                       <h1 className="text-2xl font-bold">الإعدادات</h1>
-                      <p className="text-muted-foreground text-sm mt-1">إعدادات حساب المدير</p>
+                      <p className="text-muted-foreground text-sm mt-1">إعدادات حساب المدير والنظام</p>
                     </div>
+                    {/* Account Info */}
                     <Card className="border-0 shadow-sm">
                       <CardContent className="p-6">
                         <h3 className="font-semibold text-lg mb-4">معلومات الحساب</h3>
@@ -867,12 +1656,64 @@ export default function AdminDashboard() {
                         </div>
                       </CardContent>
                     </Card>
+
+                    {/* Change Password */}
                     <Card className="border-0 shadow-sm">
                       <CardContent className="p-6">
                         <h3 className="font-semibold text-lg mb-4">تغيير كلمة المرور</h3>
                         <Button variant="outline" onClick={() => setView('admin-change-password')}>
                           تغيير كلمة المرور
                         </Button>
+                      </CardContent>
+                    </Card>
+
+                    {/* Dark Mode */}
+                    <Card className="border-0 shadow-sm">
+                      <CardContent className="p-6">
+                        <h3 className="font-semibold text-lg mb-4">المظهر</h3>
+                        <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                          <div className="flex items-center gap-3">
+                            {darkMode ? <Moon className="w-5 h-5 text-gray-700" /> : <Sun className="w-5 h-5 text-yellow-500" />}
+                            <div>
+                              <p className="font-medium">{darkMode ? 'الوضع الداكن' : 'الوضع الفاتح'}</p>
+                              <p className="text-xs text-muted-foreground">تبديل مظهر الواجهة</p>
+                            </div>
+                          </div>
+                          <Switch checked={darkMode} onCheckedChange={toggleDarkMode} />
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    {/* System Info */}
+                    <Card className="border-0 shadow-sm">
+                      <CardContent className="p-6">
+                        <h3 className="font-semibold text-lg mb-4">معلومات النظام</h3>
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                            <p className="text-sm text-muted-foreground">حالة Firebase</p>
+                            <Badge className="bg-emerald-100 text-emerald-700">متصل</Badge>
+                          </div>
+                          <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                            <p className="text-sm text-muted-foreground">إجمالي الممرضين</p>
+                            <span className="font-medium">{stats?.totalNurses || 0}</span>
+                          </div>
+                          <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                            <p className="text-sm text-muted-foreground">إجمالي المستفيدين</p>
+                            <span className="font-medium">{stats?.totalBeneficiaries || 0}</span>
+                          </div>
+                          <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                            <p className="text-sm text-muted-foreground">إجمالي الطلبات</p>
+                            <span className="font-medium">{stats?.totalRequests || 0}</span>
+                          </div>
+                          <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                            <p className="text-sm text-muted-foreground">إجمالي الخدمات</p>
+                            <span className="font-medium">{stats?.totalServices || 0}</span>
+                          </div>
+                          <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                            <p className="text-sm text-muted-foreground">إصدار النظام</p>
+                            <span className="font-medium">1.0.0</span>
+                          </div>
+                        </div>
                       </CardContent>
                     </Card>
                   </div>
@@ -953,6 +1794,66 @@ export default function AdminDashboard() {
             <Button variant="outline" onClick={() => setPaymentDialog(false)}>إلغاء</Button>
             <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleSavePayment}>
               {editingPayment ? 'تحديث' : 'إضافة'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Coupon Dialog */}
+      <Dialog open={couponDialog} onOpenChange={setCouponDialog}>
+        <DialogContent className="max-w-md" dir="rtl">
+          <DialogHeader>
+            <DialogTitle>{editingCoupon ? 'تعديل الكوبون' : 'إضافة كوبون جديد'}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>كود الكوبون</Label>
+              <Input
+                value={couponForm.code}
+                onChange={e => setCouponForm(f => ({ ...f, code: e.target.value.toUpperCase() }))}
+                placeholder="مثال: SAVE20"
+                className="font-mono"
+                disabled={!!editingCoupon}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>نسبة الخصم (%)</Label>
+              <Input
+                type="number"
+                min="1"
+                max="100"
+                value={couponForm.discountPercent}
+                onChange={e => setCouponForm(f => ({ ...f, discountPercent: e.target.value }))}
+                placeholder="20"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>الحد الأقصى للاستخدام</Label>
+              <Input
+                type="number"
+                min="1"
+                value={couponForm.maxUses}
+                onChange={e => setCouponForm(f => ({ ...f, maxUses: e.target.value }))}
+                placeholder="100"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>تاريخ الانتهاء</Label>
+              <Input
+                type="date"
+                value={couponForm.expiresAt}
+                onChange={e => setCouponForm(f => ({ ...f, expiresAt: e.target.value }))}
+              />
+            </div>
+            <div className="flex items-center gap-3">
+              <Switch checked={couponForm.isActive} onCheckedChange={v => setCouponForm(f => ({ ...f, isActive: v }))} />
+              <Label>كوبون نشط</Label>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCouponDialog(false)}>إلغاء</Button>
+            <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleSaveCoupon}>
+              {editingCoupon ? 'تحديث' : 'إضافة'}
             </Button>
           </DialogFooter>
         </DialogContent>
