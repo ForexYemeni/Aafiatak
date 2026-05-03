@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { Shield, ArrowRight, Loader2 } from 'lucide-react'
+import { Shield, ArrowRight, Loader2, AlertTriangle, Database } from 'lucide-react'
 import { useAppStore } from '@/lib/store'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -16,63 +16,113 @@ export default function AdminLogin() {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
-  const [initLoading, setInitLoading] = useState(true)
+  const [firebaseStatus, setFirebaseStatus] = useState<{ connected: boolean; error: string | null } | null>(null)
 
+  // Check Firebase connection on mount
   useEffect(() => {
-    setInitLoading(false)
+    checkFirebase()
   }, [])
 
-  const handleInitAndLogin = async () => {
+  const checkFirebase = async () => {
+    try {
+      const res = await fetch('/api/firebase-status')
+      if (res.ok) {
+        const data = await res.json()
+        setFirebaseStatus(data)
+      } else {
+        setFirebaseStatus({ connected: false, error: 'فشل الاتصال بالخادم' })
+      }
+    } catch {
+      setFirebaseStatus({ connected: false, error: 'فشل الاتصال بالخادم' })
+    }
+  }
+
+  const handleLogin = async () => {
     if (!username || !password) {
       toast({ title: 'خطأ', description: 'يرجى ملء جميع الحقول', variant: 'destructive' })
       return
     }
 
+    // Check Firebase first
+    if (firebaseStatus && !firebaseStatus.connected) {
+      toast({
+        title: 'خطأ في قاعدة البيانات',
+        description: firebaseStatus.error || 'Firebase غير متصل. تأكد من إعدادات قاعدة البيانات.',
+        variant: 'destructive',
+        duration: 8000,
+      })
+      return
+    }
+
     setLoading(true)
     try {
-      // Try to init admin first
-      const initRes = await fetch('/api/admin/init', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password, name: 'المدير' }),
-      })
-
-      if (initRes.ok) {
-        const admin = await initRes.json()
-        setUser(admin, 'admin')
-        // New admin must change password
-        setView('admin-change-password')
-        toast({ title: 'تم إنشاء حساب المدير بنجاح', description: 'يجب تغيير كلمة المرور الافتراضية' })
-        return
-      }
-
-      // If admin already exists, try login
+      // Try login first
       const loginRes = await fetch('/api/admin/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
       })
 
+      const loginData = await loginRes.json()
+
       if (loginRes.ok) {
-        const admin = await loginRes.json()
-        setUser(admin, 'admin')
-        
+        setUser(loginData, 'admin')
+
         // Check if must change password
-        if (admin.mustChangePassword) {
+        if (loginData.mustChangePassword) {
           setView('admin-change-password')
-          toast({ title: 'يجب تغيير كلمة المرور', description: admin.message || 'يجب تغيير كلمة المرور الافتراضية قبل المتابعة' })
+          toast({ title: 'يجب تغيير كلمة المرور', description: 'يجب تغيير كلمة المرور الافتراضية قبل المتابعة' })
         } else {
           setView('admin-dashboard')
-          toast({ title: 'تم تسجيل الدخول بنجاح', description: 'مرحباً ' + admin.name })
+          toast({ title: 'تم تسجيل الدخول بنجاح', description: 'مرحباً ' + loginData.name })
+        }
+      } else if (loginRes.status === 401) {
+        // Wrong credentials - try init if no admin exists yet
+        const initRes = await fetch('/api/admin/init', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password, name: 'المدير' }),
+        })
+
+        const initData = await initRes.json()
+
+        if (initRes.ok) {
+          setUser(initData, 'admin')
+          setView('admin-change-password')
+          toast({ title: 'تم إنشاء حساب المدير', description: 'يجب تغيير كلمة المرور الافتراضية' })
+        } else {
+          // Show the specific error
+          toast({
+            title: 'خطأ',
+            description: initData.error || initData.firebaseError || 'اسم المستخدم أو كلمة المرور غير صحيحة',
+            variant: 'destructive',
+            duration: 8000,
+          })
         }
       } else {
-        const data = await loginRes.json()
-        toast({ title: 'خطأ في تسجيل الدخول', description: data.error, variant: 'destructive' })
+        // Other error (500, etc.)
+        toast({
+          title: 'خطأ في الخادم',
+          description: loginData.error || loginData.firebaseError || 'حدث خطأ غير متوقع',
+          variant: 'destructive',
+          duration: 8000,
+        })
       }
-    } catch {
-      toast({ title: 'خطأ', description: 'حدث خطأ في الاتصال بالخادم', variant: 'destructive' })
+    } catch (error) {
+      toast({
+        title: 'خطأ في الاتصال',
+        description: 'تعذر الاتصال بالخادم. تأكد من اتصالك بالإنترنت.',
+        variant: 'destructive',
+        duration: 8000,
+      })
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleLogin()
     }
   }
 
@@ -93,14 +143,43 @@ export default function AdminLogin() {
             <p className="text-muted-foreground text-sm mt-1">أدخل بيانات المدير للوصول إلى لوحة التحكم</p>
           </CardHeader>
           <CardContent className="p-6 space-y-4">
+            {/* Firebase status warning */}
+            {firebaseStatus && !firebaseStatus.connected && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-start gap-2">
+                <AlertTriangle className="w-5 h-5 text-red-600 mt-0.5 shrink-0" />
+                <div className="text-sm">
+                  <p className="font-bold text-red-800">قاعدة البيانات غير متصلة</p>
+                  <p className="text-red-700 mt-1">{firebaseStatus.error}</p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-2 border-red-300 text-red-700"
+                    onClick={() => setView('firebase-setup')}
+                  >
+                    <Database className="w-4 h-4 ml-1" />
+                    إعداد قاعدة البيانات
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Default credentials hint */}
+            <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3">
+              <p className="text-sm text-emerald-800">
+                <strong>بيانات الدخول الافتراضية:</strong> اسم المستخدم: <code className="bg-emerald-100 px-1 rounded">admin</code> | كلمة المرور: <code className="bg-emerald-100 px-1 rounded">admin123</code>
+              </p>
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="username">اسم المستخدم</Label>
               <Input
                 id="username"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
+                onKeyDown={handleKeyDown}
                 placeholder="أدخل اسم المستخدم"
                 className="text-right"
+                disabled={loading}
               />
             </div>
             <div className="space-y-2">
@@ -110,14 +189,16 @@ export default function AdminLogin() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                onKeyDown={handleKeyDown}
                 placeholder="أدخل كلمة المرور"
                 className="text-right"
+                disabled={loading}
               />
             </div>
             <Button
-              className="w-full bg-gradient-to-r from-emerald-500 to-emerald-700 text-white hover:opacity-90"
-              onClick={handleInitAndLogin}
-              disabled={loading}
+              className="w-full bg-gradient-to-r from-emerald-500 to-emerald-700 text-white hover:opacity-90 h-12 text-base"
+              onClick={handleLogin}
+              disabled={loading || (firebaseStatus !== null && !firebaseStatus.connected)}
             >
               {loading ? (
                 <Loader2 className="w-5 h-5 animate-spin" />

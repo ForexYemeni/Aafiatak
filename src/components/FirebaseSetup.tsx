@@ -2,13 +2,10 @@
 
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { Database, AlertTriangle, Copy, CheckCircle2 } from 'lucide-react'
+import { Database, AlertTriangle, Copy, CheckCircle2, ArrowRight, RefreshCw } from 'lucide-react'
 import { useAppStore } from '@/lib/store'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
 import { Separator } from '@/components/ui/separator'
 import { useToast } from '@/hooks/use-toast'
 
@@ -19,21 +16,27 @@ export default function FirebaseSetup() {
   const [firebaseStatus, setFirebaseStatus] = useState<'checking' | 'connected' | 'disconnected'>('checking')
 
   useEffect(() => {
-    // Check Firebase connection
-    fetch('/api/admin/init', { method: 'GET' })
-      .then(res => {
-        if (res.ok) return res.json()
-        throw new Error('not connected')
-      })
-      .then(data => {
-        setFirebaseStatus(data.connected ? 'connected' : 'disconnected')
-      })
-      .catch(() => setFirebaseStatus('disconnected'))
+    checkFirebase()
   }, [])
+
+  const checkFirebase = async () => {
+    setFirebaseStatus('checking')
+    try {
+      const res = await fetch('/api/firebase-status')
+      if (res.ok) {
+        const data = await res.json()
+        setFirebaseStatus(data.connected ? 'connected' : 'disconnected')
+      } else {
+        setFirebaseStatus('disconnected')
+      }
+    } catch {
+      setFirebaseStatus('disconnected')
+    }
+  }
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text)
-    toast({ title: 'تم النسخ' })
+    toast({ title: 'تم النسخ!' })
   }
 
   const steps = [
@@ -47,7 +50,7 @@ export default function FirebaseSetup() {
           <ol className="text-sm space-y-2 list-decimal list-inside">
             <li>افتح <a href="https://console.firebase.google.com" target="_blank" className="text-emerald-600 underline" rel="noreferrer">Firebase Console</a></li>
             <li>اضغط على &quot;Add Project&quot; (إضافة مشروع)</li>
-            <li>أدخل اسم المشروع (مثلاً: afiyatak)</li>
+            <li>أدخل اسم المشروع (مثلاً: aafiatak)</li>
             <li>اختر عدم تفعيل Analytics (اختياري)</li>
             <li>اضغط &quot;Create Project&quot;</li>
           </ol>
@@ -59,7 +62,7 @@ export default function FirebaseSetup() {
       content: (
         <div className="space-y-3">
           <p className="text-sm text-muted-foreground leading-relaxed">
-            يجب تفعيل قاعدة بيانات Firestore في المشروع.
+            يجب تفعيل قاعدة بيانات Firestore في المشروع حتى يتم تخزين البيانات.
           </p>
           <ol className="text-sm space-y-2 list-decimal list-inside">
             <li>من القائمة الجانبية، اضغط على &quot;Firestore Database&quot;</li>
@@ -68,6 +71,12 @@ export default function FirebaseSetup() {
             <li>اختر أقرب موقع جغرافي (مثلاً: europe-west1)</li>
             <li>اضغط &quot;Done&quot;</li>
           </ol>
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-2">
+            <AlertTriangle className="w-5 h-5 text-amber-600 mt-0.5 shrink-0" />
+            <p className="text-sm text-amber-800">
+              هذه الخطوة ضرورية جداً! بدون إنشاء Firestore Database ستظهر أخطاء PERMISSION_DENIED.
+            </p>
+          </div>
         </div>
       ),
     },
@@ -76,14 +85,14 @@ export default function FirebaseSetup() {
       content: (
         <div className="space-y-3">
           <p className="text-sm text-muted-foreground leading-relaxed">
-            هذا هو المفتاح الذي يسمح للتطبيق بالاتصال بقاعدة البيانات.
+            هذا المفتاح يسمح للتطبيق بالاتصال بقاعدة البيانات بشكل آمن.
           </p>
           <ol className="text-sm space-y-2 list-decimal list-inside">
-            <li>اذهب إلى إعدادات المشروع ⚙️</li>
+            <li>اذهب إلى <strong>Project Settings</strong> (⚙️ إعدادات المشروع)</li>
             <li>اختر تبويب &quot;Service Accounts&quot;</li>
             <li>اضغط &quot;Generate New Private Key&quot;</li>
             <li>سيتم تحميل ملف JSON - افتحه</li>
-            <li>انسخ القيم الثلاث المطلوبة أدناه</li>
+            <li>انسخ القيم الثلاث المطلوبة</li>
           </ol>
         </div>
       ),
@@ -95,34 +104,47 @@ export default function FirebaseSetup() {
           <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-2">
             <AlertTriangle className="w-5 h-5 text-amber-600 mt-0.5 shrink-0" />
             <p className="text-sm text-amber-800">
-              أدخل بيانات مفتاح الخدمة من ملف JSON الذي تم تحميله. هذه البيانات تُحفظ في ملف .env.local على الخادم فقط ولا تُعرض للمستخدمين.
+              إذا كنت تستخدم Vercel، أضف هذه المتغيرات في Settings → Environment Variables. أما محلياً، أضفها في ملف .env.local
             </p>
           </div>
-          <div className="space-y-2">
-            <Label>project_id</Label>
-            <div className="flex gap-2">
-              <Input placeholder="مثال: afiyatak-12345" className="text-left" dir="ltr" />
-              <Button size="sm" variant="outline" onClick={() => copyToClipboard('FIREBASE_PROJECT_ID=')}>
-                <Copy className="w-4 h-4" />
-              </Button>
+
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <Label className="font-bold text-sm">FIREBASE_PROJECT_ID</Label>
+                <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => copyToClipboard('FIREBASE_PROJECT_ID=')}>
+                  <Copy className="w-3 h-3 ml-1" /> نسخ
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">من ملف JSON: project_id</p>
+              <div className="bg-gray-50 border rounded p-2 text-xs font-mono text-left" dir="ltr">
+                aafiatak-26439
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <Label className="font-bold text-sm">FIREBASE_CLIENT_EMAIL</Label>
+                <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => copyToClipboard('FIREBASE_CLIENT_EMAIL=')}>
+                  <Copy className="w-3 h-3 ml-1" /> نسخ
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">من ملف JSON: client_email</p>
+              <div className="bg-gray-50 border rounded p-2 text-xs font-mono text-left break-all" dir="ltr">
+                firebase-adminsdk-fbsvc@aafiatak-26439.iam.gserviceaccount.com
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <Label className="font-bold text-sm">FIREBASE_PRIVATE_KEY</Label>
+                <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => copyToClipboard('FIREBASE_PRIVATE_KEY=')}>
+                  <Copy className="w-3 h-3 ml-1" /> نسخ
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">من ملف JSON: private_key - انسخه بالكامل بما فيه -----BEGIN و -----END</p>
             </div>
           </div>
-          <div className="space-y-2">
-            <Label>client_email</Label>
-            <div className="flex gap-2">
-              <Input placeholder="مثال: firebase-adminsdk@afiyatak.iam.gserviceaccount.com" className="text-left" dir="ltr" />
-              <Button size="sm" variant="outline" onClick={() => copyToClipboard('FIREBASE_CLIENT_EMAIL=')}>
-                <Copy className="w-4 h-4" />
-              </Button>
-            </div>
-          </div>
-          <div className="space-y-2">
-            <Label>private_key</Label>
-            <Textarea placeholder="-----BEGIN PRIVATE KEY-----\nMIIE...\n-----END PRIVATE KEY-----" className="text-left font-mono text-xs" dir="ltr" rows={4} />
-          </div>
-          <p className="text-xs text-muted-foreground">
-            بعد إدخال البيانات، أضفها إلى ملف .env.local بالصيغة الموضحة أعلاه ثم أعد تشغيل الخادم.
-          </p>
         </div>
       ),
     },
@@ -145,18 +167,30 @@ export default function FirebaseSetup() {
             <p className="text-muted-foreground text-sm mt-1">
               اربط التطبيق بـ Firebase Firestore (مجاني مدى الحياة)
             </p>
-            {firebaseStatus === 'disconnected' && (
-              <div className="mt-2 inline-flex items-center gap-1.5 bg-red-50 text-red-700 px-3 py-1.5 rounded-full text-xs font-medium">
-                <span className="w-2 h-2 rounded-full bg-red-500"></span>
-                غير متصل
-              </div>
-            )}
-            {firebaseStatus === 'connected' && (
-              <div className="mt-2 inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-full text-xs font-medium">
-                <CheckCircle2 className="w-3 h-3" />
-                متصل بنجاح
-              </div>
-            )}
+            <div className="flex items-center justify-center gap-2 mt-3">
+              {firebaseStatus === 'disconnected' && (
+                <div className="inline-flex items-center gap-1.5 bg-red-50 text-red-700 px-3 py-1.5 rounded-full text-xs font-medium">
+                  <span className="w-2 h-2 rounded-full bg-red-500" />
+                  غير متصل
+                </div>
+              )}
+              {firebaseStatus === 'connected' && (
+                <div className="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-full text-xs font-medium">
+                  <CheckCircle2 className="w-3 h-3" />
+                  متصل بنجاح ✅
+                </div>
+              )}
+              {firebaseStatus === 'checking' && (
+                <div className="inline-flex items-center gap-1.5 bg-gray-50 text-gray-600 px-3 py-1.5 rounded-full text-xs font-medium">
+                  <RefreshCw className="w-3 h-3 animate-spin" />
+                  جاري التحقق...
+                </div>
+              )}
+              <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={checkFirebase}>
+                <RefreshCw className="w-3 h-3 ml-1" />
+                إعادة التحقق
+              </Button>
+            </div>
           </CardHeader>
           <CardContent className="p-6">
             {/* Step progress */}
@@ -184,10 +218,8 @@ export default function FirebaseSetup() {
             <Separator className="my-6" />
 
             <div className="flex items-center justify-between">
-              <Button
-                variant="ghost"
-                onClick={() => setView('landing')}
-              >
+              <Button variant="ghost" onClick={() => setView('landing')}>
+                <ArrowRight className="w-4 h-4 ml-2" />
                 العودة للرئيسية
               </Button>
               <div className="flex gap-2">
@@ -204,10 +236,11 @@ export default function FirebaseSetup() {
                   <Button
                     className="bg-emerald-600 hover:bg-emerald-700"
                     onClick={() => {
-                      toast({ title: 'تم الحفظ', description: 'أعد تشغيل الخادم لتطبيق التغييرات' })
+                      checkFirebase()
+                      toast({ title: 'جاري التحقق من الاتصال...' })
                     }}
                   >
-                    حفظ الإعدادات
+                    التحقق من الاتصال
                   </Button>
                 )}
               </div>
@@ -217,4 +250,8 @@ export default function FirebaseSetup() {
       </motion.div>
     </div>
   )
+}
+
+function Label({ className, children }: { className?: string; children: React.ReactNode }) {
+  return <label className={className}>{children}</label>
 }

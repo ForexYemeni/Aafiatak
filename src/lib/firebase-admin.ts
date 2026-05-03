@@ -36,8 +36,18 @@ if (!admin.apps.length) {
       console.error('❌ Firebase Admin SDK initialization failed:', error.message)
     }
   } else {
-    initializationError = 'بيانات Firebase غير مكتملة أو غير صالحة. يرجى تعيين FIREBASE_PROJECT_ID و FIREBASE_CLIENT_EMAIL و FIREBASE_PRIVATE_KEY في ملف .env.local'
-    console.warn('⚠️ Firebase Admin SDK: Missing or invalid credentials. Please set FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, and FIREBASE_PRIVATE_KEY in .env.local')
+    // Provide specific error message based on what's missing
+    const missing = []
+    if (!firebaseConfig.projectId) missing.push('FIREBASE_PROJECT_ID')
+    if (!firebaseConfig.clientEmail) missing.push('FIREBASE_CLIENT_EMAIL')
+    if (!firebaseConfig.privateKey) missing.push('FIREBASE_PRIVATE_KEY')
+    
+    if (missing.length > 0) {
+      initializationError = `بيانات Firebase غير مكتملة. المتغيرات الناقصة: ${missing.join(', ')}`
+    } else {
+      initializationError = 'بيانات Firebase غير صالحة. تأكد من صحة المفتاح الخاص.'
+    }
+    console.warn('⚠️ Firebase Admin SDK: Missing or invalid credentials.', missing.length > 0 ? `Missing: ${missing.join(', ')}` : '')
   }
 } else {
   firebaseInitialized = true

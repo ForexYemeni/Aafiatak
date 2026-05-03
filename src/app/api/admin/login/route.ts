@@ -30,7 +30,14 @@ export async function POST(request: NextRequest) {
         message: 'يجب تغيير كلمة المرور الافتراضية قبل المتابعة',
       }),
     })
-  } catch (error) {
-    return NextResponse.json({ error: 'حدث خطأ في الخادم' }, { status: 500 })
+  } catch (error: any) {
+    console.error('Admin login error:', error.message)
+    const msg = error.message || 'حدث خطأ في الخادم'
+    return NextResponse.json({
+      error: msg.includes('Firebase') || msg.includes('غير مهيأ')
+        ? 'قاعدة البيانات غير متصلة. تأكد من إعداد Firebase بشكل صحيح.'
+        : 'حدث خطأ في الخادم. حاول مرة أخرى.',
+      details: msg,
+    }, { status: 500 })
   }
 }

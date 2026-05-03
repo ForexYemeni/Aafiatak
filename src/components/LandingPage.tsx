@@ -1,13 +1,37 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Shield, Stethoscope, Heart, Database } from 'lucide-react'
+import { Shield, Stethoscope, Heart, Database, AlertTriangle } from 'lucide-react'
 import { useAppStore } from '@/lib/store'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 
 export default function LandingPage() {
   const { setView } = useAppStore()
+  const [firebaseConnected, setFirebaseConnected] = useState<boolean | null>(null)
+  const [firebaseError, setFirebaseError] = useState<string | null>(null)
+
+  useEffect(() => {
+    checkFirebase()
+  }, [])
+
+  const checkFirebase = async () => {
+    try {
+      const res = await fetch('/api/firebase-status')
+      if (res.ok) {
+        const data = await res.json()
+        setFirebaseConnected(data.connected)
+        setFirebaseError(data.error)
+      } else {
+        setFirebaseConnected(false)
+        setFirebaseError('فشل الاتصال بالخادم')
+      }
+    } catch {
+      setFirebaseConnected(false)
+      setFirebaseError('فشل الاتصال بالخادم')
+    }
+  }
 
   const cards = [
     {
@@ -62,6 +86,47 @@ export default function LandingPage() {
             منصة متكاملة لربط المستفيدين بالممرضين المؤهلين
           </p>
         </motion.div>
+
+        {/* Firebase Status Banner */}
+        {firebaseConnected === false && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="w-full max-w-4xl mb-6"
+          >
+            <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3">
+              <AlertTriangle className="w-6 h-6 text-red-600 mt-0.5 shrink-0" />
+              <div className="flex-1">
+                <p className="font-bold text-red-800">قاعدة البيانات غير متصلة</p>
+                <p className="text-sm text-red-700 mt-1">
+                  {firebaseError || 'لا يمكن الاتصال بـ Firebase. يرجى إعداد قاعدة البيانات أولاً.'}
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-2 border-red-300 text-red-700 hover:bg-red-50"
+                  onClick={() => setView('firebase-setup')}
+                >
+                  <Database className="w-4 h-4 ml-1" />
+                  إعداد قاعدة البيانات
+                </Button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {firebaseConnected === true && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="w-full max-w-4xl mb-6"
+          >
+            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <p className="text-sm text-emerald-700">قاعدة البيانات متصلة بنجاح</p>
+            </div>
+          </motion.div>
+        )}
 
         <motion.div
           initial={{ opacity: 0, y: 30 }}
