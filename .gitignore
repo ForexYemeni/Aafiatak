@@ -1,0 +1,51 @@
+# dependencies
+node_modules
+/.pnp
+.pnp.*
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+.pnpm-debug.log*
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# env files - keep .env.local and .env.example
+.env
+!.env.local
+!.env.example
+
+# logs
+*.log
+
+# vercel
+.vercel
+
+# IDE
+.claude
+.z-ai-config
+
+# ========== NOT part of Aafiatak project ==========
+skills/
+.zscripts/
+mini-services/
+prisma/
+examples/
+download/
+db/
+agent-ctx/
+Caddyfile
+worklog.md
+src/lib/db.ts
