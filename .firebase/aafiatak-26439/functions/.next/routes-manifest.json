@@ -1,0 +1,299 @@
+{
+  "version": 3,
+  "pages404": true,
+  "appType": "app",
+  "caseSensitive": false,
+  "basePath": "",
+  "redirects": [
+    {
+      "source": "/:path+/",
+      "destination": "/:path+",
+      "internal": true,
+      "priority": true,
+      "statusCode": 308,
+      "regex": "^(?:/((?:[^/]+?)(?:/(?:[^/]+?))*))/$"
+    }
+  ],
+  "headers": [],
+  "rewrites": {
+    "beforeFiles": [],
+    "afterFiles": [],
+    "fallback": []
+  },
+  "dynamicRoutes": [
+    {
+      "page": "/api/admin/coupons/[id]",
+      "regex": "^/api/admin/coupons/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/admin/coupons/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/api/admin/nurses/[id]",
+      "regex": "^/api/admin/nurses/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/admin/nurses/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/api/admin/payments/[id]",
+      "regex": "^/api/admin/payments/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/admin/payments/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/api/admin/requests/[id]",
+      "regex": "^/api/admin/requests/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/admin/requests/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/api/admin/services/[id]",
+      "regex": "^/api/admin/services/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/admin/services/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/api/beneficiary/requests/[id]",
+      "regex": "^/api/beneficiary/requests/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/beneficiary/requests/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/api/nurse/assignments/[id]",
+      "regex": "^/api/nurse/assignments/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/nurse/assignments/(?<nxtPid>[^/]+?)(?:/)?$"
+    }
+  ],
+  "staticRoutes": [
+    {
+      "page": "/",
+      "regex": "^/(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/(?:/)?$"
+    },
+    {
+      "page": "/_global-error",
+      "regex": "^/_global\\-error(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/_global\\-error(?:/)?$"
+    },
+    {
+      "page": "/_not-found",
+      "regex": "^/_not\\-found(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/_not\\-found(?:/)?$"
+    },
+    {
+      "page": "/api",
+      "regex": "^/api(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api(?:/)?$"
+    },
+    {
+      "page": "/api/admin/activity-log",
+      "regex": "^/api/admin/activity\\-log(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/admin/activity\\-log(?:/)?$"
+    },
+    {
+      "page": "/api/admin/assign-nurse",
+      "regex": "^/api/admin/assign\\-nurse(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/admin/assign\\-nurse(?:/)?$"
+    },
+    {
+      "page": "/api/admin/beneficiaries",
+      "regex": "^/api/admin/beneficiaries(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/admin/beneficiaries(?:/)?$"
+    },
+    {
+      "page": "/api/admin/change-password",
+      "regex": "^/api/admin/change\\-password(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/admin/change\\-password(?:/)?$"
+    },
+    {
+      "page": "/api/admin/coupons",
+      "regex": "^/api/admin/coupons(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/admin/coupons(?:/)?$"
+    },
+    {
+      "page": "/api/admin/dashboard",
+      "regex": "^/api/admin/dashboard(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/admin/dashboard(?:/)?$"
+    },
+    {
+      "page": "/api/admin/init",
+      "regex": "^/api/admin/init(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/admin/init(?:/)?$"
+    },
+    {
+      "page": "/api/admin/login",
+      "regex": "^/api/admin/login(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/admin/login(?:/)?$"
+    },
+    {
+      "page": "/api/admin/nurses",
+      "regex": "^/api/admin/nurses(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/admin/nurses(?:/)?$"
+    },
+    {
+      "page": "/api/admin/payments",
+      "regex": "^/api/admin/payments(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/admin/payments(?:/)?$"
+    },
+    {
+      "page": "/api/admin/profile",
+      "regex": "^/api/admin/profile(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/admin/profile(?:/)?$"
+    },
+    {
+      "page": "/api/admin/requests",
+      "regex": "^/api/admin/requests(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/admin/requests(?:/)?$"
+    },
+    {
+      "page": "/api/admin/services",
+      "regex": "^/api/admin/services(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/admin/services(?:/)?$"
+    },
+    {
+      "page": "/api/beneficiary/login",
+      "regex": "^/api/beneficiary/login(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/beneficiary/login(?:/)?$"
+    },
+    {
+      "page": "/api/beneficiary/payments",
+      "regex": "^/api/beneficiary/payments(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/beneficiary/payments(?:/)?$"
+    },
+    {
+      "page": "/api/beneficiary/profile",
+      "regex": "^/api/beneficiary/profile(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/beneficiary/profile(?:/)?$"
+    },
+    {
+      "page": "/api/beneficiary/register",
+      "regex": "^/api/beneficiary/register(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/beneficiary/register(?:/)?$"
+    },
+    {
+      "page": "/api/beneficiary/requests",
+      "regex": "^/api/beneficiary/requests(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/beneficiary/requests(?:/)?$"
+    },
+    {
+      "page": "/api/beneficiary/services",
+      "regex": "^/api/beneficiary/services(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/beneficiary/services(?:/)?$"
+    },
+    {
+      "page": "/api/chat",
+      "regex": "^/api/chat(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/chat(?:/)?$"
+    },
+    {
+      "page": "/api/coupons/validate",
+      "regex": "^/api/coupons/validate(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/coupons/validate(?:/)?$"
+    },
+    {
+      "page": "/api/emergency",
+      "regex": "^/api/emergency(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/emergency(?:/)?$"
+    },
+    {
+      "page": "/api/firebase-status",
+      "regex": "^/api/firebase\\-status(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/firebase\\-status(?:/)?$"
+    },
+    {
+      "page": "/api/loyalty",
+      "regex": "^/api/loyalty(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/loyalty(?:/)?$"
+    },
+    {
+      "page": "/api/nurse/assignments",
+      "regex": "^/api/nurse/assignments(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/nurse/assignments(?:/)?$"
+    },
+    {
+      "page": "/api/nurse/login",
+      "regex": "^/api/nurse/login(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/nurse/login(?:/)?$"
+    },
+    {
+      "page": "/api/nurse/profile",
+      "regex": "^/api/nurse/profile(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/nurse/profile(?:/)?$"
+    },
+    {
+      "page": "/api/nurse/register",
+      "regex": "^/api/nurse/register(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/nurse/register(?:/)?$"
+    },
+    {
+      "page": "/api/referral",
+      "regex": "^/api/referral(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/referral(?:/)?$"
+    }
+  ],
+  "dataRoutes": [],
+  "rsc": {
+    "header": "rsc",
+    "varyHeader": "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch",
+    "prefetchHeader": "next-router-prefetch",
+    "didPostponeHeader": "x-nextjs-postponed",
+    "contentTypeHeader": "text/x-component",
+    "suffix": ".rsc",
+    "prefetchSegmentHeader": "next-router-segment-prefetch",
+    "prefetchSegmentSuffix": ".segment.rsc",
+    "prefetchSegmentDirSuffix": ".segments",
+    "clientParamParsing": false,
+    "dynamicRSCPrerender": false
+  },
+  "rewriteHeaders": {
+    "pathHeader": "x-nextjs-rewritten-path",
+    "queryHeader": "x-nextjs-rewritten-query"
+  }
+}

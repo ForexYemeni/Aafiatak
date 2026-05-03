@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": [],
+  "sections": [
+    {"offset": {"line": 46, "column": 0}, "map": {"version":3,"sources":["file:///home/z/my-project/src/lib/db.ts"],"sourcesContent":["import { PrismaClient } from '@prisma/client'\n\nconst globalForPrisma = globalThis as unknown as {\n  prisma: PrismaClient | undefined\n}\n\nexport const db =\n  globalForPrisma.prisma ??\n  new PrismaClient({\n    log: ['query'],\n  })\n\nif (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = db"],"names":[],"mappings":";;;;AAAA;;AAEA,MAAM,kBAAkB;AAIjB,MAAM,KACX,gBAAgB,MAAM,IACtB,IAAI,sMAAY,CAAC;IACf,KAAK;QAAC;KAAQ;AAChB;AAEF,wCAA2C,gBAAgB,MAAM,GAAG"}},
+    {"offset": {"line": 63, "column": 0}, "map": {"version":3,"sources":["file:///home/z/my-project/src/app/api/beneficiary/services/route.ts"],"sourcesContent":["import { NextResponse } from 'next/server'\nimport { db } from '@/lib/db'\n\nexport async function GET() {\n  try {\n    const services = await db.service.findMany({\n      where: { isActive: true },\n      orderBy: { createdAt: 'desc' },\n    })\n    return NextResponse.json(services)\n  } catch (error) {\n    return NextResponse.json({ error: 'حدث خطأ في الخادم' }, { status: 500 })\n  }\n}\n"],"names":[],"mappings":";;;;AAAA;AACA;;;AAEO,eAAe;IACpB,IAAI;QACF,MAAM,WAAW,MAAM,wHAAE,CAAC,OAAO,CAAC,QAAQ,CAAC;YACzC,OAAO;gBAAE,UAAU;YAAK;YACxB,SAAS;gBAAE,WAAW;YAAO;QAC/B;QACA,OAAO,gJAAY,CAAC,IAAI,CAAC;IAC3B,EAAE,OAAO,OAAO;QACd,OAAO,gJAAY,CAAC,IAAI,CAAC;YAAE,OAAO;QAAoB,GAAG;YAAE,QAAQ;QAAI;IACzE;AACF"}}]
+}

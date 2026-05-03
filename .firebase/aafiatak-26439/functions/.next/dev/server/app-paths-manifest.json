@@ -1,0 +1,12 @@
+{
+  "/api/admin/activity-log/route": "app/api/admin/activity-log/route.js",
+  "/api/admin/dashboard/route": "app/api/admin/dashboard/route.js",
+  "/api/admin/login/route": "app/api/admin/login/route.js",
+  "/api/admin/payments/route": "app/api/admin/payments/route.js",
+  "/api/admin/requests/route": "app/api/admin/requests/route.js",
+  "/api/admin/services/[id]/route": "app/api/admin/services/[id]/route.js",
+  "/api/admin/services/route": "app/api/admin/services/route.js",
+  "/api/beneficiary/services/route": "app/api/beneficiary/services/route.js",
+  "/api/firebase-status/route": "app/api/firebase-status/route.js",
+  "/page": "app/page.js"
+}
