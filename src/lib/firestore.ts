@@ -189,11 +189,14 @@ export async function getAllServices() {
 
 export async function getActiveServices() {
   checkFirebase()
+  // Fetch all services ordered by createdAt, then filter active ones in code
+  // This avoids the need for a composite Firestore index
   const snapshot = await firestore.collection('services')
-    .where('isActive', '==', true)
     .orderBy('createdAt', 'desc')
     .get()
-  return snapshot.docs.map(docToObject)
+  return snapshot.docs
+    .filter(doc => doc.data().isActive === true)
+    .map(docToObject)
 }
 
 export async function getServiceById(id: string) {
@@ -598,11 +601,14 @@ export async function getAllPaymentMethods() {
 
 export async function getActivePaymentMethods() {
   checkFirebase()
+  // Fetch all payment methods ordered by createdAt, then filter active ones in code
+  // This avoids the need for a composite Firestore index
   const snapshot = await firestore.collection('paymentMethods')
-    .where('isActive', '==', true)
     .orderBy('createdAt', 'desc')
     .get()
-  return snapshot.docs.map(docToObject)
+  return snapshot.docs
+    .filter(doc => doc.data().isActive === true)
+    .map(docToObject)
 }
 
 export async function getPaymentMethodById(id: string) {

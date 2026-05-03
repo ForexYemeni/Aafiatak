@@ -4,15 +4,11 @@ import { create } from 'zustand'
 
 export type AppView =
   | 'landing'
-  | 'admin-login'
+  | 'unified-login'
   | 'admin-dashboard'
   | 'admin-change-password'
   | 'firebase-setup'
-  | 'nurse-login'
-  | 'nurse-register'
   | 'nurse-dashboard'
-  | 'beneficiary-login'
-  | 'beneficiary-register'
   | 'beneficiary-dashboard'
 
 interface AdminUser {

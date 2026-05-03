@@ -6,6 +6,7 @@ import { Shield, Stethoscope, Heart, Database, AlertTriangle } from 'lucide-reac
 import { useAppStore } from '@/lib/store'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import Image from 'next/image'
 
 export default function LandingPage() {
   const { setView } = useAppStore()
@@ -35,51 +36,67 @@ export default function LandingPage() {
 
   const cards = [
     {
-      icon: Shield,
-      title: 'الإدارة',
-      description: 'لوحة تحكم المدير لإدارة الخدمات والممرضين والطلبات',
-      view: 'admin-login' as const,
-      color: 'from-emerald-500 to-emerald-700',
-      bgLight: 'bg-emerald-50',
-      iconColor: 'text-emerald-600',
+      icon: Heart,
+      title: 'المستفيد',
+      description: 'طلب الخدمات الصحية ومتابعة حالة الطلبات',
+      view: 'unified-login' as const,
+      color: 'from-rose-500 via-pink-500 to-fuchsia-600',
+      bgLight: 'bg-rose-50',
+      iconColor: 'text-rose-600',
+      role: 'beneficiary',
     },
     {
       icon: Stethoscope,
       title: 'الممرض',
       description: 'تسجيل الدخول أو إنشاء حساب لمتابعة المهام المعينة',
-      view: 'nurse-login' as const,
-      color: 'from-teal-500 to-teal-700',
-      bgLight: 'bg-teal-50',
-      iconColor: 'text-teal-600',
+      view: 'unified-login' as const,
+      color: 'from-violet-500 via-purple-500 to-indigo-600',
+      bgLight: 'bg-violet-50',
+      iconColor: 'text-violet-600',
+      role: 'nurse',
     },
     {
-      icon: Heart,
-      title: 'المستفيد',
-      description: 'طلب الخدمات الصحية ومتابعة حالة الطلبات',
-      view: 'beneficiary-login' as const,
-      color: 'from-cyan-500 to-cyan-700',
-      bgLight: 'bg-cyan-50',
-      iconColor: 'text-cyan-600',
+      icon: Shield,
+      title: 'الإدارة',
+      description: 'لوحة تحكم المدير لإدارة الخدمات والممرضين والطلبات',
+      view: 'unified-login' as const,
+      color: 'from-amber-500 via-orange-500 to-red-600',
+      bgLight: 'bg-amber-50',
+      iconColor: 'text-amber-600',
+      role: 'admin',
     },
   ]
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-emerald-50 via-white to-emerald-50 flex flex-col">
-      {/* Header */}
-      <div className="flex-1 flex flex-col items-center justify-center px-4 py-12">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 flex flex-col">
+      {/* Background decorations */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-40 -right-40 w-80 h-80 bg-gradient-to-br from-rose-200/30 to-purple-200/30 rounded-full blur-3xl" />
+        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-gradient-to-br from-violet-200/30 to-amber-200/30 rounded-full blur-3xl" />
+      </div>
+
+      <div className="flex-1 flex flex-col items-center justify-center px-4 py-12 relative z-10">
+        {/* Logo & Title */}
         <motion.div
           initial={{ opacity: 0, y: -30 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8 }}
           className="text-center mb-12"
         >
-          <div className="inline-flex items-center justify-center w-24 h-24 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 shadow-xl mb-6">
-            <Heart className="w-12 h-12 text-white" />
+          <div className="inline-block mb-6">
+            <Image
+              src="/logo.png"
+              alt="عافيتك"
+              width={100}
+              height={100}
+              className="rounded-2xl shadow-xl"
+              priority
+            />
           </div>
-          <h1 className="text-6xl md:text-7xl font-bold bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent mb-4">
+          <h1 className="text-6xl md:text-7xl font-bold bg-gradient-to-r from-rose-600 via-purple-600 to-indigo-600 bg-clip-text text-transparent mb-4">
             عافيتك
           </h1>
-          <p className="text-xl md:text-2xl text-emerald-700 font-medium">
+          <p className="text-xl md:text-2xl text-slate-700 font-medium">
             رعاية صحية في منزلك
           </p>
           <p className="text-muted-foreground mt-2 text-base">
@@ -115,6 +132,7 @@ export default function LandingPage() {
           </motion.div>
         )}
 
+        {/* Role Cards */}
         <motion.div
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
@@ -157,9 +175,9 @@ export default function LandingPage() {
       </div>
 
       {/* Footer */}
-      <footer className="text-center py-6">
+      <footer className="text-center py-6 relative z-10">
         <p className="text-sm text-muted-foreground">
-          © {new Date().getFullYear()} عافيتك - جميع الحقوق محفوظة
+          &copy; {new Date().getFullYear()} عافيتك - جميع الحقوق محفوظة
         </p>
       </footer>
     </div>

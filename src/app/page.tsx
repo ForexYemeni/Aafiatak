@@ -3,28 +3,20 @@
 import { useAppStore, type AppView } from '@/lib/store'
 import { AnimatePresence, motion } from 'framer-motion'
 import LandingPage from '@/components/LandingPage'
-import AdminLogin from '@/components/AdminLogin'
+import UnifiedLogin from '@/components/UnifiedLogin'
 import AdminDashboard from '@/components/AdminDashboard'
 import AdminChangePassword from '@/components/AdminChangePassword'
 import FirebaseSetup from '@/components/FirebaseSetup'
-import NurseLogin from '@/components/NurseLogin'
-import NurseRegister from '@/components/NurseRegister'
 import NurseDashboard from '@/components/NurseDashboard'
-import BeneficiaryLogin from '@/components/BeneficiaryLogin'
-import BeneficiaryRegister from '@/components/BeneficiaryRegister'
 import BeneficiaryDashboard from '@/components/BeneficiaryDashboard'
 
 const viewComponents: Record<AppView, React.ComponentType> = {
   landing: LandingPage,
-  'admin-login': AdminLogin,
+  'unified-login': UnifiedLogin,
   'admin-dashboard': AdminDashboard,
   'admin-change-password': AdminChangePassword,
   'firebase-setup': FirebaseSetup,
-  'nurse-login': NurseLogin,
-  'nurse-register': NurseRegister,
   'nurse-dashboard': NurseDashboard,
-  'beneficiary-login': BeneficiaryLogin,
-  'beneficiary-register': BeneficiaryRegister,
   'beneficiary-dashboard': BeneficiaryDashboard,
 }
 
