@@ -204,13 +204,6 @@ export default function AdminLogin() {
               </div>
             )}
 
-            {/* Default credentials hint */}
-            <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3">
-              <p className="text-sm text-emerald-800">
-                <strong>بيانات الدخول الافتراضية:</strong> اسم المستخدم: <code className="bg-emerald-100 px-1 rounded">admin</code> | كلمة المرور: <code className="bg-emerald-100 px-1 rounded">admin123</code>
-              </p>
-            </div>
-
             <div className="space-y-2">
               <Label htmlFor="username">اسم المستخدم</Label>
               <Input

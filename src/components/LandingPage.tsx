@@ -87,7 +87,7 @@ export default function LandingPage() {
           </p>
         </motion.div>
 
-        {/* Firebase Status Banner */}
+        {/* Firebase Status Banner - only show when disconnected */}
         {firebaseConnected === false && (
           <motion.div
             initial={{ opacity: 0, y: 10 }}
@@ -111,19 +111,6 @@ export default function LandingPage() {
                   إعداد قاعدة البيانات
                 </Button>
               </div>
-            </div>
-          </motion.div>
-        )}
-
-        {firebaseConnected === true && (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="w-full max-w-4xl mb-6"
-          >
-            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <p className="text-sm text-emerald-700">قاعدة البيانات متصلة بنجاح</p>
             </div>
           </motion.div>
         )}
@@ -170,16 +157,7 @@ export default function LandingPage() {
       </div>
 
       {/* Footer */}
-      <footer className="text-center py-6 flex flex-col items-center gap-3">
-        <Button
-          variant="outline"
-          size="sm"
-          className="border-orange-200 text-orange-700 hover:bg-orange-50 gap-2"
-          onClick={() => setView('firebase-setup')}
-        >
-          <Database className="w-4 h-4" />
-          إعداد قاعدة البيانات
-        </Button>
+      <footer className="text-center py-6">
         <p className="text-sm text-muted-foreground">
           © {new Date().getFullYear()} عافيتك - جميع الحقوق محفوظة
         </p>
