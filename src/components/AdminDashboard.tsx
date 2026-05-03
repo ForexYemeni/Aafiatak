@@ -19,6 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch'
 import { Separator } from '@/components/ui/separator'
 import { useToast } from '@/hooks/use-toast'
+import Image from 'next/image'
 
 type Tab = 'dashboard' | 'services' | 'nurses' | 'beneficiaries' | 'requests' | 'payments' | 'settings'
 
@@ -345,8 +346,8 @@ export default function AdminDashboard() {
         {/* Logo */}
         <div className="p-6 border-b bg-gradient-to-l from-emerald-600 to-emerald-700">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
-              <Heart className="w-6 h-6 text-white" />
+            <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center overflow-hidden">
+              <Image src="/logo.png" alt="عافيتك" width={40} height={40} className="rounded-lg" />
             </div>
             <div>
               <h2 className="text-xl font-bold text-white">عافيتك</h2>
@@ -407,7 +408,7 @@ export default function AdminDashboard() {
       <div className={`lg:hidden fixed right-0 top-0 bottom-0 w-72 bg-white z-50 transform transition-transform duration-300 ${mobileMenuOpen ? 'translate-x-0' : 'translate-x-full'}`}>
         <div className="p-4 border-b bg-gradient-to-l from-emerald-600 to-emerald-700 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Heart className="w-6 h-6 text-white" />
+            <Image src="/logo.png" alt="عافيتك" width={28} height={28} className="rounded-lg" />
             <h2 className="text-lg font-bold text-white">عافيتك</h2>
           </div>
           <button onClick={() => setMobileMenuOpen(false)} className="text-white/80 hover:text-white">
@@ -454,7 +455,7 @@ export default function AdminDashboard() {
       {/* Mobile Header */}
       <div className="lg:hidden fixed top-0 left-0 right-0 bg-white border-b z-40 px-4 py-3 flex items-center justify-between shadow-sm">
         <div className="flex items-center gap-2">
-          <Heart className="w-5 h-5 text-emerald-600" />
+          <Image src="/logo.png" alt="عافيتك" width={24} height={24} className="rounded" />
           <span className="font-bold text-emerald-700">عافيتك</span>
         </div>
         <div className="flex items-center gap-2">

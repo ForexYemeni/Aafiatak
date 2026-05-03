@@ -3,7 +3,6 @@
 import { useAppStore, type AppView } from '@/lib/store'
 import { AnimatePresence, motion } from 'framer-motion'
 import LandingPage from '@/components/LandingPage'
-import UnifiedLogin from '@/components/UnifiedLogin'
 import AdminDashboard from '@/components/AdminDashboard'
 import AdminChangePassword from '@/components/AdminChangePassword'
 import FirebaseSetup from '@/components/FirebaseSetup'
@@ -12,7 +11,6 @@ import BeneficiaryDashboard from '@/components/BeneficiaryDashboard'
 
 const viewComponents: Record<AppView, React.ComponentType> = {
   landing: LandingPage,
-  'unified-login': UnifiedLogin,
   'admin-dashboard': AdminDashboard,
   'admin-change-password': AdminChangePassword,
   'firebase-setup': FirebaseSetup,

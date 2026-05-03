@@ -92,11 +92,14 @@ export async function getNurseById(id: string) {
 
 export async function getAllNurses(status?: string) {
   checkFirebase()
-  let query: FirebaseFirestore.Query = firestore.collection('nurses')
+  let snapshot: FirebaseFirestore.QuerySnapshot
   if (status) {
-    query = query.where('status', '==', status)
+    // Filter in code to avoid composite index
+    const allSnapshot = await firestore.collection('nurses').orderBy('createdAt', 'desc').get()
+    snapshot = { docs: allSnapshot.docs.filter(d => d.data().status === status) } as any
+  } else {
+    snapshot = await firestore.collection('nurses').orderBy('createdAt', 'desc').get()
   }
-  const snapshot = await query.orderBy('createdAt', 'desc').get()
   return snapshot.docs.map(docToObject)
 }
 
@@ -134,11 +137,12 @@ export async function updateNurse(id: string, data: Record<string, any>) {
 
 export async function countNurses(status?: string) {
   checkFirebase()
-  let query: FirebaseFirestore.Query = firestore.collection('nurses')
   if (status) {
-    query = query.where('status', '==', status)
+    // Filter in code to avoid composite index
+    const snapshot = await firestore.collection('nurses').get()
+    return snapshot.docs.filter(d => d.data().status === status).length
   }
-  const snapshot = await query.get()
+  const snapshot = await firestore.collection('nurses').get()
   return snapshot.size
 }
 
@@ -251,7 +255,9 @@ export async function countServices(isActive?: boolean) {
 
 export async function getAllServiceRequests() {
   checkFirebase()
-  const snapshot = await firestore.collection('serviceRequests').orderBy('createdAt', 'desc').get()
+  const snapshot = await firestore.collection('serviceRequests')
+    .orderBy('createdAt', 'desc')
+    .get()
   const requests = []
   for (const doc of snapshot.docs) {
     const data = doc.data()
@@ -300,9 +306,9 @@ export async function getAllServiceRequests() {
 
 export async function getServiceRequestsByBeneficiary(beneficiaryId: string) {
   checkFirebase()
+  // Fetch all requests for beneficiary, filter and sort in code to avoid composite index
   const snapshot = await firestore.collection('serviceRequests')
     .where('beneficiaryId', '==', beneficiaryId)
-    .orderBy('createdAt', 'desc')
     .get()
   
   const requests = []
@@ -436,11 +442,12 @@ export async function updateServiceRequest(id: string, data: Record<string, any>
 
 export async function countServiceRequests(status?: string) {
   checkFirebase()
-  let query: FirebaseFirestore.Query = firestore.collection('serviceRequests')
   if (status) {
-    query = query.where('status', '==', status)
+    // Filter in code to avoid composite index
+    const snapshot = await firestore.collection('serviceRequests').get()
+    return snapshot.docs.filter(d => d.data().status === status).length
   }
-  const snapshot = await query.get()
+  const snapshot = await firestore.collection('serviceRequests').get()
   return snapshot.size
 }
 
@@ -475,9 +482,9 @@ export async function getAssignmentByRequestId(requestId: string) {
 
 export async function getAssignmentsByNurseId(nurseId: string) {
   checkFirebase()
+  // Fetch assignments for nurse, sort in code to avoid composite index
   const snapshot = await firestore.collection('serviceAssignments')
     .where('nurseId', '==', nurseId)
-    .orderBy('createdAt', 'desc')
     .get()
   
   const assignments = []

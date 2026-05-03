@@ -4,7 +4,6 @@ import { create } from 'zustand'
 
 export type AppView =
   | 'landing'
-  | 'unified-login'
   | 'admin-dashboard'
   | 'admin-change-password'
   | 'firebase-setup'
