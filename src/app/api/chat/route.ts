@@ -13,7 +13,8 @@ export async function GET(request: NextRequest) {
 
     const messages = await getChatMessages(requestId, limit)
     return NextResponse.json(messages)
-  } catch (error) {
+  } catch (error: any) {
+    console.error('Chat GET error:', error.message)
     return NextResponse.json({ error: 'حدث خطأ في الخادم' }, { status: 500 })
   }
 }
@@ -23,12 +24,27 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { requestId, senderId, senderName, senderType, message } = body
 
-    if (!requestId || !senderId || !senderName || !senderType || !message) {
-      return NextResponse.json({ error: 'جميع الحقول مطلوبة' }, { status: 400 })
+    // Detailed validation with specific error messages
+    const missingFields: string[] = []
+    if (!requestId) missingFields.push('معرف الطلب')
+    if (!senderId) missingFields.push('معرف المرسل')
+    if (!senderName) missingFields.push('اسم المرسل')
+    if (!senderType) missingFields.push('نوع المرسل')
+    if (!message) missingFields.push('الرسالة')
+
+    if (missingFields.length > 0) {
+      return NextResponse.json({
+        error: `حقول مفقودة: ${missingFields.join('، ')}`
+      }, { status: 400 })
     }
 
     if (!['nurse', 'beneficiary', 'admin'].includes(senderType)) {
       return NextResponse.json({ error: 'نوع المرسل غير صالح' }, { status: 400 })
+    }
+
+    // Validate message length
+    if (message.length > 10000) {
+      return NextResponse.json({ error: 'الرسالة طويلة جداً (الحد الأقصى 10000 حرف)' }, { status: 400 })
     }
 
     const chatMessage = await sendChatMessage({
@@ -40,7 +56,8 @@ export async function POST(request: NextRequest) {
     })
 
     return NextResponse.json(chatMessage)
-  } catch (error) {
-    return NextResponse.json({ error: 'حدث خطأ في الخادم' }, { status: 500 })
+  } catch (error: any) {
+    console.error('Chat POST error:', error.message)
+    return NextResponse.json({ error: 'حدث خطأ في الخادم أثناء إرسال الرسالة' }, { status: 500 })
   }
 }

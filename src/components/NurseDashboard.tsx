@@ -2750,11 +2750,11 @@ export default function NurseDashboard() {
             </motion.div>
 
             {/* Chat System */}
-            {activeChatRequestId && (
+            {activeChatRequestId && nurseId && (
               <ChatSystem
                 requestId={activeChatRequestId}
                 userId={nurseId}
-                userName={nurseName}
+                userName={nurseName.trim() || 'ممرض'}
                 userType="nurse"
                 otherPartyName={chatOtherPartyName}
               />

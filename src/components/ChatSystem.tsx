@@ -239,6 +239,13 @@ export default function ChatSystem({
   const handleSend = async (text?: string) => {
     const msgText = text || newMessage
     if (!msgText.trim() || sending) return
+
+    // Validate required fields before sending
+    if (!requestId || !userId || !senderName || !userType) {
+      toast({ title: 'خطأ', description: 'بيانات المحادثة غير مكتملة. يرجى إعادة فتح المحادثة.', variant: 'destructive' })
+      return
+    }
+
     setSending(true)
     try {
       const res = await fetch('/api/chat', {
@@ -259,11 +266,18 @@ export default function ChatSystem({
         // Simulate other party typing after a short delay
         setTimeout(simulateTyping, 1500)
       } else {
-        const data = await res.json()
-        toast({ title: 'خطأ', description: data.error, variant: 'destructive' })
+        // Try to parse error as JSON, fall back to status text
+        let errorMsg = 'فشل إرسال الرسالة'
+        try {
+          const data = await res.json()
+          errorMsg = data.error || errorMsg
+        } catch {
+          errorMsg = `خطأ الخادم (${res.status})`
+        }
+        toast({ title: 'خطأ', description: errorMsg, variant: 'destructive' })
       }
     } catch {
-      toast({ title: 'خطأ', description: 'فشل إرسال الرسالة', variant: 'destructive' })
+      toast({ title: 'خطأ', description: 'فشل الاتصال بالخادم. تأكد من اتصالك بالإنترنت.', variant: 'destructive' })
     } finally {
       setSending(false)
     }

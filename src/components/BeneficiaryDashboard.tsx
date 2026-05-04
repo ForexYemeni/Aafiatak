@@ -2963,11 +2963,11 @@ export default function BeneficiaryDashboard() {
       </motion.button>
 
       {/* ===== ChatSystem Component ===== */}
-      {activeChatRequestId && (
+      {activeChatRequestId && beneficiaryUser?.id && (
         <ChatSystem
           requestId={activeChatRequestId}
-          userId={beneficiaryUser?.id || ''}
-          userName={beneficiaryUser?.name || ''}
+          userId={beneficiaryUser.id}
+          userName={beneficiaryUser.name || 'مستفيد'}
           userType="beneficiary"
           otherPartyName={activeChatNurseName}
         />
