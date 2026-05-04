@@ -2604,16 +2604,16 @@ export default function NurseDashboard() {
 
   const renderTabContent = () => {
     switch (activeTab) {
-      case 'assignments': return <AssignmentsTab />
-      case 'schedule': return <ScheduleTab />
-      case 'ratings': return <RatingsTab />
-      case 'profile': return <ProfileTab />
-      case 'notifications': return <NotificationsTab />
-      case 'help': return <HelpTab />
-      case 'portfolio': return <PortfolioTab />
-      case 'appointments': return <AppointmentsTab />
-      case 'earnings': return <EarningsTab />
-      default: return <AssignmentsTab />
+      case 'assignments': return AssignmentsTab()
+      case 'schedule': return ScheduleTab()
+      case 'ratings': return RatingsTab()
+      case 'profile': return ProfileTab()
+      case 'notifications': return NotificationsTab()
+      case 'help': return HelpTab()
+      case 'portfolio': return PortfolioTab()
+      case 'appointments': return AppointmentsTab()
+      case 'earnings': return EarningsTab()
+      default: return AssignmentsTab()
     }
   }
 

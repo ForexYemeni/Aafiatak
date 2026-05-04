@@ -11,9 +11,9 @@ export async function POST(request: NextRequest) {
   try {
     checkFirebase()
     const body = await request.json()
-    const { reporterId, reporterType, reportedId, reportedType, type, description, images } = body
+    const { reporterId, reporterType, reportedId, reportedType, type, description, images, requestId, serviceName } = body
 
-    if (!reporterId || !reporterType || !reportedId || !reportedType || !type || !description) {
+    if (!reporterId || !reporterType || !type || !description) {
       return NextResponse.json({ error: 'جميع الحقول المطلوبة يجب ملؤها' }, { status: 400 })
     }
 
@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
     if (!validReporterTypes.includes(reporterType)) {
       return NextResponse.json({ error: 'نوع المبلغ غير صالح' }, { status: 400 })
     }
-    if (!validReportedTypes.includes(reportedType)) {
+    if (reportedType && !validReportedTypes.includes(reportedType)) {
       return NextResponse.json({ error: 'نوع المبلغ عنه غير صالح' }, { status: 400 })
     }
     if (!validTypes.includes(type)) {
@@ -41,26 +41,31 @@ export async function POST(request: NextRequest) {
     }
 
     // Fetch reported entity name
-    let reportedName = 'غير معروف'
-    const reportedCollection = reportedType === 'beneficiary' ? 'beneficiaries' : reportedType === 'nurse' ? 'nurses' : 'services'
-    const reportedDoc = await firestore.collection(reportedCollection).doc(reportedId).get()
-    if (reportedDoc.exists) {
-      const data = reportedDoc.data()!
-      reportedName = data.name || `${data.firstName || ''} ${data.lastName || ''}`.trim()
+    let reportedName = 'غير محدد'
+    if (reportedId && reportedType && reportedId !== 'general') {
+      const reportedCollection = reportedType === 'beneficiary' ? 'beneficiaries' : reportedType === 'nurse' ? 'nurses' : 'services'
+      const reportedDoc = await firestore.collection(reportedCollection).doc(reportedId).get()
+      if (reportedDoc.exists) {
+        const data = reportedDoc.data()!
+        reportedName = data.name || `${data.firstName || ''} ${data.lastName || ''}`.trim()
+      }
     }
 
     const reportData = {
       reporterId,
       reporterType,
       reporterName,
-      reportedId,
-      reportedType,
+      reportedId: reportedId || null,
+      reportedType: reportedType || null,
       reportedName,
+      requestId: requestId || null,
+      serviceName: serviceName || null,
       type,
       description,
       images: images || [],
       status: 'pending',
       adminNotes: null,
+      adminResponse: null,
       resolvedAt: null,
       resolvedBy: null,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),

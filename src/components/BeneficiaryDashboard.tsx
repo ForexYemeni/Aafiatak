@@ -8,7 +8,7 @@ import {
   Filter, RefreshCw, Calendar, Tag, AlertTriangle,
   Copy, Check, Award, Zap, Share2, MessageCircle, Star, Send,
   Siren, ChevronDown, ChevronUp, Shield, Gift, TrendingUp, Sparkles, Navigation,
-  Flag, Search, Camera, DollarSign, Clock, Eye, FileText, Upload, ImagePlus, Thermometer, Handshake, Mic, Wallet
+  Flag, Search, Camera, DollarSign, Clock, Eye, FileText, Upload, ImagePlus, Thermometer, Handshake, Mic, Wallet, Stethoscope
 } from 'lucide-react'
 import { useAppStore, formatPrice, getStatusLabel, getStatusColor } from '@/lib/store'
 import { openInMaps, getGPSLocation, searchLocation, extractCoordinates, getDisplayLocation, getMapEmbedUrl, getDirectionsUrl } from '@/lib/location-utils'
@@ -266,7 +266,7 @@ export default function BeneficiaryDashboard() {
   // Reports state
   const [reports, setReports] = useState<any[]>([])
   const [reportDialog, setReportDialog] = useState(false)
-  const [reportForm, setReportForm] = useState({ type: '', description: '', images: '' })
+  const [reportForm, setReportForm] = useState({ type: '', requestId: '', description: '' })
   const [reportSubmitting, setReportSubmitting] = useState(false)
 
   // Favorite nurse state
@@ -872,20 +872,33 @@ export default function BeneficiaryDashboard() {
     }
     setReportSubmitting(true)
     try {
+      // Find the selected request to get nurse info
+      const selectedReq = reportForm.requestId ? requests.find((r: any) => r.id === reportForm.requestId) : null
+      const reportBody: any = {
+        reporterId: beneficiaryUser?.id,
+        reporterType: 'beneficiary',
+        type: reportForm.type,
+        description: reportForm.description,
+      }
+      // If a request is selected, link the report to the nurse
+      if (selectedReq) {
+        reportBody.reportedId = selectedReq.assignment?.nurseId || selectedReq.nurseId || ''
+        reportBody.reportedType = 'nurse'
+        reportBody.requestId = selectedReq.id
+        reportBody.serviceName = selectedReq.service?.name || ''
+      } else {
+        reportBody.reportedId = 'general'
+        reportBody.reportedType = 'service'
+      }
       const res = await fetch('/api/reports', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          beneficiaryId: beneficiaryUser?.id,
-          type: reportForm.type,
-          description: reportForm.description,
-          images: reportForm.images || undefined,
-        }),
+        body: JSON.stringify(reportBody),
       })
       if (res.ok) {
         toast({ title: 'تم إرسال البلاغ بنجاح', description: 'سيتم مراجعته من قبل الإدارة' })
         setReportDialog(false)
-        setReportForm({ type: '', description: '', images: '' })
+        setReportForm({ type: '', requestId: '', description: '' })
         fetchData()
       } else {
         const data = await res.json()
@@ -3892,7 +3905,7 @@ export default function BeneficiaryDashboard() {
 
       {/* ===== REPORT DIALOG ===== */}
       <Dialog open={reportDialog} onOpenChange={setReportDialog}>
-        <DialogContent className="sm:max-w-md border-0 shadow-2xl p-0 max-h-[90vh] overflow-y-auto" dir="rtl">
+        <DialogContent className="sm:max-w-lg border-0 shadow-2xl p-0 max-h-[90vh] overflow-y-auto" dir="rtl">
           <div className="bg-gradient-to-l from-red-600 via-rose-600 to-red-700 p-5 text-white relative overflow-hidden">
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.1)_0%,transparent_70%)]" />
             <div className="relative flex items-center gap-3">
@@ -3900,64 +3913,108 @@ export default function BeneficiaryDashboard() {
                 <Flag className="w-5 h-5" />
               </div>
               <div>
-                <DialogTitle className="text-lg font-bold">تقديم بلاغ</DialogTitle>
-                <p className="text-red-100 text-xs mt-0.5">سيتم مراجعة بلاغك من قبل الإدارة</p>
+                <DialogTitle className="text-lg font-bold">تقديم بلاغ أو شكوى</DialogTitle>
+                <p className="text-red-100 text-xs mt-0.5">اشرح ما حدث بالتفصيل وسيتم مراجعته من الإدارة</p>
               </div>
             </div>
           </div>
 
           <div className="p-6 space-y-4">
+            {/* Select related request */}
             <div className="space-y-2">
-              <Label className="text-sm font-medium text-red-700">نوع البلاغ</Label>
-              <div className="grid grid-cols-3 gap-2">
+              <Label className="text-sm font-bold text-gray-700 flex items-center gap-1.5">
+                <ClipboardList className="w-4 h-4 text-violet-500" />
+                الخدمة المتعلقة بالبلاغ
+              </Label>
+              <p className="text-xs text-gray-400 mb-1">اختر الطلب الذي تريد الإبلاغ عنه (اختياري)</p>
+              <Select
+                value={reportForm.requestId}
+                onValueChange={(val) => setReportForm(prev => ({ ...prev, requestId: val === 'none' ? '' : val }))}
+              >
+                <SelectTrigger className="rounded-xl bg-white/80 border-gray-200/50">
+                  <SelectValue placeholder="اختر طلب الخدمة..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">بلاغ عام (بدون طلب محدد)</SelectItem>
+                  {requests
+                    .filter((r: any) => r.status === 'completed' || r.status === 'in_progress' || r.status === 'assigned')
+                    .map((r: any) => (
+                      <SelectItem key={r.id} value={r.id}>
+                        {r.service?.name || 'خدمة'} - {r.assignment?.nurse ? `${r.assignment.nurse.firstName} ${r.assignment.nurse.lastName}` : 'لم يُعيّن ممرض'} ({getStatusLabel(r.status)})
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+              {reportForm.requestId && (() => {
+                const selReq = requests.find((r: any) => r.id === reportForm.requestId)
+                if (selReq?.assignment?.nurse) {
+                  return (
+                    <div className="mt-2 p-3 rounded-xl bg-blue-50/80 ring-1 ring-blue-200/30">
+                      <p className="text-xs font-bold text-blue-700 mb-1">الممرض/ة المعين/ة:</p>
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center">
+                          <Stethoscope className="w-4 h-4 text-white" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-gray-800">{selReq.assignment.nurse.firstName} {selReq.assignment.nurse.lastName}</p>
+                          {selReq.assignment.nurse.phone && <p className="text-xs text-gray-500" dir="ltr">{selReq.assignment.nurse.phone}</p>}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                }
+                return null
+              })()}
+            </div>
+
+            {/* Report type */}
+            <div className="space-y-2">
+              <Label className="text-sm font-bold text-red-700">نوع البلاغ</Label>
+              <div className="grid grid-cols-2 gap-2">
                 {[
-                  { key: 'nurse_issue', label: 'مشكلة ممرض' },
-                  { key: 'service_issue', label: 'مشكلة خدمة' },
-                  { key: 'other', label: 'أخرى' },
+                  { key: 'misconduct', label: 'سلوك غير لائق', desc: 'تصرف غير مهني من الممرض/ة' },
+                  { key: 'no-show', label: 'عدم الحضور', desc: 'الممرض/ة لم يحضر في الموعد' },
+                  { key: 'late', label: 'تأخر', desc: 'الممرض/ة تأخر عن الموعد' },
+                  { key: 'quality', label: 'جودة الخدمة', desc: 'الخدمة لم تكن بالمستوى المطلوب' },
+                  { key: 'complaint', label: 'شكوى عامة', desc: 'شكوى أخرى متعلقة بالخدمة' },
+                  { key: 'other', label: 'أخرى', desc: 'مشكلة أخرى' },
                 ].map(t => (
                   <button
                     key={t.key}
                     onClick={() => setReportForm(prev => ({ ...prev, type: t.key }))}
-                    className={`px-3 py-2 rounded-xl text-xs font-medium transition-all duration-200 ${
+                    className={`px-3 py-2.5 rounded-xl text-right transition-all duration-200 ${
                       reportForm.type === t.key
-                        ? 'bg-gradient-to-r from-red-500 to-rose-500 text-white shadow-md'
+                        ? 'bg-gradient-to-r from-red-500 to-rose-500 text-white shadow-md ring-2 ring-red-300/50'
                         : 'bg-gray-50 text-gray-600 border border-gray-200 hover:border-red-300'
                     }`}
                   >
-                    {t.label}
+                    <span className="text-xs font-bold block">{t.label}</span>
+                    <span className={`text-[10px] block mt-0.5 ${reportForm.type === t.key ? 'text-red-100' : 'text-gray-400'}`}>{t.desc}</span>
                   </button>
                 ))}
               </div>
             </div>
 
+            {/* Detailed description */}
             <div className="space-y-2">
-              <Label className="text-sm font-medium">الوصف</Label>
+              <Label className="text-sm font-bold text-gray-700 flex items-center gap-1.5">
+                <FileText className="w-4 h-4 text-red-500" />
+                شرح تفصيلي لما حدث
+              </Label>
+              <p className="text-xs text-gray-400">اشرح بالتفصيل ما جرى خلال الخدمة - هذا سيساعد الإدارة في فهم المشكلة</p>
               <Textarea
                 value={reportForm.description}
                 onChange={e => setReportForm(prev => ({ ...prev, description: e.target.value }))}
-                placeholder="اشرح المشكلة بالتفصيل..."
-                className="rounded-xl resize-none"
-                rows={4}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-sm font-medium flex items-center gap-2">
-                <Camera className="w-4 h-4 text-red-500" />
-                صور (اختياري - روابط)
-              </Label>
-              <Input
-                value={reportForm.images}
-                onChange={e => setReportForm(prev => ({ ...prev, images: e.target.value }))}
-                placeholder="روابط الصور مفصولة بفواصل"
-                className="rounded-xl"
+                placeholder="اكتب شرحاً تفصيلياً لما حدث... مثلاً: وصل الممرض متأخراً 45 دقيقة عن الموعد المحدد، ثم قام بـ..."
+                className="rounded-xl resize-none bg-white/80 border-gray-200/50 focus:border-red-400 min-h-[140px]"
+                rows={6}
               />
             </div>
 
             <Button
               onClick={handleSubmitReport}
               disabled={reportSubmitting}
-              className="w-full bg-gradient-to-r from-red-500 to-rose-500 text-white hover:shadow-lg rounded-xl"
+              className="w-full bg-gradient-to-r from-red-500 to-rose-500 text-white hover:shadow-lg rounded-xl h-12"
             >
               {reportSubmitting ? <Loader2 className="w-5 h-5 animate-spin ml-2" /> : <Flag className="w-5 h-5 ml-2" />}
               إرسال البلاغ
