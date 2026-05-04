@@ -11,7 +11,7 @@ import {
   Ban, Unlock, Eye, AlertTriangle, UsersRound, Settings,
   ChevronDown, AlertCircle, MessageSquare, Clock, MapPin, Calendar, Navigation,
   FileWarning, ShieldCheck, ShieldAlert, Image as ImageIcon,
-  Wallet, Send, Building, DollarSign
+  Wallet, Send, Building, DollarSign, Save
 } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RTooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts'
 import { useAppStore, formatPrice, getStatusLabel, getStatusColor } from '@/lib/store'
@@ -53,6 +53,7 @@ function formatDateTime(ts: any): string {
 
 // ─── Types ─────────────────────────────────────────────────────
 type Tab = 'dashboard' | 'services' | 'nurses' | 'beneficiaries' | 'requests' | 'emergency' | 'payments' | 'coupons' | 'ratings' | 'reports' | 'complaints' | 'appointments' | 'activity' | 'sub-admins' | 'settings'
+type FinanceSubTab = 'methods' | 'transactions' | 'settings' | 'pricing'
 
 interface DashboardStats {
   totalNurses: number
@@ -173,6 +174,18 @@ export default function AdminDashboard() {
   const [locationSearchResults, setLocationSearchResults] = useState<Array<{ name: string; lat: string; lng: string; display: string }>>([])
   const [locationSearchLoading, setLocationSearchLoading] = useState(false)
 
+  // Finance sub-tab
+  const [financeSubTab, setFinanceSubTab] = useState<FinanceSubTab>('methods')
+
+  // Confirmation dialog
+  const [confirmDialog, setConfirmDialog] = useState(false)
+  const [confirmAction, setConfirmAction] = useState<{ title: string; description: string; icon: any; iconColor: string; onConfirm: () => void } | null>(null)
+
+  const showConfirmDialog = (title: string, description: string, icon: any, iconColor: string, onConfirm: () => void) => {
+    setConfirmAction({ title, description, icon, iconColor, onConfirm })
+    setConfirmDialog(true)
+  }
+
   // Complaints
   const [complaints, setComplaints] = useState<any[]>([])
   const [complaintsLoading, setComplaintsLoading] = useState(false)
@@ -244,14 +257,15 @@ export default function AdminDashboard() {
         const res = await fetch('/api/admin/emergency')
         if (res.ok) { const data = await res.json(); setEmergencyRequests(Array.isArray(data) ? data : []) }
       } else if (activeTab === 'payments') {
-        const res = await fetch('/api/admin/payments')
-        if (res.ok) setPayments(await res.json())
+        const [payRes, transRes] = await Promise.all([
+          fetch('/api/admin/payments'),
+          fetch('/api/payments/process').catch(() => null),
+        ])
+        if (payRes.ok) setPayments(await payRes.json())
+        if (transRes?.ok) { const transData = await transRes.json(); setTransactions(Array.isArray(transData) ? transData : []) }
         try {
-          const transRes = await fetch('/api/payments/process')
-          if (transRes.ok) {
-            const transData = await transRes.json()
-            setTransactions(Array.isArray(transData) ? transData : [])
-          }
+          const setRes = await fetch('/api/admin/settings')
+          if (setRes.ok) setSettings(await setRes.json())
         } catch {}
       } else if (activeTab === 'coupons') {
         const res = await fetch('/api/admin/coupons')
@@ -1487,88 +1501,329 @@ export default function AdminDashboard() {
                 ═══════════════════════════════════════════════════ */}
                 {activeTab === 'payments' && (
                   <div className="space-y-6">
-                    <div className="flex items-center justify-between">
-                      <div><h1 className="text-2xl font-bold bg-gradient-to-l from-amber-600 via-orange-600 to-rose-600 bg-clip-text text-transparent">المدفوعات والمعاملات</h1><p className="text-gray-500 text-sm mt-1">تأكيد المعاملات ومتابعة المدفوعات</p></div>
+                    {/* Header */}
+                    <div><h1 className="text-2xl font-bold bg-gradient-to-l from-amber-600 via-orange-600 to-rose-600 bg-clip-text text-transparent">المالية والمدفوعات</h1><p className="text-gray-500 text-sm mt-1">إدارة طرق الدفع والمعاملات والإعدادات المالية</p></div>
+
+                    {/* Finance Sub-Tabs */}
+                    <div className="flex gap-2 p-1 bg-gray-100/80 rounded-2xl">
+                      {[
+                        { key: 'methods' as FinanceSubTab, label: 'طرق الدفع', icon: Wallet, count: payments.length },
+                        { key: 'transactions' as FinanceSubTab, label: 'المعاملات', icon: CreditCard, count: transactions.filter((t: any) => t.status === 'pending_confirmation' || t.status === 'pending').length, countColor: 'text-red-500' },
+                        { key: 'settings' as FinanceSubTab, label: 'إعدادات الدفع', icon: Settings },
+                        { key: 'pricing' as FinanceSubTab, label: 'التسعير الديناميكي', icon: TrendingUp },
+                      ].map(({ key, label, icon: Icon, count, countColor }) => (
+                        <button
+                          key={key}
+                          onClick={() => setFinanceSubTab(key)}
+                          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all flex-1 justify-center ${
+                            financeSubTab === key
+                              ? 'bg-white shadow-md text-amber-700'
+                              : 'text-gray-500 hover:text-gray-700 hover:bg-white/50'
+                          }`}
+                        >
+                          <Icon className="w-4 h-4" />
+                          {label}
+                          {count !== undefined && count > 0 && (
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${countColor ? `bg-red-100 ${countColor}` : 'bg-amber-100 text-amber-700'}`}>{count}</span>
+                          )}
+                        </button>
+                      ))}
                     </div>
 
-                    {/* Pending Payments Section */}
-                    {transactions.filter((t: any) => t.status === 'pending_confirmation' || t.status === 'pending').length > 0 && (
-                      <div className="space-y-3">
-                        <h2 className="text-lg font-bold text-red-600 flex items-center gap-2">
-                          <AlertTriangle className="w-5 h-5" />
-                          مدفوعات بانتظار التأكيد ({transactions.filter((t: any) => t.status === 'pending_confirmation' || t.status === 'pending').length})
-                        </h2>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {transactions.filter((t: any) => t.status === 'pending_confirmation' || t.status === 'pending').map((t: any) => (
-                            <motion.div key={t.id} variants={cardVariants} initial="hidden" animate="visible">
-                              <Card className="border-2 border-amber-200 shadow-lg">
-                                <CardContent className="p-4 space-y-3">
-                                  <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-md">
-                                        <Clock className="w-5 h-5 text-white" />
-                                      </div>
-                                      <div>
-                                        <p className="font-bold text-sm">{t.beneficiaryName || 'مستفيد'}</p>
-                                        <p className="text-xs text-gray-400">{formatDate(t.createdAt)}</p>
-                                      </div>
-                                    </div>
-                                    <Badge className="bg-amber-100 text-amber-700 border-0">بانتظار التأكيد</Badge>
-                                  </div>
-                                  <div className="space-y-1.5 text-sm">
-                                    <div className="flex justify-between"><span className="text-gray-500">المبلغ:</span><span className="font-bold text-amber-600">{t.amount} ر.ي</span></div>
-                                    <div className="flex justify-between"><span className="text-gray-500">الطريقة:</span><span className="font-medium">
-                                      {t.paymentMethod === 'wallet-deposit' ? 'إيداع محفظة' : t.paymentMethod === 'exchange-transfer' ? 'تحويل صراف' : t.paymentMethod === 'bank-transfer' ? 'تحويل بنكي' : t.paymentMethod === 'cash' ? 'نقدي' : t.paymentMethod}
-                                    </span></div>
-                                    {t.transactionRef && <div className="flex justify-between"><span className="text-gray-500">رقم العملية:</span><span className="font-mono text-xs">{t.transactionRef}</span></div>}
-                                    {t.senderName && <div className="flex justify-between"><span className="text-gray-500">المرسل:</span><span>{t.senderName}</span></div>}
-                                    {t.senderPhone && <div className="flex justify-between"><span className="text-gray-500">هاتف المرسل:</span><span dir="ltr">{t.senderPhone}</span></div>}
-                                    {t.exchangeName && <div className="flex justify-between"><span className="text-gray-500">الصراف:</span><span>{t.exchangeName}</span></div>}
-                                  </div>
-                                  <div className="flex gap-2 pt-2 border-t">
-                                    <Button size="sm" className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white" onClick={() => handleConfirmPayment(t.id)}>
-                                      <CheckCircle className="w-3.5 h-3.5 ml-1" />تأكيد الدفع
-                                    </Button>
-                                    <Button size="sm" variant="outline" className="text-red-500 hover:bg-red-50" onClick={() => handleRejectPayment(t.id)}>
-                                      <XCircle className="w-3.5 h-3.5 ml-1" />رفض
-                                    </Button>
-                                  </div>
+                    {/* ═══ Sub-Tab: طرق الدفع ═══ */}
+                    {financeSubTab === 'methods' && (
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center shadow-md"><Wallet className="w-5 h-5 text-white" /></div>
+                            <div>
+                              <h2 className="text-lg font-bold">طرق الدفع المتاحة</h2>
+                              <p className="text-xs text-gray-400">الطرق التي تظهر للمستفيدين عند الدفع إلكترونياً</p>
+                            </div>
+                          </div>
+                          <Button className="bg-gradient-to-l from-amber-500 via-orange-500 to-rose-500 text-white shadow-lg shadow-amber-500/25" onClick={() => { setEditingPayment(null); setPaymentForm({ type: 'wallet-deposit', name: '', accountName: '', accountNumber: '', bankName: '', exchangeName: '', walletType: '', instructions: '', isActive: true }); setPaymentDialog(true) }}><Plus className="w-4 h-4 ml-2" />إضافة طريقة دفع</Button>
+                        </div>
+
+                        {/* Stats Cards */}
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                          {[
+                            { label: 'إجمالي الطرق', value: payments.length, gradient: 'from-blue-400 to-indigo-500', icon: CreditCard },
+                            { label: 'المحافظ', value: payments.filter((p: any) => p.type === 'wallet-deposit').length, gradient: 'from-blue-400 to-cyan-500', icon: Wallet },
+                            { label: 'الصرافين', value: payments.filter((p: any) => p.type === 'exchange-transfer').length, gradient: 'from-amber-400 to-orange-500', icon: Send },
+                            { label: 'البنوك', value: payments.filter((p: any) => p.type === 'bank-transfer').length, gradient: 'from-emerald-400 to-teal-500', icon: Building },
+                          ].map((item, i) => (
+                            <motion.div key={i} variants={cardVariants} initial="hidden" animate="visible" transition={{ delay: i * 0.05 }}>
+                              <Card className="border-0 shadow-md hover:shadow-lg transition-all">
+                                <CardContent className="p-3 flex items-center gap-3">
+                                  <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${item.gradient} flex items-center justify-center shadow-sm`}><item.icon className="w-4 h-4 text-white" /></div>
+                                  <div><p className="text-xl font-bold">{item.value}</p><p className="text-[10px] text-gray-400">{item.label}</p></div>
                                 </CardContent>
                               </Card>
                             </motion.div>
                           ))}
                         </div>
+
+                        {/* Payment Methods Grid */}
+                        {payments.length > 0 ? (
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {payments.map((p: any, i: number) => {
+                              const typeIcon = p.type === 'wallet-deposit' ? Wallet : p.type === 'exchange-transfer' ? Send : p.type === 'bank-transfer' ? Building : DollarSign
+                              const typeColor = p.type === 'wallet-deposit' ? 'from-blue-400 to-indigo-500' : p.type === 'exchange-transfer' ? 'from-amber-400 to-orange-500' : p.type === 'bank-transfer' ? 'from-emerald-400 to-teal-500' : 'from-gray-400 to-gray-500'
+                              const typeLabel = p.type === 'wallet-deposit' ? 'إيداع محفظة' : p.type === 'exchange-transfer' ? 'تحويل صراف' : p.type === 'bank-transfer' ? 'تحويل بنكي' : 'نقدي'
+                              const TypeIcon = typeIcon
+                              return (
+                                <motion.div key={p.id} variants={cardVariants} initial="hidden" animate="visible" transition={{ delay: i * 0.05 }}>
+                                  <Card className={`border-0 shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden ${!p.isActive ? 'opacity-60' : ''}`}>
+                                    {/* Gradient Header */}
+                                    <div className={`bg-gradient-to-l ${typeColor} p-3 text-white flex items-center justify-between`}>
+                                      <div className="flex items-center gap-2">
+                                        <TypeIcon className="w-5 h-5" />
+                                        <span className="font-bold text-sm">{p.name || typeLabel}</span>
+                                      </div>
+                                      <Badge className={`text-[10px] px-2 py-0.5 ${p.isActive ? 'bg-white/20 text-white' : 'bg-black/20 text-white/70'}`}>{p.isActive ? 'نشطة' : 'معطلة'}</Badge>
+                                    </div>
+                                    {/* Details */}
+                                    <CardContent className="p-3 space-y-2">
+                                      <div className="flex items-center gap-1.5 text-xs text-gray-500 mb-1">
+                                        <TypeIcon className="w-3 h-3" />
+                                        <span>{typeLabel}</span>
+                                      </div>
+                                      {p.accountName && (
+                                        <div className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
+                                          <div><p className="text-[10px] text-gray-400">{p.type === 'wallet-deposit' ? 'اسم صاحب المحفظة' : 'اسم صاحب الحساب'}</p><p className="text-xs font-bold text-gray-800">{p.accountName}</p></div>
+                                          <button onClick={() => { navigator.clipboard.writeText(p.accountName); toast({ title: 'تم النسخ' }) }} className="p-1 rounded hover:bg-gray-200"><Copy className="w-3 h-3 text-gray-400" /></button>
+                                        </div>
+                                      )}
+                                      {p.accountNumber && (
+                                        <div className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
+                                          <div><p className="text-[10px] text-gray-400">{p.type === 'wallet-deposit' ? 'رقم المحفظة' : p.type === 'exchange-transfer' ? 'رقم الصراف' : 'رقم الحساب'}</p><p className="text-xs font-bold font-mono text-gray-800" dir="ltr">{p.accountNumber}</p></div>
+                                          <button onClick={() => { navigator.clipboard.writeText(p.accountNumber); toast({ title: 'تم النسخ' }) }} className="p-1 rounded hover:bg-gray-200"><Copy className="w-3 h-3 text-gray-400" /></button>
+                                        </div>
+                                      )}
+                                      {p.bankName && <p className="text-xs text-gray-600"><span className="text-gray-400">البنك:</span> {p.bankName}</p>}
+                                      {p.exchangeName && <p className="text-xs text-gray-600"><span className="text-gray-400">الصراف:</span> {p.exchangeName}</p>}
+                                      {p.instructions && <p className="text-xs text-gray-500 bg-amber-50/50 p-1.5 rounded-lg">{p.instructions}</p>}
+                                      <div className="flex gap-2 pt-1">
+                                        <Button size="sm" variant="outline" className="flex-1 text-xs h-7" onClick={() => { setEditingPayment(p); setPaymentForm({ type: p.type || 'wallet-deposit', name: p.name || '', accountName: p.accountName || '', accountNumber: p.accountNumber || '', bankName: p.bankName || '', exchangeName: p.exchangeName || '', walletType: p.walletType || '', instructions: p.instructions || '', isActive: p.isActive }); setPaymentDialog(true) }}><Pencil className="w-3 h-3 ml-1" />تعديل</Button>
+                                        <Button size="sm" variant="outline" className="text-red-500 hover:bg-red-50 text-xs h-7" onClick={() => showConfirmDialog('حذف طريقة الدفع', `هل أنت متأكد من حذف "${p.name}"؟ لا يمكن التراجع عن هذا الإجراء.`, Trash2, 'text-red-500', () => handleDeletePayment(p.id))}><Trash2 className="w-3 h-3" /></Button>
+                                      </div>
+                                    </CardContent>
+                                  </Card>
+                                </motion.div>
+                              )
+                            })}
+                          </div>
+                        ) : (
+                          <div className="text-center py-16">
+                            <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center mx-auto mb-4"><CreditCard className="w-10 h-10 text-blue-300" /></div>
+                            <p className="text-lg font-bold text-gray-500">لا توجد طرق دفع</p>
+                            <p className="text-sm text-gray-400 mt-1">أضف طرق الدفع لتظهر للمستفيدين عند الدفع إلكترونياً</p>
+                          </div>
+                        )}
                       </div>
                     )}
 
-                    {/* Confirmed Transactions */}
-                    <div className="space-y-3">
-                      <h2 className="text-lg font-bold text-emerald-600 flex items-center gap-2">
-                        <CheckCircle className="w-5 h-5" />
-                        المعاملات المكتملة
-                      </h2>
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {transactions.filter((t: any) => t.status === 'paid').slice(0, 20).map((t: any) => (
-                          <Card key={t.id} className="border-0 shadow-lg">
-                            <CardContent className="p-4">
-                              <div className="flex items-center justify-between mb-2">
-                                <p className="font-bold text-sm">{t.beneficiaryName || 'مستفيد'}</p>
-                                <Badge className="bg-emerald-100 text-emerald-700 border-0">مدفوع</Badge>
-                              </div>
-                              <div className="space-y-1 text-sm">
-                                <div className="flex justify-between"><span className="text-gray-500">المبلغ:</span><span className="font-bold">{t.amount} ر.ي</span></div>
-                                <div className="flex justify-between"><span className="text-gray-500">الطريقة:</span><span>{t.paymentMethod === 'wallet-deposit' ? 'محفظة' : t.paymentMethod === 'exchange-transfer' ? 'صراف' : t.paymentMethod === 'bank-transfer' ? 'بنكي' : 'نقدي'}</span></div>
-                                <p className="text-xs text-gray-400">{formatDate(t.confirmedAt || t.createdAt)}</p>
-                              </div>
-                            </CardContent>
-                          </Card>
-                        ))}
-                        {transactions.filter((t: any) => t.status === 'paid').length === 0 && (
-                          <div className="col-span-full text-center py-8"><CheckCircle className="w-10 h-10 text-gray-300 mx-auto mb-2" /><p className="text-gray-400 text-sm">لا توجد معاملات مكتملة</p></div>
-                        )}
-                      </div>
-                    </div>
+                    {/* ═══ Sub-Tab: المعاملات ═══ */}
+                    {financeSubTab === 'transactions' && (
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-md"><CreditCard className="w-5 h-5 text-white" /></div>
+                          <div>
+                            <h2 className="text-lg font-bold">المعاملات المالية</h2>
+                            <p className="text-xs text-gray-400">متابعة وتأكيد المدفوعات</p>
+                          </div>
+                        </div>
 
+                        {/* Transaction Stats */}
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                          {[
+                            { label: 'بانتظار التأكيد', value: transactions.filter((t: any) => t.status === 'pending_confirmation' || t.status === 'pending').length, gradient: 'from-amber-400 to-orange-500', icon: Clock },
+                            { label: 'مكتملة', value: transactions.filter((t: any) => t.status === 'paid').length, gradient: 'from-emerald-400 to-teal-500', icon: CheckCircle },
+                            { label: 'مرفوضة', value: transactions.filter((t: any) => t.status === 'rejected').length, gradient: 'from-red-400 to-rose-500', icon: XCircle },
+                            { label: 'إجمالي المعاملات', value: transactions.length, gradient: 'from-blue-400 to-indigo-500', icon: CreditCard },
+                          ].map((item, i) => (
+                            <motion.div key={i} variants={cardVariants} initial="hidden" animate="visible" transition={{ delay: i * 0.05 }}>
+                              <Card className="border-0 shadow-md hover:shadow-lg transition-all">
+                                <CardContent className="p-3 flex items-center gap-3">
+                                  <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${item.gradient} flex items-center justify-center shadow-sm`}><item.icon className="w-4 h-4 text-white" /></div>
+                                  <div><p className="text-xl font-bold">{item.value}</p><p className="text-[10px] text-gray-400">{item.label}</p></div>
+                                </CardContent>
+                              </Card>
+                            </motion.div>
+                          ))}
+                        </div>
+
+                        {/* Pending Payments */}
+                        {transactions.filter((t: any) => t.status === 'pending_confirmation' || t.status === 'pending').length > 0 && (
+                          <div className="space-y-3">
+                            <h3 className="text-base font-bold text-red-600 flex items-center gap-2"><AlertTriangle className="w-4 h-4 animate-pulse" />مدفوعات بانتظار التأكيد</h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              {transactions.filter((t: any) => t.status === 'pending_confirmation' || t.status === 'pending').map((t: any, i: number) => {
+                                const typeColor = t.paymentMethod === 'wallet-deposit' ? 'from-blue-400 to-indigo-500' : t.paymentMethod === 'exchange-transfer' ? 'from-amber-400 to-orange-500' : 'from-emerald-400 to-teal-500'
+                                const typeLabel = t.paymentMethod === 'wallet-deposit' ? 'إيداع محفظة' : t.paymentMethod === 'exchange-transfer' ? 'تحويل صراف' : t.paymentMethod === 'bank-transfer' ? 'تحويل بنكي' : 'نقدي'
+                                return (
+                                <motion.div key={t.id} variants={cardVariants} initial="hidden" animate="visible" transition={{ delay: i * 0.05 }}>
+                                  <Card className="border-2 border-amber-200 shadow-lg overflow-hidden">
+                                    <div className={`bg-gradient-to-l ${typeColor} p-3 text-white flex items-center justify-between`}>
+                                      <div className="flex items-center gap-2">
+                                        <Clock className="w-5 h-5 animate-pulse" />
+                                        <span className="font-bold text-sm">{t.beneficiaryName || 'مستفيد'}</span>
+                                      </div>
+                                      <Badge className="bg-white/20 text-white border-0 text-[10px]">بانتظار التأكيد</Badge>
+                                    </div>
+                                    <CardContent className="p-4 space-y-3">
+                                      <div className="grid grid-cols-2 gap-2 text-sm">
+                                        <div className="p-2 bg-emerald-50 rounded-lg"><p className="text-[10px] text-gray-400">المبلغ</p><p className="font-bold text-emerald-600">{t.amount} ر.ي</p></div>
+                                        <div className="p-2 bg-blue-50 rounded-lg"><p className="text-[10px] text-gray-400">الطريقة</p><p className="font-medium text-blue-600">{typeLabel}</p></div>
+                                      </div>
+                                      {t.transactionRef && <div className="p-2 bg-gray-50 rounded-lg"><p className="text-[10px] text-gray-400">رقم العملية</p><p className="font-mono text-xs">{t.transactionRef}</p></div>}
+                                      {t.senderName && <div className="p-2 bg-gray-50 rounded-lg"><p className="text-[10px] text-gray-400">المرسل</p><p className="text-xs font-medium">{t.senderName}</p></div>}
+                                      {t.senderPhone && <div className="p-2 bg-gray-50 rounded-lg"><p className="text-[10px] text-gray-400">هاتف المرسل</p><p className="text-xs font-mono" dir="ltr">{t.senderPhone}</p></div>}
+                                      {t.exchangeName && <div className="p-2 bg-amber-50 rounded-lg"><p className="text-[10px] text-gray-400">الصراف</p><p className="text-xs font-medium">{t.exchangeName}</p></div>}
+                                      <p className="text-[10px] text-gray-400">{formatDate(t.createdAt)}</p>
+                                      <div className="flex gap-2 pt-2 border-t">
+                                        <Button size="sm" className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white" onClick={() => showConfirmDialog('تأكيد الدفع', `هل أنت متأكد من تأكيد استلام دفع "${t.beneficiaryName || 'مستفيد'}" بمبلغ ${t.amount} ر.ي؟`, CheckCircle, 'text-emerald-500', () => handleConfirmPayment(t.id))}><CheckCircle className="w-3.5 h-3.5 ml-1" />تأكيد الدفع</Button>
+                                        <Button size="sm" variant="outline" className="text-red-500 hover:bg-red-50" onClick={() => showConfirmDialog('رفض الدفع', `هل أنت متأكد من رفض دفع "${t.beneficiaryName || 'مستفيد'}"؟ سيتم إشعار المستفيد بالرفض.`, XCircle, 'text-red-500', () => handleRejectPayment(t.id))}><XCircle className="w-3.5 h-3.5 ml-1" />رفض</Button>
+                                      </div>
+                                    </CardContent>
+                                  </Card>
+                                </motion.div>
+                              )})}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Confirmed Transactions */}
+                        <div className="space-y-3">
+                          <h3 className="text-base font-bold text-emerald-600 flex items-center gap-2"><CheckCircle className="w-4 h-4" />المعاملات المكتملة</h3>
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {transactions.filter((t: any) => t.status === 'paid').slice(0, 20).map((t: any) => {
+                              const typeLabel = t.paymentMethod === 'wallet-deposit' ? 'محفظة' : t.paymentMethod === 'exchange-transfer' ? 'صراف' : t.paymentMethod === 'bank-transfer' ? 'بنكي' : 'نقدي'
+                              return (
+                              <Card key={t.id} className="border-0 shadow-md">
+                                <CardContent className="p-4">
+                                  <div className="flex items-center justify-between mb-2">
+                                    <p className="font-bold text-sm">{t.beneficiaryName || 'مستفيد'}</p>
+                                    <Badge className="bg-emerald-100 text-emerald-700 border-0">مدفوع</Badge>
+                                  </div>
+                                  <div className="space-y-1 text-sm">
+                                    <div className="flex justify-between"><span className="text-gray-500">المبلغ:</span><span className="font-bold">{t.amount} ر.ي</span></div>
+                                    <div className="flex justify-between"><span className="text-gray-500">الطريقة:</span><span>{typeLabel}</span></div>
+                                    <p className="text-xs text-gray-400">{formatDate(t.confirmedAt || t.createdAt)}</p>
+                                  </div>
+                                </CardContent>
+                              </Card>
+                            )})}
+                            {transactions.filter((t: any) => t.status === 'paid').length === 0 && (
+                              <div className="col-span-full text-center py-8"><CheckCircle className="w-10 h-10 text-gray-300 mx-auto mb-2" /><p className="text-gray-400 text-sm">لا توجد معاملات مكتملة</p></div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ═══ Sub-Tab: إعدادات الدفع ═══ */}
+                    {financeSubTab === 'settings' && settings && (
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center shadow-md"><Settings className="w-5 h-5 text-white" /></div>
+                          <div>
+                            <h2 className="text-lg font-bold">إعدادات الدفع</h2>
+                            <p className="text-xs text-gray-400">إعدادات واتساب الدفع والإعدادات العامة</p>
+                          </div>
+                        </div>
+
+                        <Card className="border-0 shadow-lg overflow-hidden">
+                          <div className="bg-gradient-to-l from-emerald-500 to-teal-600 p-4 text-white">
+                            <div className="flex items-center gap-2"><CreditCard className="w-5 h-5" /><span className="font-bold">إعدادات إثبات الدفع</span></div>
+                            <p className="text-emerald-100 text-xs mt-1">عندما يختار المستفيد الدفع إلكترونياً، يتم عرض بيانات الحساب كاملة مع زر "إثبات الدفع" يحوله لواتساب الإدارة</p>
+                          </div>
+                          <CardContent className="p-4 space-y-4">
+                            <div className="p-3 bg-emerald-50/50 rounded-xl border border-emerald-100">
+                              <p className="text-sm text-emerald-700">رقم واتساب الإدارة هو الرقم الذي سيتواصل معه المستفيد لإرسال إثبات الدفع (إيصال التحويل)</p>
+                            </div>
+                            <div><Label className="font-medium">رقم واتساب الإدارة (لإثبات الدفع) *</Label><Input value={settings.whatsappNumber || ''} onChange={e => setSettings({ ...settings, whatsappNumber: e.target.value })} placeholder="مثال: 967771234567" className="border-amber-200 mt-1" dir="ltr" /><p className="text-xs text-gray-400 mt-1">أدخل الرقم بالصيغة الدولية بدون + (مثال: 967771234567)</p></div>
+                            <Button className="bg-gradient-to-l from-emerald-500 to-teal-600 text-white shadow-lg" onClick={() => showConfirmDialog('حفظ رقم الواتساب', 'سيتم تحديث رقم واتساب الإدارة لإثبات الدفع. هل أنت متأكد؟', MessageSquare, 'text-emerald-500', () => handleSaveSettings({ whatsappNumber: settings.whatsappNumber }))}><Save className="w-4 h-4 ml-2" />حفظ رقم الواتساب</Button>
+                          </CardContent>
+                        </Card>
+                      </div>
+                    )}
+
+                    {/* ═══ Sub-Tab: التسعير الديناميكي ═══ */}
+                    {financeSubTab === 'pricing' && settings && (
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-400 to-purple-500 flex items-center justify-center shadow-md"><TrendingUp className="w-5 h-5 text-white" /></div>
+                          <div>
+                            <h2 className="text-lg font-bold">إعدادات التسعير الديناميكي</h2>
+                            <p className="text-xs text-gray-400">تحكم في نسب الرسوم الإضافية للخدمات</p>
+                          </div>
+                        </div>
+
+                        <Card className="border-0 shadow-lg overflow-hidden">
+                          <div className="bg-gradient-to-l from-indigo-500 to-purple-600 p-4 text-white">
+                            <div className="flex items-center gap-2"><Clock className="w-5 h-5" /><span className="font-bold">رسوم الوقت (الليل)</span></div>
+                            <p className="text-indigo-100 text-xs mt-1">تُطبق من الساعة 10 مساءً إلى 6 صباحاً</p>
+                          </div>
+                          <CardContent className="p-4 space-y-3">
+                            <div><Label className="font-medium">نسبة رسوم الليل (%)</Label><Input type="number" value={settings.nightSurchargePercent ?? 50} onChange={e => setSettings({ ...settings, nightSurchargePercent: Number(e.target.value) })} className="border-amber-200 mt-1" min={0} max={200} /><p className="text-[10px] text-gray-400 mt-1">النسبة المئوية المضافة على السعر الأساسي خلال أوقات الليل</p></div>
+                            <div className="p-3 bg-indigo-50/50 rounded-xl border border-indigo-100">
+                              <p className="text-sm text-indigo-700">مثال: إذا كان السعر الأساسي 5,000 ر.ي ورسوم الليل 50%، سيصبح السعر 7,500 ر.ي</p>
+                            </div>
+                          </CardContent>
+                        </Card>
+
+                        <Card className="border-0 shadow-lg overflow-hidden">
+                          <div className="bg-gradient-to-l from-amber-500 to-orange-600 p-4 text-white">
+                            <div className="flex items-center gap-2"><Calendar className="w-5 h-5" /><span className="font-bold">رسوم يوم الجمعة</span></div>
+                            <p className="text-amber-100 text-xs mt-1">رسوم إضافية تُطبق في يوم الجمعة</p>
+                          </div>
+                          <CardContent className="p-4 space-y-3">
+                            <div><Label className="font-medium">نسبة رسوم الجمعة (%)</Label><Input type="number" value={settings.fridaySurchargePercent ?? 25} onChange={e => setSettings({ ...settings, fridaySurchargePercent: Number(e.target.value) })} className="border-amber-200 mt-1" min={0} max={200} /><p className="text-[10px] text-gray-400 mt-1">النسبة المئوية المضافة على السعر الأساسي في يوم الجمعة</p></div>
+                          </CardContent>
+                        </Card>
+
+                        <Card className="border-0 shadow-lg overflow-hidden">
+                          <div className="bg-gradient-to-l from-emerald-500 to-teal-600 p-4 text-white">
+                            <div className="flex items-center gap-2"><MapPin className="w-5 h-5" /><span className="font-bold">رسوم المسافة</span></div>
+                            <p className="text-emerald-100 text-xs mt-1">رسوم إضافية حسب المسافة بين الممرض والمستفيد</p>
+                          </div>
+                          <CardContent className="p-4 space-y-3">
+                            <div className="flex items-center justify-between p-3 bg-emerald-50/50 rounded-xl border border-emerald-100">
+                              <div><p className="font-medium text-sm">تفعيل رسوم المسافة</p><p className="text-xs text-gray-500">تطبيق رسوم إضافية حسب المسافة</p></div>
+                              <Switch checked={settings.distanceFeesEnabled ?? true} onCheckedChange={v => setSettings({ ...settings, distanceFeesEnabled: v })} />
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                              <div className="p-3 bg-emerald-50/30 rounded-xl border border-emerald-100/50"><Label className="font-medium text-sm">المسافة المجانية (كم)</Label><Input type="number" value={settings.distanceFreeKm ?? 5} onChange={e => setSettings({ ...settings, distanceFreeKm: Number(e.target.value) })} className="border-amber-200 mt-1" min={0} /><p className="text-[10px] text-gray-400 mt-1">أول X كم بدون رسوم</p></div>
+                              <div className="p-3 bg-blue-50/30 rounded-xl border border-blue-100/50"><Label className="font-medium text-sm">رسوم الكلم (5-15 كم) ر.ي</Label><Input type="number" value={settings.distanceFeePerKm5to15 ?? 100} onChange={e => setSettings({ ...settings, distanceFeePerKm5to15: Number(e.target.value) })} className="border-amber-200 mt-1" min={0} /></div>
+                              <div className="p-3 bg-amber-50/30 rounded-xl border border-amber-100/50"><Label className="font-medium text-sm">رسوم الكلم (15-30 كم) ر.ي</Label><Input type="number" value={settings.distanceFeePerKm15to30 ?? 150} onChange={e => setSettings({ ...settings, distanceFeePerKm15to30: Number(e.target.value) })} className="border-amber-200 mt-1" min={0} /></div>
+                              <div className="p-3 bg-red-50/30 rounded-xl border border-red-100/50"><Label className="font-medium text-sm">رسوم الكلم (أكثر من 30 كم) ر.ي</Label><Input type="number" value={settings.distanceFeePerKmOver30 ?? 200} onChange={e => setSettings({ ...settings, distanceFeePerKmOver30: Number(e.target.value) })} className="border-amber-200 mt-1" min={0} /></div>
+                            </div>
+                          </CardContent>
+                        </Card>
+
+                        <Card className="border-0 shadow-lg overflow-hidden">
+                          <div className="bg-gradient-to-l from-rose-500 to-pink-600 p-4 text-white">
+                            <div className="flex items-center gap-2"><DollarSign className="w-5 h-5" /><span className="font-bold">عمولة المنصة</span></div>
+                            <p className="text-rose-100 text-xs mt-1">النسبة التي تأخذها المنصة من كل طلب</p>
+                          </div>
+                          <CardContent className="p-4 space-y-3">
+                            <div><Label className="font-medium">نسبة العمولة (%)</Label><Input type="number" value={settings.commissionPercent ?? 15} onChange={e => setSettings({ ...settings, commissionPercent: Number(e.target.value) })} className="border-amber-200 mt-1" min={0} max={100} /><p className="text-[10px] text-gray-400 mt-1">مثال: 15% تعني أن المنصة تأخذ 15% من كل طلب والممرض يحصل على 85%</p></div>
+                          </CardContent>
+                        </Card>
+
+                        <Button className="w-full bg-gradient-to-l from-violet-500 via-purple-500 to-fuchsia-500 text-white shadow-lg shadow-violet-500/25 h-12 text-base" onClick={() => showConfirmDialog('حفظ إعدادات التسعير', 'سيتم تحديث جميع إعدادات التسعير الديناميكي. هل أنت متأكد؟', TrendingUp, 'text-violet-500', () => handleSaveSettings({
+                          nightSurchargePercent: settings.nightSurchargePercent,
+                          fridaySurchargePercent: settings.fridaySurchargePercent,
+                          distanceFeesEnabled: settings.distanceFeesEnabled,
+                          distanceFeePerKm5to15: settings.distanceFeePerKm5to15,
+                          distanceFeePerKm15to30: settings.distanceFeePerKm15to30,
+                          distanceFeePerKmOver30: settings.distanceFeePerKmOver30,
+                          distanceFreeKm: settings.distanceFreeKm,
+                          commissionPercent: settings.commissionPercent,
+                        }))}><Save className="w-5 h-5 ml-2" />حفظ جميع إعدادات التسعير</Button>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -2115,7 +2370,7 @@ export default function AdminDashboard() {
                       <CardHeader className="pb-3"><CardTitle className="text-lg flex items-center gap-2"><Phone className="w-5 h-5 text-red-500" />إعدادات الطوارئ</CardTitle></CardHeader>
                       <CardContent className="space-y-4">
                         <div><Label>رقم هاتف الطوارئ</Label><Input value={settings.emergencyPhone || ''} onChange={e => setSettings({ ...settings, emergencyPhone: e.target.value })} placeholder="أدخل رقم الطوارئ" className="border-amber-200 mt-1" /></div>
-                        <Button className="bg-gradient-to-l from-amber-500 via-orange-500 to-rose-500 text-white shadow-lg shadow-amber-500/25" onClick={() => handleSaveSettings({ emergencyPhone: settings.emergencyPhone })}>حفظ رقم الطوارئ</Button>
+                        <Button className="bg-gradient-to-l from-amber-500 via-orange-500 to-rose-500 text-white shadow-lg shadow-amber-500/25" onClick={() => showConfirmDialog('حفظ رقم الطوارئ', 'سيتم تحديث رقم هاتف الطوارئ. هل أنت متأكد؟', Phone, 'text-red-500', () => handleSaveSettings({ emergencyPhone: settings.emergencyPhone }))}>حفظ رقم الطوارئ</Button>
                       </CardContent>
                     </Card>
 
@@ -2131,145 +2386,23 @@ export default function AdminDashboard() {
                           <div><Label>مكافأة المُحيل (نقاط)</Label><Input type="number" value={settings.referralBonusPoints ?? 50} onChange={e => setSettings({ ...settings, referralBonusPoints: Number(e.target.value) })} className="border-amber-200 mt-1" /></div>
                           <div><Label>مكافأة المُحال (نقاط)</Label><Input type="number" value={settings.referralBonusPointsReceiver ?? 25} onChange={e => setSettings({ ...settings, referralBonusPointsReceiver: Number(e.target.value) })} className="border-amber-200 mt-1" /></div>
                         </div>
-                        <Button className="bg-gradient-to-l from-amber-500 via-orange-500 to-rose-500 text-white shadow-lg shadow-amber-500/25" onClick={() => handleSaveSettings({ referralEnabled: settings.referralEnabled, referralBonusPoints: settings.referralBonusPoints, referralBonusPointsReceiver: settings.referralBonusPointsReceiver })}>حفظ إعدادات الإحالة</Button>
+                        <Button className="bg-gradient-to-l from-amber-500 via-orange-500 to-rose-500 text-white shadow-lg shadow-amber-500/25" onClick={() => showConfirmDialog('حفظ إعدادات الإحالة', 'سيتم تحديث إعدادات نظام الإحالة. هل أنت متأكد؟', Gift, 'text-purple-500', () => handleSaveSettings({ referralEnabled: settings.referralEnabled, referralBonusPoints: settings.referralBonusPoints, referralBonusPointsReceiver: settings.referralBonusPointsReceiver }))}>حفظ إعدادات الإحالة</Button>
                       </CardContent>
                     </Card>
 
-                    {/* Dynamic Pricing Settings */}
-                    <Card className="border-0 shadow-lg">
-                      <CardHeader className="pb-3"><CardTitle className="text-lg flex items-center gap-2"><TrendingUp className="w-5 h-5 text-blue-500" />إعدادات التسعير الديناميكي</CardTitle></CardHeader>
-                      <CardContent className="space-y-4">
-                        <div className="p-3 bg-blue-50/50 rounded-xl border border-blue-100">
-                          <p className="text-sm text-blue-700">تحكم في نسب الرسوم الإضافية للخدمات مثل رسوم الوقت والمسافة ويوم الجمعة</p>
-                        </div>
-                        
-                        {/* Night Surcharge */}
-                        <div className="p-3 bg-indigo-50/50 rounded-xl border border-indigo-100 space-y-3">
-                          <div className="flex items-center gap-2">
-                            <Clock className="w-4 h-4 text-indigo-500" />
-                            <p className="font-medium text-sm text-indigo-700">رسوم الوقت (الليل)</p>
-                          </div>
-                          <p className="text-xs text-gray-500">تُطبق من الساعة 10 مساءً إلى 6 صباحاً</p>
-                          <div><Label>نسبة رسوم الليل (%)</Label><Input type="number" value={settings.nightSurchargePercent ?? 50} onChange={e => setSettings({ ...settings, nightSurchargePercent: Number(e.target.value) })} className="border-amber-200 mt-1" min={0} max={200} /></div>
-                        </div>
-
-                        {/* Friday Surcharge */}
-                        <div className="p-3 bg-amber-50/50 rounded-xl border border-amber-100 space-y-3">
-                          <div className="flex items-center gap-2">
-                            <Calendar className="w-4 h-4 text-amber-500" />
-                            <p className="font-medium text-sm text-amber-700">رسوم يوم الجمعة</p>
-                          </div>
-                          <div><Label>نسبة رسوم الجمعة (%)</Label><Input type="number" value={settings.fridaySurchargePercent ?? 25} onChange={e => setSettings({ ...settings, fridaySurchargePercent: Number(e.target.value) })} className="border-amber-200 mt-1" min={0} max={200} /></div>
-                        </div>
-
-                        {/* Distance Fees */}
-                        <div className="p-3 bg-emerald-50/50 rounded-xl border border-emerald-100 space-y-3">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <MapPin className="w-4 h-4 text-emerald-500" />
-                              <p className="font-medium text-sm text-emerald-700">رسوم المسافة</p>
-                            </div>
-                            <Switch checked={settings.distanceFeesEnabled ?? true} onCheckedChange={v => setSettings({ ...settings, distanceFeesEnabled: v })} />
-                          </div>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            <div><Label>المسافة المجانية (كم)</Label><Input type="number" value={settings.distanceFreeKm ?? 5} onChange={e => setSettings({ ...settings, distanceFreeKm: Number(e.target.value) })} className="border-amber-200 mt-1" min={0} /><p className="text-[10px] text-gray-400 mt-0.5">أول X كم بدون رسوم</p></div>
-                            <div><Label>رسوم الكلم (5-15 كم) ر.ي</Label><Input type="number" value={settings.distanceFeePerKm5to15 ?? 100} onChange={e => setSettings({ ...settings, distanceFeePerKm5to15: Number(e.target.value) })} className="border-amber-200 mt-1" min={0} /></div>
-                            <div><Label>رسوم الكلم (15-30 كم) ر.ي</Label><Input type="number" value={settings.distanceFeePerKm15to30 ?? 150} onChange={e => setSettings({ ...settings, distanceFeePerKm15to30: Number(e.target.value) })} className="border-amber-200 mt-1" min={0} /></div>
-                            <div><Label>رسوم الكلم (أكثر من 30 كم) ر.ي</Label><Input type="number" value={settings.distanceFeePerKmOver30 ?? 200} onChange={e => setSettings({ ...settings, distanceFeePerKmOver30: Number(e.target.value) })} className="border-amber-200 mt-1" min={0} /></div>
-                          </div>
-                        </div>
-
-                        {/* Commission */}
-                        <div className="p-3 bg-rose-50/50 rounded-xl border border-rose-100 space-y-3">
-                          <div className="flex items-center gap-2">
-                            <DollarSign className="w-4 h-4 text-rose-500" />
-                            <p className="font-medium text-sm text-rose-700">عمولة المنصة</p>
-                          </div>
-                          <div><Label>نسبة العمولة (%)</Label><Input type="number" value={settings.commissionPercent ?? 15} onChange={e => setSettings({ ...settings, commissionPercent: Number(e.target.value) })} className="border-amber-200 mt-1" min={0} max={100} /><p className="text-[10px] text-gray-400 mt-0.5">النسبة المئوية التي تأخذها المنصة من كل طلب</p></div>
-                        </div>
-
-                        <Button className="bg-gradient-to-l from-amber-500 via-orange-500 to-rose-500 text-white shadow-lg shadow-amber-500/25" onClick={() => handleSaveSettings({
-                          nightSurchargePercent: settings.nightSurchargePercent,
-                          fridaySurchargePercent: settings.fridaySurchargePercent,
-                          distanceFeesEnabled: settings.distanceFeesEnabled,
-                          distanceFeePerKm5to15: settings.distanceFeePerKm5to15,
-                          distanceFeePerKm15to30: settings.distanceFeePerKm15to30,
-                          distanceFeePerKmOver30: settings.distanceFeePerKmOver30,
-                          distanceFreeKm: settings.distanceFreeKm,
-                          commissionPercent: settings.commissionPercent,
-                        })}>حفظ إعدادات التسعير</Button>
-                      </CardContent>
-                    </Card>
-
-                    {/* Payment Settings */}
-                    <Card className="border-0 shadow-lg">
-                      <CardHeader className="pb-3"><CardTitle className="text-lg flex items-center gap-2"><CreditCard className="w-5 h-5 text-emerald-500" />إعدادات الدفع</CardTitle></CardHeader>
-                      <CardContent className="space-y-4">
-                        <div className="p-3 bg-emerald-50/50 rounded-xl border border-emerald-100">
-                          <p className="text-sm text-emerald-700 mb-2">عندما يختار المستفيد الدفع إلكترونياً، يتم عرض بيانات الحساب كاملة مع زر "إثبات الدفع" يحوله لواتساب الإدارة</p>
-                        </div>
-                        <div><Label>رقم واتساب الإدارة (لإثبات الدفع) *</Label><Input value={settings.whatsappNumber || ''} onChange={e => setSettings({ ...settings, whatsappNumber: e.target.value })} placeholder="مثال: 967771234567" className="border-amber-200 mt-1" dir="ltr" />
-                          <p className="text-xs text-gray-400 mt-1">أدخل الرقم بالصيغة الدولية بدون + (مثال: 967771234567)</p>
-                        </div>
-                        <Button className="bg-gradient-to-l from-amber-500 via-orange-500 to-rose-500 text-white shadow-lg shadow-amber-500/25" onClick={() => handleSaveSettings({ whatsappNumber: settings.whatsappNumber })}>حفظ رقم الواتساب</Button>
-                      </CardContent>
-                    </Card>
-
-                    {/* Payment Methods Management */}
-                    <Card className="border-0 shadow-lg">
-                      <CardHeader className="pb-3">
+                    {/* Shortcut to Finance Tab */}
+                    <Card className="border-0 shadow-lg bg-gradient-to-l from-blue-50/50 to-indigo-50/50 border border-blue-200/50">
+                      <CardContent className="p-4">
                         <div className="flex items-center justify-between">
-                          <CardTitle className="text-lg flex items-center gap-2"><Wallet className="w-5 h-5 text-blue-500" />طرق الدفع المتاحة</CardTitle>
-                          <Button className="bg-gradient-to-l from-amber-500 via-orange-500 to-rose-500 text-white shadow-lg shadow-amber-500/25" onClick={() => { setEditingPayment(null); setPaymentForm({ type: 'wallet-deposit', name: '', accountName: '', accountNumber: '', bankName: '', exchangeName: '', walletType: '', instructions: '', isActive: true }); setPaymentDialog(true) }}><Plus className="w-4 h-4 ml-2" />إضافة طريقة دفع</Button>
-                        </div>
-                      </CardHeader>
-                      <CardContent className="space-y-3">
-                        {payments.length > 0 ? (
-                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                            {payments.map((p: any) => (
-                              <div key={p.id} className="p-3 rounded-xl border border-gray-200 hover:border-amber-300 hover:shadow-md transition-all">
-                                <div className="flex items-start justify-between mb-2">
-                                  <div className="flex items-center gap-2">
-                                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center shadow-sm ${
-                                      p.type === 'wallet-deposit' ? 'bg-gradient-to-br from-blue-400 to-indigo-500' :
-                                      p.type === 'exchange-transfer' ? 'bg-gradient-to-br from-amber-400 to-orange-500' :
-                                      p.type === 'bank-transfer' ? 'bg-gradient-to-br from-emerald-400 to-teal-500' :
-                                      'bg-gradient-to-br from-gray-400 to-gray-500'
-                                    }`}>
-                                      {p.type === 'wallet-deposit' ? <Wallet className="w-4 h-4 text-white" /> :
-                                       p.type === 'exchange-transfer' ? <Send className="w-4 h-4 text-white" /> :
-                                       p.type === 'bank-transfer' ? <Building className="w-4 h-4 text-white" /> :
-                                       <DollarSign className="w-4 h-4 text-white" />}
-                                    </div>
-                                    <div>
-                                      <p className="font-bold text-sm">{p.name || getWalletTypeLabel(p.walletType)}</p>
-                                      <p className="text-[10px] text-gray-400">{
-                                        p.type === 'wallet-deposit' ? 'إيداع محفظة' :
-                                        p.type === 'exchange-transfer' ? 'تحويل صراف' :
-                                        p.type === 'bank-transfer' ? 'تحويل بنكي' :
-                                        p.type === 'cash' ? 'نقدي' : p.type
-                                      }</p>
-                                    </div>
-                                  </div>
-                                  <Badge className={`${getStatusColor(p.isActive ? 'active' : 'suspended')} border text-[10px] px-1.5`}>{p.isActive ? 'نشطة' : 'معطلة'}</Badge>
-                                </div>
-                                <div className="space-y-0.5 mb-2 text-xs">
-                                  {p.accountNumber && <p className="text-gray-600"><span className="text-gray-400">الرقم:</span> <span dir="ltr" className="font-mono">{p.accountNumber}</span></p>}
-                                  {p.accountName && <p className="text-gray-600"><span className="text-gray-400">الحساب:</span> {p.accountName}</p>}
-                                  {p.bankName && <p className="text-gray-600"><span className="text-gray-400">البنك:</span> {p.bankName}</p>}
-                                  {p.exchangeName && <p className="text-gray-600"><span className="text-gray-400">الصراف:</span> {p.exchangeName}</p>}
-                                  {p.walletType && <p className="text-gray-600"><span className="text-gray-400">المحفظة:</span> {getWalletTypeLabel(p.walletType)}</p>}
-                                </div>
-                                <div className="flex gap-2">
-                                  <Button size="sm" variant="outline" className="flex-1 text-xs h-7" onClick={() => { setEditingPayment(p); setPaymentForm({ type: p.type || 'wallet-deposit', name: p.name || '', accountName: p.accountName || '', accountNumber: p.accountNumber || '', bankName: p.bankName || '', exchangeName: p.exchangeName || '', walletType: p.walletType || '', instructions: p.instructions || '', isActive: p.isActive }); setPaymentDialog(true) }}><Pencil className="w-3 h-3 ml-1" />تعديل</Button>
-                                  <Button size="sm" variant="outline" className="text-red-500 hover:bg-red-50 text-xs h-7" onClick={() => handleDeletePayment(p.id)}><Trash2 className="w-3 h-3" /></Button>
-                                </div>
-                              </div>
-                            ))}
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center shadow-md"><CreditCard className="w-5 h-5 text-white" /></div>
+                            <div>
+                              <p className="font-bold">إعدادات المدفوعات والتسعير</p>
+                              <p className="text-xs text-gray-500">إدارة طرق الدفع، إعدادات الدفع، والتسعير الديناميكي في قسم المالية</p>
+                            </div>
                           </div>
-                        ) : (
-                          <div className="text-center py-6"><CreditCard className="w-10 h-10 text-gray-300 mx-auto mb-2" /><p className="text-gray-400 text-sm">لا توجد طرق دفع - أضف طرق الدفع لتظهر للمستفيدين</p></div>
-                        )}
+                          <Button variant="outline" className="border-blue-300 text-blue-600 hover:bg-blue-50" onClick={() => setActiveTab('payments')}>الانتقال للمالية <ChevronDown className="w-4 h-4 mr-1 rotate-[-90deg]" /></Button>
+                        </div>
                       </CardContent>
                     </Card>
 
@@ -2281,8 +2414,8 @@ export default function AdminDashboard() {
                       </CardHeader>
                       <CardContent className="space-y-4">
                         <div className="p-4 bg-red-50/80 rounded-xl border border-red-200/50">
-                          <p className="text-sm text-red-700 font-medium mb-3">⚠️ تحذير: حذف جميع البيانات لا يمكن التراجع عنه. سيتم حذف جميع الممرضين، المستفيدين، الطلبات، الخدمات، المدفوعات، الكوبونات، التقييمات، سجل النشاط، طلبات الطوارئ، والمدراء الفرعيين. سيتم الاحتفاظ بحساب المدير فقط.</p>
-                          <Button className="bg-gradient-to-l from-red-500 to-red-600 text-white shadow-lg shadow-red-500/25 hover:shadow-red-500/40 hover:scale-[1.02] active:scale-[0.98] transition-all" onClick={() => { setResetPassword(''); setResetConfirmText(''); setResetDataDialog(true) }}><Trash2 className="w-4 h-4 ml-2" />حذف جميع البيانات</Button>
+                          <p className="text-sm text-red-700 font-medium mb-3">تحذير: حذف جميع البيانات لا يمكن التراجع عنه. سيتم حذف جميع الممرضين، المستفيدين، الطلبات، الخدمات، المدفوعات، الكوبونات، التقييمات، سجل النشاط، طلبات الطوارئ، والمدراء الفرعيين. سيتم الاحتفاظ بحساب المدير فقط.</p>
+                          <Button className="bg-gradient-to-l from-red-500 to-red-600 text-white shadow-lg shadow-red-500/25 hover:shadow-red-500/40 hover:scale-[1.02] active:scale-[0.98] transition-all" onClick={() => showConfirmDialog('حذف جميع البيانات', 'هذا الإجراء لا يمكن التراجع عنه! سيتم حذف جميع البيانات نهائياً.', Trash2, 'text-red-500', () => { setResetPassword(''); setResetConfirmText(''); setResetDataDialog(true) })}><Trash2 className="w-4 h-4 ml-2" />حذف جميع البيانات</Button>
                         </div>
                       </CardContent>
                     </Card>
@@ -2299,6 +2432,37 @@ export default function AdminDashboard() {
       {/* ═══════════════════════════════════════════════════════════
           DIALOGS
       ═══════════════════════════════════════════════════════════ */}
+
+      {/* Confirmation Dialog */}
+      <Dialog open={confirmDialog} onOpenChange={setConfirmDialog}>
+        <DialogContent className="sm:max-w-md border-0 shadow-2xl" dir="rtl">
+          {confirmAction && (
+            <>
+              <div className="flex flex-col items-center py-4">
+                <div className={`w-16 h-16 rounded-full bg-gradient-to-br ${
+                  confirmAction.iconColor === 'text-red-500' ? 'from-red-400 to-rose-500' :
+                  confirmAction.iconColor === 'text-emerald-500' ? 'from-emerald-400 to-teal-500' :
+                  confirmAction.iconColor === 'text-violet-500' ? 'from-violet-400 to-purple-500' :
+                  'from-amber-400 to-orange-500'
+                } flex items-center justify-center shadow-lg mb-4`}>
+                  <confirmAction.icon className="w-8 h-8 text-white" />
+                </div>
+                <DialogTitle className="text-xl font-bold text-center">{confirmAction.title}</DialogTitle>
+                <p className="text-sm text-gray-500 text-center mt-2">{confirmAction.description}</p>
+              </div>
+              <DialogFooter className="gap-2 sm:gap-2">
+                <Button variant="outline" className="flex-1" onClick={() => setConfirmDialog(false)}>إلغاء</Button>
+                <Button className={`flex-1 ${
+                  confirmAction.iconColor === 'text-red-500' ? 'bg-gradient-to-l from-red-500 to-rose-500' :
+                  confirmAction.iconColor === 'text-emerald-500' ? 'bg-gradient-to-l from-emerald-500 to-teal-500' :
+                  confirmAction.iconColor === 'text-violet-500' ? 'bg-gradient-to-l from-violet-500 to-purple-500' :
+                  'bg-gradient-to-l from-amber-500 via-orange-500 to-rose-500'
+                } text-white shadow-lg`} onClick={() => { confirmAction.onConfirm(); setConfirmDialog(false) }}>تأكيد</Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Edit Admin Profile Dialog */}
       <Dialog open={editNameDialog} onOpenChange={setEditNameDialog}>
