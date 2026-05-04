@@ -139,13 +139,24 @@ function useGeoLocation() {
       async (pos) => {
         const { latitude, longitude } = pos.coords
         try {
-          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&accept-language=ar`)
+          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&accept-language=ar&zoom=16&addressdetails=1`, { headers: { 'User-Agent': 'AafiatakApp/1.0' } })
           const data = await res.json()
-          const address = data.display_name || `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`
+          // Build a clean short address
+          const addr = data.address || {}
+          const parts = [
+            addr.road || addr.street || '',
+            addr.neighbourhood || addr.suburb || addr.village || '',
+            addr.city || addr.town || addr.state || '',
+            addr.country || ''
+          ].filter(Boolean)
+          const shortAddress = parts.length > 0
+            ? parts.join('، ')
+            : (data.display_name || `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`)
+          const address = `${shortAddress} [${latitude.toFixed(6)},${longitude.toFixed(6)}]`
           onSuccess(address)
-          toast({ title: 'تم تحديد الموقع بنجاح', description: address.substring(0, 80) })
+          toast({ title: 'تم تحديد الموقع بنجاح', description: shortAddress.substring(0, 80) })
         } catch {
-          const coord = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`
+          const coord = `${latitude.toFixed(6)},${longitude.toFixed(6)}`
           onSuccess(coord)
           toast({ title: 'تم تحديد الموقع', description: `${latitude.toFixed(4)}, ${longitude.toFixed(4)}` })
         }
@@ -153,7 +164,7 @@ function useGeoLocation() {
       () => {
         toast({ title: 'خطأ في تحديد الموقع', description: 'يرجى السماح بالوصول إلى الموقع أو إدخاله يدوياً', variant: 'destructive' })
       },
-      { enableHighAccuracy: true, timeout: 15000 }
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 }
     )
   }, [toast])
 

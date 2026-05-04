@@ -1120,15 +1120,43 @@ export async function createRating(data: {
 
 export async function getSubAdmins(adminId: string) {
   checkFirebase()
-  const snapshot = await firestore.collection('subAdmins')
-    .where('adminId', '==', adminId)
-    .orderBy('createdAt', 'desc')
-    .get()
-  return snapshot.docs.map(doc => {
-    const data = doc.data()
-    const { password, ...rest } = data
-    return { id: doc.id, ...rest }
-  })
+  try {
+    const snapshot = await firestore.collection('subAdmins')
+      .where('adminId', '==', adminId)
+      .orderBy('createdAt', 'desc')
+      .get()
+    return snapshot.docs.map(doc => {
+      const data = doc.data()
+      const { password, ...rest } = data
+      return { id: doc.id, ...rest }
+    })
+  } catch (error: any) {
+    // Fallback: try without orderBy (composite index may not exist yet)
+    console.warn('getSubAdmins: orderBy failed, trying without sort:', error.message)
+    try {
+      const snapshot = await firestore.collection('subAdmins')
+        .where('adminId', '==', adminId)
+        .get()
+      const docs = snapshot.docs.map(doc => {
+        const data = doc.data()
+        const { password, ...rest } = data
+        return { id: doc.id, ...rest }
+      })
+      // Sort client-side
+      docs.sort((a: any, b: any) => {
+        const getTime = (ts: any) => {
+          if (!ts) return 0
+          if (typeof ts === 'object' && ts !== null && 'seconds' in ts) return ts.seconds * 1000
+          return new Date(ts).getTime() || 0
+        }
+        return getTime(b.createdAt) - getTime(a.createdAt)
+      })
+      return docs
+    } catch (fallbackError: any) {
+      console.error('getSubAdmins fallback also failed:', fallbackError.message)
+      return []
+    }
+  }
 }
 
 export async function createSubAdmin(data: {

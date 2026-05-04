@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RTooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts'
 import { useAppStore, formatPrice, getStatusLabel, getStatusColor } from '@/lib/store'
+import { openInMaps, getGPSLocation, searchLocation, extractCoordinates, getDisplayLocation } from '@/lib/location-utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -153,6 +154,11 @@ export default function AdminDashboard() {
   // Nearby nurses geocoding cache
   const [nurseDistances, setNurseDistances] = useState<Record<string, number>>({})
   const [geocodingLoading, setGeocodingLoading] = useState(false)
+
+  // Location search state
+  const [locationSearchQuery, setLocationSearchQuery] = useState('')
+  const [locationSearchResults, setLocationSearchResults] = useState<Array<{ name: string; lat: string; lng: string; display: string }>>([])
+  const [locationSearchLoading, setLocationSearchLoading] = useState(false)
 
   // Settings
   const [settings, setSettings] = useState<any>(null)
@@ -525,16 +531,25 @@ export default function AdminDashboard() {
     if (!beneficiaryLocation || beneficiaryLocation === 'غير محدد') { setNurseDistances({}); return }
     setGeocodingLoading(true)
     try {
-      const benefCoords = await geocodeCache(beneficiaryLocation)
+      // First try to extract coordinates from the location string directly
+      let benefCoords = extractCoordinates(beneficiaryLocation)
+      // If no coordinates embedded, try geocoding the address
+      if (!benefCoords) {
+        benefCoords = await geocodeCache(beneficiaryLocation)
+      }
       if (!benefCoords) { setNurseDistances({}); setGeocodingLoading(false); return }
       const distances: Record<string, number> = {}
-      const approved = nurses.filter(n => n.status === 'approved')
-      // Geocode nurses in parallel (limit to 10 to avoid rate limiting)
-      const nursesToGeocode = approved.slice(0, 10)
-      const coords = await Promise.all(nursesToGeocode.map(async (n) => {
+      const approved = nurses.filter((n: any) => n.status === 'approved')
+      // Geocode nurses - try extracting coordinates first, then fall back to geocoding
+      const nursesToGeocode = approved.slice(0, 15)
+      const coords = await Promise.all(nursesToGeocode.map(async (n: any) => {
         const loc = n.location || ''
-        const coords = await geocodeCache(loc)
-        return { id: n.id, coords }
+        // Try extracting coordinates from nurse location string first
+        const nurseCoords = extractCoordinates(loc)
+        if (nurseCoords) return { id: n.id, coords: nurseCoords }
+        // Fall back to geocoding
+        const geocodedCoords = await geocodeCache(loc)
+        return { id: n.id, coords: geocodedCoords }
       }))
       for (const c of coords) {
         if (c.coords) {
@@ -1110,6 +1125,13 @@ export default function AdminDashboard() {
                                     {r.isEmergency && <Badge className="bg-red-500 text-white border-0 text-xs animate-pulse"><AlertTriangle className="w-3 h-3 ml-1" />طوارئ</Badge>}
                                   </div>
                                   <p className="text-sm text-gray-500 mt-1">المستفيد: {r.beneficiary?.name || 'غير محدد'} {r.beneficiary?.phone && `• ${r.beneficiary.phone}`}</p>
+                                  {(r.address || r.beneficiary?.location) && (
+                                    <button onClick={() => openInMaps(r.address || r.beneficiary?.location || '')} className="flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-800 hover:underline mt-1 transition-colors">
+                                      <MapPin className="w-3.5 h-3.5 shrink-0" />
+                                      <span className="truncate">{getDisplayLocation(r.address || r.beneficiary?.location || '')}</span>
+                                      <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full">فتح الخريطة</span>
+                                    </button>
+                                  )}
                                   {r.assignment?.nurse && <p className="text-sm text-emerald-600">الممرض: {r.assignment.nurse.firstName} {r.assignment.nurse.lastName}</p>}
                                   {r.notes && <p className="text-sm text-gray-400 mt-1">{r.notes}</p>}
                                   <p className="text-xs text-gray-400 mt-1">{formatDateTime(r.createdAt)}</p>
@@ -1201,7 +1223,13 @@ export default function AdminDashboard() {
                                     </div>
                                     <div className="mt-2 space-y-1 text-sm">
                                       <p className="text-gray-600"><span className="font-medium">المستفيد:</span> {req.beneficiaryName || 'غير معروف'}</p>
-                                      {req.address && <p className="text-gray-600"><span className="font-medium">العنوان:</span> {req.address}</p>}
+                                      {req.address && (
+                                        <button onClick={() => openInMaps(req.address)} className="flex items-center gap-1.5 text-blue-600 hover:text-blue-800 hover:underline transition-colors">
+                                          <MapPin className="w-3.5 h-3.5 shrink-0" />
+                                          <span className="truncate">{getDisplayLocation(req.address)}</span>
+                                          <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full">فتح الخريطة</span>
+                                        </button>
+                                      )}
                                       {req.notes && <p className="text-gray-500"><span className="font-medium">ملاحظات:</span> {req.notes}</p>}
                                       {req.nurseName && <p className="text-blue-600"><span className="font-medium">الممرض المعين:</span> {req.nurseName}</p>}
                                       <p className="text-gray-400 text-xs">{formatDateTime(req.createdAt)}</p>
@@ -1700,7 +1728,14 @@ export default function AdminDashboard() {
                 <p className="font-medium">{selectedRequest.service?.name || 'خدمة'}</p>
                 <p className="text-sm text-gray-500">المستفيد: {selectedRequest.beneficiary?.name || 'غير محدد'}</p>
                 {(selectedRequest.beneficiary?.location || selectedRequest.address || selectedRequest.location) && (
-                  <p className="text-xs text-gray-400 mt-1 flex items-center gap-1"><MapPin className="w-3 h-3" />{selectedRequest.beneficiary?.location || selectedRequest.address || selectedRequest.location}</p>
+                  <button
+                    onClick={() => openInMaps(selectedRequest.beneficiary?.location || selectedRequest.address || selectedRequest.location)}
+                    className="flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-800 hover:underline mt-1 transition-colors"
+                  >
+                    <MapPin className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate">{getDisplayLocation(selectedRequest.beneficiary?.location || selectedRequest.address || selectedRequest.location)}</span>
+                    <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full">فتح الخريطة</span>
+                  </button>
                 )}
               </div>
             )}
@@ -1894,7 +1929,17 @@ export default function AdminDashboard() {
               <Separator />
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div><span className="text-gray-500">الهاتف:</span><p className="font-medium">{beneficiaryDetail.phone}</p></div>
-                <div><span className="text-gray-500">الموقع:</span><p className="font-medium">{beneficiaryDetail.location}</p></div>
+                <div>
+                  <span className="text-gray-500">الموقع:</span>
+                  {beneficiaryDetail.location && beneficiaryDetail.location !== 'غير محدد' ? (
+                    <button onClick={() => openInMaps(beneficiaryDetail.location)} className="flex items-center gap-1.5 text-blue-600 hover:text-blue-800 hover:underline font-medium transition-colors">
+                      <MapPin className="w-3.5 h-3.5 shrink-0" />
+                      <span className="truncate">{getDisplayLocation(beneficiaryDetail.location)}</span>
+                    </button>
+                  ) : (
+                    <p className="font-medium text-gray-400">غير محدد</p>
+                  )}
+                </div>
               </div>
               {beneficiaryRequests.length > 0 && (
                 <div>

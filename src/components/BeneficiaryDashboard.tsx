@@ -10,6 +10,7 @@ import {
   Siren, ChevronDown, ChevronUp, Shield, Gift, TrendingUp, Sparkles, Navigation
 } from 'lucide-react'
 import { useAppStore, formatPrice, getStatusLabel, getStatusColor } from '@/lib/store'
+import { openInMaps, getGPSLocation, searchLocation, extractCoordinates, getDisplayLocation } from '@/lib/location-utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -228,6 +229,12 @@ export default function BeneficiaryDashboard() {
   const [profileSaving, setProfileSaving] = useState(false)
   const [profileLoaded, setProfileLoaded] = useState(false)
   const [profileData, setProfileData] = useState<any>(null)
+  const [gpsLoading, setGpsLoading] = useState(false)
+  const [locationSearchResults, setLocationSearchResults] = useState<Array<{ name: string; lat: string; lng: string; display: string }>>([])
+  const [emergencyGpsLoading, setEmergencyGpsLoading] = useState(false)
+  const [emergencyLocationSearchResults, setEmergencyLocationSearchResults] = useState<Array<{ name: string; lat: string; lng: string; display: string }>>([])
+  const [requestGpsLoading, setRequestGpsLoading] = useState(false)
+  const [requestLocationSearchResults, setRequestLocationSearchResults] = useState<Array<{ name: string; lat: string; lng: string; display: string }>>([])
 
   // Rating state
   const [ratingDialog, setRatingDialog] = useState(false)
@@ -1119,10 +1126,11 @@ export default function BeneficiaryDashboard() {
                                   </div>
 
                                   {req.address && (
-                                    <div className="flex items-center gap-1.5 text-sm text-muted-foreground mb-2">
+                                    <button onClick={() => openInMaps(req.address)} className="flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-800 hover:underline transition-colors mb-2">
                                       <MapPin className="w-3.5 h-3.5 shrink-0" />
-                                      <span className="truncate">{req.address}</span>
-                                    </div>
+                                      <span className="truncate">{getDisplayLocation(req.address)}</span>
+                                      <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full shrink-0">خريطة</span>
+                                    </button>
                                   )}
 
                                   {req.paymentMethod && (
@@ -1328,49 +1336,75 @@ export default function BeneficiaryDashboard() {
                             الموقع / العنوان
                           </Label>
                           <div className="flex gap-2">
-                            <Input
-                              value={profileLocation}
-                              onChange={(e) => setProfileLocation(e.target.value)}
-                              placeholder="سيتم تحديد موقعك تلقائياً أو أدخل العنوان يدوياً"
-                              className="rounded-xl border-violet-200 focus:border-violet-400 focus:ring-violet-200 flex-1"
-                            />
+                            <div className="flex-1 relative">
+                              <Input
+                                value={profileLocation}
+                                onChange={(e) => {
+                                  setProfileLocation(e.target.value)
+                                  if (e.target.value.length >= 3) {
+                                    searchLocation(e.target.value).then(results => setLocationSearchResults(results))
+                                  } else {
+                                    setLocationSearchResults([])
+                                  }
+                                }}
+                                placeholder="ابحث عن موقع أو اضغط زر GPS..."
+                                className="rounded-xl border-violet-200 focus:border-violet-400 focus:ring-violet-200 w-full"
+                              />
+                              {locationSearchResults.length > 0 && (
+                                <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-white rounded-xl shadow-xl border border-violet-100 max-h-48 overflow-y-auto">
+                                  {locationSearchResults.map((result, idx) => (
+                                    <button
+                                      key={idx}
+                                      className="w-full text-right px-3 py-2.5 hover:bg-violet-50 transition-colors text-sm border-b border-gray-50 last:border-0"
+                                      onClick={() => {
+                                        setProfileLocation(`${result.name} [${result.lat},${result.lng}]`)
+                                        setLocationSearchResults([])
+                                      }}
+                                    >
+                                      <div className="flex items-center gap-2">
+                                        <MapPin className="w-3.5 h-3.5 text-violet-500 shrink-0" />
+                                        <span className="truncate">{result.name}</span>
+                                      </div>
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
                             <Button
                               type="button"
                               variant="outline"
                               className="shrink-0 rounded-xl border-violet-200 text-violet-600 hover:bg-violet-50"
-                              onClick={() => {
-                                if (navigator.geolocation) {
-                                  toast({ title: 'جارٍ تحديد الموقع...', description: 'يرجى الانتظار' })
-                                  navigator.geolocation.getCurrentPosition(
-                                    async (pos) => {
-                                      const { latitude, longitude } = pos.coords
-                                      try {
-                                        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&accept-language=ar`)
-                                        const data = await res.json()
-                                        const address = data.display_name || `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`
-                                        setProfileLocation(address)
-                                        toast({ title: 'تم تحديد الموقع بنجاح', description: address.substring(0, 80) })
-                                      } catch {
-                                        setProfileLocation(`${latitude.toFixed(6)}, ${longitude.toFixed(6)}`)
-                                        toast({ title: 'تم تحديد الموقع', description: `${latitude.toFixed(4)}, ${longitude.toFixed(4)}` })
-                                      }
-                                    },
-                                    (err) => {
-                                      toast({ title: 'خطأ في تحديد الموقع', description: 'يرجى السماح بالوصول إلى الموقع أو إدخاله يدوياً', variant: 'destructive' })
-                                    },
-                                    { enableHighAccuracy: true, timeout: 15000 }
-                                  )
+                              disabled={gpsLoading}
+                              onClick={async () => {
+                                setGpsLoading(true)
+                                const result = await getGPSLocation()
+                                setGpsLoading(false)
+                                if (result) {
+                                  setProfileLocation(result.address)
+                                  setLocationSearchResults([])
+                                  toast({ title: 'تم تحديد الموقع بنجاح', description: getDisplayLocation(result.address).substring(0, 80) })
                                 } else {
-                                  toast({ title: 'غير مدعوم', description: 'متصفحك لا يدعم تحديد الموقع', variant: 'destructive' })
+                                  toast({ title: 'خطأ في تحديد الموقع', description: 'يرجى السماح بالوصول إلى الموقع أو إدخاله يدوياً', variant: 'destructive' })
                                 }
                               }}
                             >
-                              <Navigation className="w-4 h-4" />
+                              {gpsLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Navigation className="w-4 h-4" />}
                             </Button>
                           </div>
+                          {/* Clickable map link */}
+                          {profileLocation && (
+                            <button
+                              onClick={() => openInMaps(profileLocation)}
+                              className="flex items-center gap-1.5 text-sm text-violet-600 hover:text-violet-800 hover:underline transition-colors"
+                            >
+                              <MapPin className="w-3.5 h-3.5" />
+                              <span className="truncate">{getDisplayLocation(profileLocation)}</span>
+                              <span className="text-[10px] bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded-full">فتح في الخريطة</span>
+                            </button>
+                          )}
                           <p className="text-xs text-violet-600 flex items-center gap-1">
-                            <MapPin className="w-3 h-3" />
-                            اضغط على زر الموقع لتحديد موقعك تلقائياً عبر GPS أو أدخل العنوان يدوياً
+                            <Navigation className="w-3 h-3" />
+                            اضغط على زر GPS لتحديد موقعك تلقائياً أو اكتب للبحث عن عنوان
                           </p>
                         </div>
 
@@ -1867,46 +1901,72 @@ export default function BeneficiaryDashboard() {
                 العنوان
               </Label>
               <div className="flex gap-2">
-                <Input
-                  value={emergencyForm.address}
-                  onChange={(e) => setEmergencyForm(prev => ({ ...prev, address: e.target.value }))}
-                  placeholder="سيتم تحديد موقعك تلقائياً أو أدخل العنوان يدوياً"
-                  className="rounded-xl flex-1"
-                />
+                <div className="flex-1 relative">
+                  <Input
+                    value={emergencyForm.address}
+                    onChange={(e) => {
+                      setEmergencyForm(prev => ({ ...prev, address: e.target.value }))
+                      if (e.target.value.length >= 3) {
+                        searchLocation(e.target.value).then(results => setEmergencyLocationSearchResults(results))
+                      } else {
+                        setEmergencyLocationSearchResults([])
+                      }
+                    }}
+                    placeholder="ابحث عن موقع أو اضغط زر GPS..."
+                    className="rounded-xl w-full"
+                  />
+                  {emergencyLocationSearchResults.length > 0 && (
+                    <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-white rounded-xl shadow-xl border border-red-100 max-h-48 overflow-y-auto">
+                      {emergencyLocationSearchResults.map((result, idx) => (
+                        <button
+                          key={idx}
+                          className="w-full text-right px-3 py-2.5 hover:bg-red-50 transition-colors text-sm border-b border-gray-50 last:border-0"
+                          onClick={() => {
+                            setEmergencyForm(prev => ({ ...prev, address: `${result.name} [${result.lat},${result.lng}]` }))
+                            setEmergencyLocationSearchResults([])
+                          }}
+                        >
+                          <div className="flex items-center gap-2">
+                            <MapPin className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                            <span className="truncate">{result.name}</span>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 <Button
                   type="button"
                   variant="outline"
                   className="shrink-0 rounded-xl"
-                  onClick={() => {
-                    if (navigator.geolocation) {
-                      toast({ title: 'جارٍ تحديد الموقع...', description: 'يرجى الانتظار' })
-                      navigator.geolocation.getCurrentPosition(
-                        async (pos) => {
-                          const { latitude, longitude } = pos.coords
-                          try {
-                            const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&accept-language=ar`)
-                            const data = await res.json()
-                            const address = data.display_name || `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`
-                            setEmergencyForm(prev => ({ ...prev, address }))
-                            toast({ title: 'تم تحديد الموقع بنجاح', description: address.substring(0, 80) })
-                          } catch {
-                            setEmergencyForm(prev => ({ ...prev, address: `${latitude.toFixed(6)}, ${longitude.toFixed(6)}` }))
-                            toast({ title: 'تم تحديد الموقع', description: `${latitude.toFixed(4)}, ${longitude.toFixed(4)}` })
-                          }
-                        },
-                        (err) => {
-                          toast({ title: 'خطأ في تحديد الموقع', description: 'يرجى السماح بالوصول إلى الموقع أو إدخاله يدوياً', variant: 'destructive' })
-                        },
-                        { enableHighAccuracy: true, timeout: 15000 }
-                      )
+                  disabled={emergencyGpsLoading}
+                  onClick={async () => {
+                    setEmergencyGpsLoading(true)
+                    const result = await getGPSLocation()
+                    setEmergencyGpsLoading(false)
+                    if (result) {
+                      setEmergencyForm(prev => ({ ...prev, address: result.address }))
+                      setEmergencyLocationSearchResults([])
+                      toast({ title: 'تم تحديد الموقع بنجاح', description: getDisplayLocation(result.address).substring(0, 80) })
                     } else {
-                      toast({ title: 'غير مدعوم', description: 'متصفحك لا يدعم تحديد الموقع', variant: 'destructive' })
+                      toast({ title: 'خطأ في تحديد الموقع', description: 'يرجى السماح بالوصول إلى الموقع أو إدخاله يدوياً', variant: 'destructive' })
                     }
                   }}
                 >
-                  <Navigation className="w-4 h-4" />
+                  {emergencyGpsLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Navigation className="w-4 h-4" />}
                 </Button>
               </div>
+              {/* Clickable map link */}
+              {emergencyForm.address && (
+                <button
+                  onClick={() => openInMaps(emergencyForm.address)}
+                  className="flex items-center gap-1.5 text-sm text-red-600 hover:text-red-800 hover:underline transition-colors"
+                >
+                  <MapPin className="w-3.5 h-3.5" />
+                  <span className="truncate">{getDisplayLocation(emergencyForm.address)}</span>
+                  <span className="text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full">فتح في الخريطة</span>
+                </button>
+              )}
             </div>
 
             {/* Notes Field */}
@@ -1984,46 +2044,72 @@ export default function BeneficiaryDashboard() {
                 العنوان
               </Label>
               <div className="flex gap-2">
-                <Input
-                  value={requestForm.address}
-                  onChange={(e) => setRequestForm(prev => ({ ...prev, address: e.target.value }))}
-                  placeholder="سيتم تحديد موقعك تلقائياً أو أدخل العنوان يدوياً"
-                  className="rounded-xl flex-1"
-                />
+                <div className="flex-1 relative">
+                  <Input
+                    value={requestForm.address}
+                    onChange={(e) => {
+                      setRequestForm(prev => ({ ...prev, address: e.target.value }))
+                      if (e.target.value.length >= 3) {
+                        searchLocation(e.target.value).then(results => setRequestLocationSearchResults(results))
+                      } else {
+                        setRequestLocationSearchResults([])
+                      }
+                    }}
+                    placeholder="ابحث عن موقع أو اضغط زر GPS..."
+                    className="rounded-xl w-full"
+                  />
+                  {requestLocationSearchResults.length > 0 && (
+                    <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-white rounded-xl shadow-xl border border-violet-100 max-h-48 overflow-y-auto">
+                      {requestLocationSearchResults.map((result, idx) => (
+                        <button
+                          key={idx}
+                          className="w-full text-right px-3 py-2.5 hover:bg-violet-50 transition-colors text-sm border-b border-gray-50 last:border-0"
+                          onClick={() => {
+                            setRequestForm(prev => ({ ...prev, address: `${result.name} [${result.lat},${result.lng}]` }))
+                            setRequestLocationSearchResults([])
+                          }}
+                        >
+                          <div className="flex items-center gap-2">
+                            <MapPin className="w-3.5 h-3.5 text-violet-500 shrink-0" />
+                            <span className="truncate">{result.name}</span>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 <Button
                   type="button"
                   variant="outline"
                   className="shrink-0 rounded-xl"
-                  onClick={() => {
-                    if (navigator.geolocation) {
-                      toast({ title: 'جارٍ تحديد الموقع...', description: 'يرجى الانتظار' })
-                      navigator.geolocation.getCurrentPosition(
-                        async (pos) => {
-                          const { latitude, longitude } = pos.coords
-                          try {
-                            const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&accept-language=ar`)
-                            const data = await res.json()
-                            const address = data.display_name || `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`
-                            setRequestForm(prev => ({ ...prev, address }))
-                            toast({ title: 'تم تحديد الموقع بنجاح', description: address.substring(0, 80) })
-                          } catch {
-                            setRequestForm(prev => ({ ...prev, address: `${latitude.toFixed(6)}, ${longitude.toFixed(6)}` }))
-                            toast({ title: 'تم تحديد الموقع', description: `${latitude.toFixed(4)}, ${longitude.toFixed(4)}` })
-                          }
-                        },
-                        (err) => {
-                          toast({ title: 'خطأ في تحديد الموقع', description: 'يرجى السماح بالوصول إلى الموقع أو إدخاله يدوياً', variant: 'destructive' })
-                        },
-                        { enableHighAccuracy: true, timeout: 15000 }
-                      )
+                  disabled={requestGpsLoading}
+                  onClick={async () => {
+                    setRequestGpsLoading(true)
+                    const result = await getGPSLocation()
+                    setRequestGpsLoading(false)
+                    if (result) {
+                      setRequestForm(prev => ({ ...prev, address: result.address }))
+                      setRequestLocationSearchResults([])
+                      toast({ title: 'تم تحديد الموقع بنجاح', description: getDisplayLocation(result.address).substring(0, 80) })
                     } else {
-                      toast({ title: 'غير مدعوم', description: 'متصفحك لا يدعم تحديد الموقع', variant: 'destructive' })
+                      toast({ title: 'خطأ في تحديد الموقع', description: 'يرجى السماح بالوصول إلى الموقع أو إدخاله يدوياً', variant: 'destructive' })
                     }
                   }}
                 >
-                  <Navigation className="w-4 h-4" />
+                  {requestGpsLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Navigation className="w-4 h-4" />}
                 </Button>
               </div>
+              {/* Clickable map link */}
+              {requestForm.address && (
+                <button
+                  onClick={() => openInMaps(requestForm.address)}
+                  className="flex items-center gap-1.5 text-sm text-violet-600 hover:text-violet-800 hover:underline transition-colors"
+                >
+                  <MapPin className="w-3.5 h-3.5" />
+                  <span className="truncate">{getDisplayLocation(requestForm.address)}</span>
+                  <span className="text-[10px] bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded-full">فتح في الخريطة</span>
+                </button>
+              )}
             </div>
 
             {/* Payment Method */}

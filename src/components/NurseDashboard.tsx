@@ -9,6 +9,7 @@ import {
   Mail, Shield, Award, Navigation, Info, Sparkles
 } from 'lucide-react'
 import { useAppStore, formatPrice, getStatusLabel, getStatusColor } from '@/lib/store'
+import { openInMaps, getGPSLocation, searchLocation, extractCoordinates, getDisplayLocation } from '@/lib/location-utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -262,6 +263,9 @@ export default function NurseDashboard() {
   // Profile tab state - only location
   const [locationValue, setLocationValue] = useState('')
   const [profileSaving, setProfileSaving] = useState(false)
+  const [gpsLoading, setGpsLoading] = useState(false)
+  const [locationSearchResults, setLocationSearchResults] = useState<Array<{ name: string; lat: string; lng: string; display: string }>>([])
+  const [locationSearchLoading, setLocationSearchLoading] = useState(false)
 
   // Ratings state - fetch from API
   const [ratings, setRatings] = useState<Rating[]>([])
@@ -825,7 +829,7 @@ export default function NurseDashboard() {
                               <div className="flex items-center gap-1.5">
                                 <MapPin className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
                                 <span className="font-medium text-gray-700">الموقع:</span>
-                                <span className="text-gray-500">{assignment.request.beneficiary.location}</span>
+                                <button onClick={() => openInMaps(assignment.request!.beneficiary!.location)} className="text-blue-600 hover:text-blue-800 hover:underline truncate transition-colors">{getDisplayLocation(assignment.request.beneficiary.location)}</button>
                               </div>
                             )}
                             {assignment.request?.service?.price !== undefined && (
@@ -859,7 +863,7 @@ export default function NurseDashboard() {
                             <div className="mt-2 flex items-center gap-1.5 text-sm">
                               <MapPin className="w-3.5 h-3.5 text-rose-500 shrink-0" />
                               <span className="font-medium text-gray-700">العنوان:</span>
-                              <span className="text-gray-500">{assignment.request.address}</span>
+                              <button onClick={() => openInMaps(assignment.request!.address!)} className="text-blue-600 hover:text-blue-800 hover:underline transition-colors">{getDisplayLocation(assignment.request.address)}</button>
                             </div>
                           )}
 
@@ -1390,50 +1394,82 @@ export default function NurseDashboard() {
                   عنوانك الفعلي
                 </Label>
                 <div className="flex gap-2">
-                  <Input
-                    id="location"
-                    value={locationValue}
-                    onChange={e => setLocationValue(e.target.value)}
-                    placeholder="سيتم تحديد موقعك تلقائياً أو أدخل العنوان يدوياً"
-                    className="bg-white/80 border-blue-200/50 focus:border-blue-400 rounded-xl flex-1"
-                  />
+                  <div className="flex-1 relative">
+                    <Input
+                      id="location"
+                      value={locationValue}
+                      onChange={e => {
+                        setLocationValue(e.target.value)
+                        // Search as user types
+                        if (e.target.value.length >= 3) {
+                          setLocationSearchLoading(true)
+                          searchLocation(e.target.value).then(results => {
+                            setLocationSearchResults(results)
+                            setLocationSearchLoading(false)
+                          })
+                        } else {
+                          setLocationSearchResults([])
+                        }
+                      }}
+                      placeholder="ابحث عن موقع أو اضغط زر GPS..."
+                      className="bg-white/80 border-blue-200/50 focus:border-blue-400 rounded-xl w-full"
+                    />
+                    {/* Location search results dropdown */}
+                    {locationSearchResults.length > 0 && (
+                      <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-white rounded-xl shadow-xl border border-blue-100 max-h-48 overflow-y-auto">
+                        {locationSearchResults.map((result, idx) => (
+                          <button
+                            key={idx}
+                            className="w-full text-right px-3 py-2.5 hover:bg-blue-50 transition-colors text-sm border-b border-gray-50 last:border-0"
+                            onClick={() => {
+                              setLocationValue(`${result.name} [${result.lat},${result.lng}]`)
+                              setLocationSearchResults([])
+                            }}
+                          >
+                            <div className="flex items-center gap-2">
+                              <MapPin className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                              <span className="truncate">{result.name}</span>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                   <Button
                     type="button"
                     variant="outline"
                     className="shrink-0 rounded-xl border-blue-200 text-blue-600 hover:bg-blue-50"
-                    onClick={() => {
-                      if (navigator.geolocation) {
-                        toast({ title: 'جارٍ تحديد الموقع...', description: 'يرجى الانتظار' })
-                        navigator.geolocation.getCurrentPosition(
-                          async (pos) => {
-                            const { latitude, longitude } = pos.coords
-                            try {
-                              const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&accept-language=ar`)
-                              const data = await res.json()
-                              const address = data.display_name || `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`
-                              setLocationValue(address)
-                              toast({ title: 'تم تحديد الموقع بنجاح', description: address.substring(0, 80) })
-                            } catch {
-                              setLocationValue(`${latitude.toFixed(6)}, ${longitude.toFixed(6)}`)
-                              toast({ title: 'تم تحديد الموقع', description: `${latitude.toFixed(4)}, ${longitude.toFixed(4)}` })
-                            }
-                          },
-                          (err) => {
-                            toast({ title: 'خطأ في تحديد الموقع', description: 'يرجى السماح بالوصول إلى الموقع أو إدخاله يدوياً', variant: 'destructive' })
-                          },
-                          { enableHighAccuracy: true, timeout: 15000 }
-                        )
+                    disabled={gpsLoading}
+                    onClick={async () => {
+                      setGpsLoading(true)
+                      const result = await getGPSLocation()
+                      setGpsLoading(false)
+                      if (result) {
+                        setLocationValue(result.address)
+                        setLocationSearchResults([])
+                        toast({ title: 'تم تحديد الموقع بنجاح', description: getDisplayLocation(result.address).substring(0, 80) })
                       } else {
-                        toast({ title: 'غير مدعوم', description: 'متصفحك لا يدعم تحديد الموقع', variant: 'destructive' })
+                        toast({ title: 'خطأ في تحديد الموقع', description: 'يرجى السماح بالوصول إلى الموقع أو إدخاله يدوياً', variant: 'destructive' })
                       }
                     }}
                   >
-                    <Navigation className="w-4 h-4" />
+                    {gpsLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Navigation className="w-4 h-4" />}
                   </Button>
                 </div>
+                {/* Clickable current location link */}
+                {locationValue && (
+                  <button
+                    onClick={() => openInMaps(locationValue)}
+                    className="flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-800 hover:underline mt-2 transition-colors"
+                  >
+                    <MapPin className="w-3.5 h-3.5" />
+                    <span className="truncate">{getDisplayLocation(locationValue)}</span>
+                    <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full">فتح في الخريطة</span>
+                  </button>
+                )}
                 <p className="text-[11px] text-blue-500 mt-2 flex items-center gap-1">
                   <Navigation className="w-3 h-3" />
-                  اضغط على زر الموقع لتحديد موقعك تلقائياً عبر GPS أو أدخل العنوان يدوياً
+                  اضغط على زر GPS لتحديد موقعك تلقائياً أو اكتب للبحث عن عنوان
                 </p>
                 <Button
                   onClick={handleSaveLocation}
