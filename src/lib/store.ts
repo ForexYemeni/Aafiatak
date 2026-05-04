@@ -153,6 +153,8 @@ export function formatPrice(price: number): string {
 export function getStatusLabel(status: string): string {
   const map: Record<string, string> = {
     pending: 'قيد الانتظار',
+    pending_confirmation: 'بانتظار التأكيد',
+    pending_payment: 'بانتظار الدفع',
     approved: 'مقبول',
     rejected: 'مرفوض',
     completed: 'مكتمل',
@@ -167,6 +169,8 @@ export function getStatusLabel(status: string): string {
     rescheduled: 'معاد جدولته',
     paid: 'مدفوع',
     unpaid: 'غير مدفوع',
+    cash_on_delivery: 'الدفع عند الاستلام',
+    pending_confirmation_payment: 'بانتظار تأكيد الدفع',
     refunded: 'مسترجع',
     open: 'مفتوح',
     closed: 'مغلق',
@@ -178,6 +182,8 @@ export function getStatusLabel(status: string): string {
 export function getStatusColor(status: string): string {
   const map: Record<string, string> = {
     pending: 'bg-yellow-100 text-yellow-800 border-yellow-300',
+    pending_confirmation: 'bg-yellow-100 text-yellow-800 border-yellow-300',
+    pending_payment: 'bg-orange-100 text-orange-800 border-orange-300',
     approved: 'bg-emerald-100 text-emerald-800 border-emerald-300',
     rejected: 'bg-red-100 text-red-800 border-red-300',
     completed: 'bg-blue-100 text-blue-800 border-blue-300',
@@ -192,6 +198,8 @@ export function getStatusColor(status: string): string {
     rescheduled: 'bg-teal-100 text-teal-800 border-teal-300',
     paid: 'bg-emerald-100 text-emerald-800 border-emerald-300',
     unpaid: 'bg-red-100 text-red-800 border-red-300',
+    cash_on_delivery: 'bg-amber-100 text-amber-800 border-amber-300',
+    pending_confirmation_payment: 'bg-orange-100 text-orange-800 border-orange-300',
     refunded: 'bg-amber-100 text-amber-800 border-amber-300',
     open: 'bg-blue-100 text-blue-800 border-blue-300',
     closed: 'bg-gray-100 text-gray-800 border-gray-300',

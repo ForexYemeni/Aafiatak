@@ -519,7 +519,7 @@ export default function BeneficiaryDashboard() {
             }),
           })
         } catch {}
-        toast({ title: 'تم إرسال الطلب بنجاح', description: 'سيتم مراجعة طلبك من قبل الإدارة' })
+        toast({ title: 'تم إرسال الطلب بنجاح', description: requestForm.paymentMethod === 'cash' ? 'سيتم مراجعة طلبك من قبل الإدارة والدفع عند الاستلام' : 'سيتم مراجعة طلبك من قبل الإدارة' })
         // If payment method is card or wallet, open payment dialog
         if (requestForm.paymentMethod && requestForm.paymentMethod !== 'cash') {
           setLastCreatedRequestId(data.id || data.requestId || '')

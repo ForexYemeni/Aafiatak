@@ -1268,7 +1268,8 @@ export default function AdminDashboard() {
                           <Card className={`border-0 shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden ${r.isEmergency ? 'ring-2 ring-red-400' : ''}`}>
                             {/* Status gradient left border */}
                             <div className={`absolute top-0 right-0 w-1.5 h-full ${
-                              r.status === 'pending' ? 'bg-gradient-to-b from-amber-400 to-orange-500' :
+                              r.status === 'pending' || r.status === 'pending_confirmation' ? 'bg-gradient-to-b from-amber-400 to-orange-500' :
+                              r.status === 'pending_payment' ? 'bg-gradient-to-b from-orange-400 to-red-500' :
                               r.status === 'approved' ? 'bg-gradient-to-b from-blue-400 to-indigo-500' :
                               r.status === 'in_progress' ? 'bg-gradient-to-b from-cyan-400 to-teal-500' :
                               r.status === 'completed' ? 'bg-gradient-to-b from-emerald-400 to-green-500' :
@@ -1277,7 +1278,7 @@ export default function AdminDashboard() {
                             }`} />
                             <CardContent className="p-4 relative">
                               <div className="flex items-start gap-3">
-                                {r.status === 'pending' && (
+                                {(r.status === 'pending' || r.status === 'pending_confirmation') && (
                                   <button onClick={() => toggleRequestSelection(r.id)} className="mt-1 shrink-0">
                                     {selectedRequestIds.includes(r.id) ? <CheckCircle className="w-5 h-5 text-amber-500" /> : <div className="w-5 h-5 rounded border-2 border-gray-300" />}
                                   </button>
@@ -1297,11 +1298,18 @@ export default function AdminDashboard() {
                                     </button>
                                   )}
                                   {r.assignment?.nurse && <p className="text-sm text-emerald-600">الممرض: {r.assignment.nurse.firstName} {r.assignment.nurse.lastName}</p>}
+                                  {r.paymentMethod && <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
+                                    <CreditCard className="w-3 h-3" />
+                                    {r.paymentMethod === 'wallet-deposit' ? 'إيداع محفظة' : r.paymentMethod === 'exchange-transfer' ? 'تحويل صراف' : r.paymentMethod === 'bank-transfer' ? 'تحويل بنكي' : r.paymentMethod === 'cash' ? 'نقدي عند الاستلام' : r.paymentMethod}
+                                    {r.paymentStatus && <Badge className={`text-[10px] px-1 py-0 border-0 ${r.paymentStatus === 'cash_on_delivery' ? 'bg-amber-100 text-amber-700' : r.paymentStatus === 'paid' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>{getStatusLabel(r.paymentStatus)}</Badge>}
+                                  </p>}
                                   {r.notes && <p className="text-sm text-gray-400 mt-1">{r.notes}</p>}
                                   <p className="text-xs text-gray-400 mt-1">{formatDateTime(r.createdAt)}</p>
                                 </div>
                                 <div className="flex gap-2 flex-wrap">
                                   {r.status === 'pending' && (<><Button size="sm" className="bg-gradient-to-l from-amber-500 via-orange-500 to-rose-500 text-white" onClick={() => handleRequestAction(r.id, 'approved')}><CheckCircle className="w-3.5 h-3.5 ml-1" />قبول</Button><Button size="sm" variant="outline" className="text-red-500 hover:bg-red-50" onClick={() => handleRequestAction(r.id, 'rejected')}><XCircle className="w-3.5 h-3.5 ml-1" />رفض</Button></>)}
+                                  {r.status === 'pending_confirmation' && (<><Button size="sm" className="bg-gradient-to-l from-amber-500 via-orange-500 to-rose-500 text-white" onClick={() => handleRequestAction(r.id, 'approved')}><CheckCircle className="w-3.5 h-3.5 ml-1" />قبول</Button><Button size="sm" variant="outline" className="text-red-500 hover:bg-red-50" onClick={() => handleRequestAction(r.id, 'rejected')}><XCircle className="w-3.5 h-3.5 ml-1" />رفض</Button></>)}
+                                  {r.status === 'pending_payment' && <Badge className="bg-orange-100 text-orange-700 border border-orange-300 text-xs">بانتظار الدفع</Badge>}
                                   {r.status === 'approved' && <Button size="sm" className="bg-blue-500 hover:bg-blue-600 text-white" onClick={() => handleOpenApproveDialog(r)}><UserPlus className="w-3.5 h-3.5 ml-1" />تعيين ممرض</Button>}
                                   {r.status === 'in_progress' && <Button size="sm" className="bg-emerald-500 hover:bg-emerald-600 text-white" onClick={async () => { await fetch(`/api/admin/requests/${r.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'completed' }) }); toast({ title: 'تم إكمال الطلب' }); fetchData() }}><CheckCircle className="w-3.5 h-3.5 ml-1" />إكمال</Button>}
                                 </div>

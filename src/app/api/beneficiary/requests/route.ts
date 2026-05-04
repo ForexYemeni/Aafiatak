@@ -59,6 +59,13 @@ export async function POST(request: NextRequest) {
     // For multiple services, create a single grouped request
     const isMultiService = validServices.length > 1
 
+    // Determine initial status based on payment method
+    // Cash on delivery: goes directly to pending_confirmation (no payment needed upfront)
+    // Electronic payment: stays at pending_payment until payment is confirmed
+    const isCashPayment = paymentMethod === 'cash'
+    const initialStatus = isCashPayment ? 'pending_confirmation' : 'pending_payment'
+    const initialPaymentStatus = isCashPayment ? 'cash_on_delivery' : 'unpaid'
+
     const serviceRequest = await createServiceRequest({
       beneficiaryId,
       serviceId: validServices[0].id, // primary service
@@ -74,9 +81,8 @@ export async function POST(request: NextRequest) {
       dynamicPrice: dynamicPrice || null,
       pricingBreakdown: pricingBreakdown || null,
       commission: commission || null,
-      // Payment gate: status is 'pending_payment' until payment confirmed
-      status: 'pending_payment',
-      paymentStatus: 'unpaid',
+      status: initialStatus,
+      paymentStatus: initialPaymentStatus,
     })
 
     return NextResponse.json(serviceRequest)

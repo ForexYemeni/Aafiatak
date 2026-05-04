@@ -7,12 +7,19 @@ export async function GET() {
       throw new Error(initializationError || 'Firebase غير مهيأ')
     }
 
-    const snapshot = await firestore.collection('paymentMethods')
-      .where('isActive', '==', true)
-      .orderBy('createdAt', 'desc')
-      .get()
+    // Fetch all payment methods without composite index requirement
+    const snapshot = await firestore.collection('paymentMethods').get()
 
-    const methods = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+    // Filter active methods and sort in memory to avoid needing composite index
+    const methods = snapshot.docs
+      .map(doc => ({ id: doc.id, ...doc.data() }))
+      .filter((doc: any) => doc.isActive === true)
+      .sort((a: any, b: any) => {
+        const timeA = a.createdAt?.seconds || 0
+        const timeB = b.createdAt?.seconds || 0
+        return timeB - timeA
+      })
+
     return NextResponse.json(methods)
   } catch (error: any) {
     console.error('Get active payment methods error:', error.message)
