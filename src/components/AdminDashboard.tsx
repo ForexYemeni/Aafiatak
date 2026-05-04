@@ -608,9 +608,9 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex" dir="rtl">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex" dir="rtl">
       {/* Desktop Sidebar */}
-      <aside className="w-72 bg-white border-l shadow-sm hidden lg:flex flex-col fixed right-0 top-0 bottom-0 z-40">
+      <aside className="w-72 bg-white dark:bg-gray-900 border-l dark:border-gray-800 shadow-sm hidden lg:flex flex-col fixed right-0 top-0 bottom-0 z-40">
         <div className="p-6 border-b bg-gradient-to-l from-emerald-600 to-emerald-700">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center overflow-hidden">
@@ -630,8 +630,8 @@ export default function AdminDashboard() {
               onClick={() => handleTabChange(tab.key)}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
                 activeTab === tab.key
-                  ? 'bg-emerald-50 text-emerald-700 shadow-sm'
-                  : 'text-gray-600 hover:bg-gray-50'
+                  ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 shadow-sm'
+                  : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
               }`}
             >
               <tab.icon className="w-5 h-5" />
@@ -643,21 +643,21 @@ export default function AdminDashboard() {
           ))}
         </nav>
 
-        <div className="p-4 border-t bg-gray-50/50">
-          <div className="flex items-center gap-3 mb-3 p-2 rounded-xl hover:bg-gray-100 cursor-pointer transition-colors" onClick={() => {
+        <div className="p-4 border-t bg-gray-50/50 dark:bg-gray-800/50">
+          <div className="flex items-center gap-3 mb-3 p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 dark:bg-gray-800 cursor-pointer transition-colors" onClick={() => {
             setEditName((user as any)?.name || '')
             setEditNameDialog(true)
           }}>
-            <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-950/40 flex items-center justify-center">
               <Shield className="w-5 h-5 text-emerald-600" />
             </div>
             <div className="flex-1 min-w-0">
               <p className="font-medium text-sm truncate">{(user as any)?.name || 'المدير'}</p>
               <p className="text-muted-foreground text-xs">مدير النظام</p>
             </div>
-            <Pencil className="w-3.5 h-3.5 text-gray-400" />
+            <Pencil className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500" />
           </div>
-          <Button variant="ghost" className="w-full justify-start text-red-600 hover:text-red-700 hover:bg-red-50 rounded-xl" onClick={handleLogout}>
+          <Button variant="ghost" className="w-full justify-start text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30 dark:bg-red-950/30 rounded-xl" onClick={handleLogout}>
             <LogOut className="w-4 h-4 ml-2" />
             تسجيل الخروج
           </Button>
@@ -670,7 +670,7 @@ export default function AdminDashboard() {
       )}
 
       {/* Mobile Sidebar */}
-      <div className={`lg:hidden fixed right-0 top-0 bottom-0 w-72 bg-white z-50 transform transition-transform duration-300 ${mobileMenuOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+      <div className={`lg:hidden fixed right-0 top-0 bottom-0 w-72 bg-white dark:bg-gray-900 z-50 transform transition-transform duration-300 ${mobileMenuOpen ? 'translate-x-0' : 'translate-x-full'}`}>
         <div className="p-4 border-b bg-gradient-to-l from-emerald-600 to-emerald-700 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Image src="/logo.png" alt="عافيتك" width={28} height={28} className="rounded-lg" />
@@ -687,8 +687,8 @@ export default function AdminDashboard() {
               onClick={() => handleTabChange(tab.key)}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors ${
                 activeTab === tab.key
-                  ? 'bg-emerald-50 text-emerald-700'
-                  : 'text-gray-600 hover:bg-gray-50'
+                  ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300'
+                  : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
               }`}
             >
               <tab.icon className="w-5 h-5" />
@@ -702,7 +702,7 @@ export default function AdminDashboard() {
             setEditNameDialog(true)
             setMobileMenuOpen(false)
           }}>
-            <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-950/40 flex items-center justify-center">
               <Shield className="w-4 h-4 text-emerald-600" />
             </div>
             <div>
@@ -710,7 +710,7 @@ export default function AdminDashboard() {
               <p className="text-muted-foreground text-xs">مدير النظام</p>
             </div>
           </div>
-          <Button variant="ghost" className="w-full justify-start text-red-600 hover:bg-red-50" onClick={handleLogout}>
+          <Button variant="ghost" className="w-full justify-start text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 dark:bg-red-950/30" onClick={handleLogout}>
             <LogOut className="w-4 h-4 ml-2" />
             تسجيل الخروج
           </Button>
@@ -718,10 +718,10 @@ export default function AdminDashboard() {
       </div>
 
       {/* Mobile Header */}
-      <div className="lg:hidden fixed top-0 left-0 right-0 bg-white border-b z-40 px-4 py-3 flex items-center justify-between shadow-sm">
+      <div className="lg:hidden fixed top-0 left-0 right-0 bg-white dark:bg-gray-900 border-b dark:border-gray-800 z-40 px-4 py-3 flex items-center justify-between shadow-sm">
         <div className="flex items-center gap-2">
           <Image src="/logo.png" alt="عافيتك" width={24} height={24} className="rounded" />
-          <span className="font-bold text-emerald-700">عافيتك</span>
+          <span className="font-bold text-emerald-700 dark:text-emerald-300">عافيتك</span>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="sm" onClick={() => {
@@ -764,14 +764,14 @@ export default function AdminDashboard() {
                     </div>
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                       {[
-                        { label: 'إجمالي الممرضين', value: stats.totalNurses, color: 'text-emerald-600', bg: 'bg-emerald-50', icon: Users },
-                        { label: 'ممرضين معتمدين', value: stats.approvedNurses, color: 'text-teal-600', bg: 'bg-teal-50', icon: CheckCircle },
-                        { label: 'بانتظار الموافقة', value: stats.pendingNurses, color: 'text-yellow-600', bg: 'bg-yellow-50', icon: Loader2 },
-                        { label: 'المستفيدون', value: stats.totalBeneficiaries, color: 'text-cyan-600', bg: 'bg-cyan-50', icon: Heart },
-                        { label: 'الخدمات', value: stats.totalServices, color: 'text-purple-600', bg: 'bg-purple-50', icon: Wrench },
-                        { label: 'خدمات نشطة', value: stats.activeServices, color: 'text-green-600', bg: 'bg-green-50', icon: CheckCircle },
-                        { label: 'طلبات بانتظار المراجعة', value: stats.pendingRequests, color: 'text-orange-600', bg: 'bg-orange-50', icon: ClipboardList },
-                        { label: 'طلبات مكتملة', value: stats.completedRequests, color: 'text-blue-600', bg: 'bg-blue-50', icon: CheckCircle },
+                        { label: 'إجمالي الممرضين', value: stats.totalNurses, color: 'text-emerald-600', bg: 'bg-emerald-50 dark:bg-emerald-950/30', icon: Users },
+                        { label: 'ممرضين معتمدين', value: stats.approvedNurses, color: 'text-teal-600', bg: 'bg-teal-50 dark:bg-teal-950/30', icon: CheckCircle },
+                        { label: 'بانتظار الموافقة', value: stats.pendingNurses, color: 'text-yellow-600', bg: 'bg-yellow-50 dark:bg-yellow-950/30', icon: Loader2 },
+                        { label: 'المستفيدون', value: stats.totalBeneficiaries, color: 'text-cyan-600', bg: 'bg-cyan-50 dark:bg-cyan-950/30', icon: Heart },
+                        { label: 'الخدمات', value: stats.totalServices, color: 'text-purple-600', bg: 'bg-purple-50 dark:bg-purple-950/30', icon: Wrench },
+                        { label: 'خدمات نشطة', value: stats.activeServices, color: 'text-green-600', bg: 'bg-green-50 dark:bg-green-950/30', icon: CheckCircle },
+                        { label: 'طلبات بانتظار المراجعة', value: stats.pendingRequests, color: 'text-orange-600', bg: 'bg-orange-50 dark:bg-orange-950/30', icon: ClipboardList },
+                        { label: 'طلبات مكتملة', value: stats.completedRequests, color: 'text-blue-600', bg: 'bg-blue-50 dark:bg-blue-950/30', icon: CheckCircle },
                       ].map((item, i) => (
                         <Card key={i} className="border-0 shadow-sm hover:shadow-md transition-shadow">
                           <CardContent className="p-4">
@@ -867,8 +867,8 @@ export default function AdminDashboard() {
                         {activityLogs.length > 0 ? (
                           <div className="space-y-3 max-h-64 overflow-y-auto">
                             {activityLogs.slice(0, 5).map((log: any) => (
-                              <div key={log.id} className="flex items-start gap-3 p-2 rounded-lg hover:bg-gray-50">
-                                <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                              <div key={log.id} className="flex items-start gap-3 p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">
+                                <div className="w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-950/40 flex items-center justify-center flex-shrink-0 mt-0.5">
                                   <Activity className="w-4 h-4 text-emerald-600" />
                                 </div>
                                 <div className="flex-1 min-w-0">
@@ -919,7 +919,7 @@ export default function AdminDashboard() {
                               <div className="flex-1">
                                 <div className="flex items-center gap-2 mb-2">
                                   <h3 className="font-semibold text-lg">{service.name}</h3>
-                                  <Badge variant={service.isActive ? 'default' : 'secondary'} className={service.isActive ? 'bg-emerald-100 text-emerald-700' : ''}>
+                                  <Badge variant={service.isActive ? 'default' : 'secondary'} className={service.isActive ? 'bg-emerald-100 dark:bg-emerald-950/40 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300' : ''}>
                                     {service.isActive ? 'نشط' : 'غير نشط'}
                                   </Badge>
                                 </div>
@@ -998,7 +998,7 @@ export default function AdminDashboard() {
                             <div className="flex items-start justify-between gap-4">
                               <div className="flex-1">
                                 <div className="flex items-center gap-2 mb-3">
-                                  <div className="w-10 h-10 rounded-full bg-teal-50 flex items-center justify-center">
+                                  <div className="w-10 h-10 rounded-full bg-teal-50 dark:bg-teal-950/30 flex items-center justify-center">
                                     <Users className="w-5 h-5 text-teal-600" />
                                   </div>
                                   <div>
@@ -1021,7 +1021,7 @@ export default function AdminDashboard() {
                                     <p className="text-sm font-medium mb-2">المستندات:</p>
                                     <div className="flex flex-wrap gap-2">
                                       {(nurse.documentUrls || nurse.documents || []).map((url: string, idx: number) => (
-                                        <a key={idx} href={url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-xs text-emerald-600 hover:text-emerald-800 bg-emerald-50 px-2 py-1 rounded-md">
+                                        <a key={idx} href={url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-xs text-emerald-600 hover:text-emerald-800 dark:hover:text-emerald-200 bg-emerald-50 dark:bg-emerald-950/30 px-2 py-1 rounded-md">
                                           <FileText className="w-3 h-3" />
                                           مستند {idx + 1}
                                           <ExternalLink className="w-3 h-3" />
@@ -1032,7 +1032,7 @@ export default function AdminDashboard() {
                                 )}
                                 {/* Admin Notes */}
                                 {nurse.adminNotes && (
-                                  <div className="mt-2 p-2 bg-red-50 rounded-lg text-sm text-red-700">
+                                  <div className="mt-2 p-2 bg-red-50 dark:bg-red-950/30 rounded-lg text-sm text-red-700">
                                     <span className="font-medium">ملاحظات الإدارة:</span> {nurse.adminNotes}
                                   </div>
                                 )}
@@ -1088,7 +1088,7 @@ export default function AdminDashboard() {
                           <Card key={ben.id} className="border-0 shadow-sm hover:shadow-md transition-shadow">
                             <CardContent className="p-5">
                               <div className="flex items-start gap-3">
-                                <div className="w-10 h-10 rounded-full bg-cyan-50 flex items-center justify-center flex-shrink-0">
+                                <div className="w-10 h-10 rounded-full bg-cyan-50 dark:bg-cyan-950/30 flex items-center justify-center flex-shrink-0">
                                   <Heart className="w-5 h-5 text-cyan-600" />
                                 </div>
                                 <div className="flex-1">
@@ -1207,11 +1207,11 @@ export default function AdminDashboard() {
                                     <button onClick={() => toggleRequestSelection(req.id)} className="flex-shrink-0">
                                       {selectedRequestIds.includes(req.id)
                                         ? <CheckSquare className="w-5 h-5 text-emerald-600" />
-                                        : <Square className="w-5 h-5 text-gray-400" />
+                                        : <Square className="w-5 h-5 text-gray-400 dark:text-gray-500" />
                                       }
                                     </button>
                                   )}
-                                  <div className="w-10 h-10 rounded-full bg-purple-50 flex items-center justify-center">
+                                  <div className="w-10 h-10 rounded-full bg-purple-50 dark:bg-purple-950/30 flex items-center justify-center">
                                     <ClipboardList className="w-5 h-5 text-purple-600" />
                                   </div>
                                   <div>
@@ -1234,7 +1234,7 @@ export default function AdminDashboard() {
                                   )}
                                 </div>
                                 {req.adminNotes && (
-                                  <div className="mt-2 p-2 bg-red-50 rounded-lg text-sm text-red-700">
+                                  <div className="mt-2 p-2 bg-red-50 dark:bg-red-950/30 rounded-lg text-sm text-red-700">
                                     <span className="font-medium">ملاحظات الإدارة:</span> {req.adminNotes}
                                   </div>
                                 )}
@@ -1252,7 +1252,7 @@ export default function AdminDashboard() {
                                 </div>
                               )}
                               {req.status === 'approved' && !req.assignment && (
-                                <Button size="sm" variant="outline" className="border-emerald-300 text-emerald-700" onClick={() => {
+                                <Button size="sm" variant="outline" className="border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300" onClick={() => {
                                   setSelectedRequest(req)
                                   setSelectedNurseId('')
                                   setAssignDialog(true)
@@ -1303,7 +1303,7 @@ export default function AdminDashboard() {
                               <div className="flex-1">
                                 <div className="flex items-center gap-2 mb-1">
                                   <h3 className="font-semibold">{payment.name}</h3>
-                                  <Badge variant={payment.isActive ? 'default' : 'secondary'} className={payment.isActive ? 'bg-emerald-100 text-emerald-700' : ''}>
+                                  <Badge variant={payment.isActive ? 'default' : 'secondary'} className={payment.isActive ? 'bg-emerald-100 dark:bg-emerald-950/40 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300' : ''}>
                                     {payment.isActive ? 'نشط' : 'غير نشط'}
                                   </Badge>
                                 </div>
@@ -1361,7 +1361,7 @@ export default function AdminDashboard() {
                       <Card className="border-0 shadow-sm">
                         <CardContent className="p-4 text-center">
                           <Tag className="w-6 h-6 text-emerald-600 mx-auto mb-1" />
-                          <p className="text-2xl font-bold text-emerald-700">{coupons.length}</p>
+                          <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-300">{coupons.length}</p>
                           <p className="text-xs text-muted-foreground">إجمالي الكوبونات</p>
                         </CardContent>
                       </Card>
@@ -1399,8 +1399,8 @@ export default function AdminDashboard() {
                               <div className="flex items-start justify-between gap-4">
                                 <div className="flex-1">
                                   <div className="flex items-center gap-2 mb-2 flex-wrap">
-                                    <h3 className="font-mono font-bold text-lg bg-gray-100 px-3 py-1 rounded-lg">{coupon.code}</h3>
-                                    <Badge variant={coupon.isActive && !isExpired && !isMaxed ? 'default' : 'secondary'} className={coupon.isActive && !isExpired && !isMaxed ? 'bg-emerald-100 text-emerald-700' : isExpired ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600'}>
+                                    <h3 className="font-mono font-bold text-lg bg-gray-100 dark:bg-gray-800 px-3 py-1 rounded-lg">{coupon.code}</h3>
+                                    <Badge variant={coupon.isActive && !isExpired && !isMaxed ? 'default' : 'secondary'} className={coupon.isActive && !isExpired && !isMaxed ? 'bg-emerald-100 dark:bg-emerald-950/40 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300' : isExpired ? 'bg-red-100 dark:bg-red-950/40 text-red-700' : 'bg-gray-100 dark:bg-gray-800 text-gray-600'}>
                                       {isExpired ? 'منتهي الصلاحية' : isMaxed ? 'استُنفد' : coupon.isActive ? 'نشط' : 'غير نشط'}
                                     </Badge>
                                   </div>
@@ -1515,8 +1515,8 @@ export default function AdminDashboard() {
                         {servicePopularity.length > 0 ? (
                           <div className="space-y-3">
                             {servicePopularity.map((svc, i) => (
-                              <div key={i} className="flex items-center gap-4 p-3 rounded-xl bg-gray-50">
-                                <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700 font-bold text-sm">
+                              <div key={i} className="flex items-center gap-4 p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50">
+                                <div className="w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-950/40 flex items-center justify-center text-emerald-700 dark:text-emerald-300 font-bold text-sm">
                                   {i + 1}
                                 </div>
                                 <div className="flex-1">
@@ -1552,12 +1552,12 @@ export default function AdminDashboard() {
                               </thead>
                               <tbody>
                                 {nursePerformance.map((n, i) => (
-                                  <tr key={i} className="border-b last:border-0 hover:bg-gray-50">
+                                  <tr key={i} className="border-b last:border-0 hover:bg-gray-50 dark:hover:bg-gray-800">
                                     <td className="py-3 px-4 font-medium">{n.name}</td>
                                     <td className="py-3 px-4">{n.assignments}</td>
                                     <td className="py-3 px-4">{n.completed}</td>
                                     <td className="py-3 px-4">
-                                      <span className={`font-medium ${n.assignments > 0 ? 'text-emerald-600' : 'text-gray-400'}`}>
+                                      <span className={`font-medium ${n.assignments > 0 ? 'text-emerald-600' : 'text-gray-400 dark:text-gray-500'}`}>
                                         {n.assignments > 0 ? Math.round(n.completed / n.assignments * 100) : 0}%
                                       </span>
                                     </td>
@@ -1587,7 +1587,7 @@ export default function AdminDashboard() {
                           <Card key={log.id} className="border-0 shadow-sm">
                             <CardContent className="p-4">
                               <div className="flex items-start gap-3">
-                                <div className="w-9 h-9 rounded-full bg-emerald-50 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                <div className="w-9 h-9 rounded-full bg-emerald-50 dark:bg-emerald-950/30 flex items-center justify-center flex-shrink-0 mt-0.5">
                                   <Activity className="w-4 h-4 text-emerald-600" />
                                 </div>
                                 <div className="flex-1">
@@ -1627,7 +1627,7 @@ export default function AdminDashboard() {
                       <CardContent className="p-6">
                         <h3 className="font-semibold text-lg mb-4">معلومات الحساب</h3>
                         <div className="space-y-4">
-                          <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                          <div className="flex items-center justify-between p-p-4 bg-gray-50 dark:bg-gray-800/50 rounded bg-gray-50 dark:bg-gray-800/50 rounded-xl">
                             <div>
                               <p className="text-sm text-muted-foreground">الاسم</p>
                               <p className="font-medium">{(user as any)?.name || 'المدير'}</p>
@@ -1640,18 +1640,18 @@ export default function AdminDashboard() {
                               تعديل
                             </Button>
                           </div>
-                          <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                          <div className="flex items-center justify-between p-p-4 bg-gray-50 dark:bg-gray-800/50 rounded bg-gray-50 dark:bg-gray-800/50 rounded-xl">
                             <div>
                               <p className="text-sm text-muted-foreground">اسم المستخدم</p>
                               <p className="font-medium">{(user as any)?.username || 'admin'}</p>
                             </div>
                           </div>
-                          <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                          <div className="flex items-center justify-between p-p-4 bg-gray-50 dark:bg-gray-800/50 rounded bg-gray-50 dark:bg-gray-800/50 rounded-xl">
                             <div>
                               <p className="text-sm text-muted-foreground">الصلاحية</p>
                               <p className="font-medium">مدير النظام</p>
                             </div>
-                            <Badge className="bg-emerald-100 text-emerald-700">مدير</Badge>
+                            <Badge className="bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300">مدير</Badge>
                           </div>
                         </div>
                       </CardContent>
@@ -1671,7 +1671,7 @@ export default function AdminDashboard() {
                     <Card className="border-0 shadow-sm">
                       <CardContent className="p-6">
                         <h3 className="font-semibold text-lg mb-4">المظهر</h3>
-                        <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                        <div className="flex items-center justify-between p-p-4 bg-gray-50 dark:bg-gray-800/50 rounded bg-gray-50 dark:bg-gray-800/50 rounded-xl">
                           <div className="flex items-center gap-3">
                             {darkMode ? <Moon className="w-5 h-5 text-gray-700" /> : <Sun className="w-5 h-5 text-yellow-500" />}
                             <div>
@@ -1689,27 +1689,27 @@ export default function AdminDashboard() {
                       <CardContent className="p-6">
                         <h3 className="font-semibold text-lg mb-4">معلومات النظام</h3>
                         <div className="space-y-3">
-                          <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                          <div className="flex items-center justify-between p-p-4 bg-gray-50 dark:bg-gray-800/50 rounded bg-gray-50 dark:bg-gray-800/50 rounded-xl">
                             <p className="text-sm text-muted-foreground">حالة Firebase</p>
-                            <Badge className="bg-emerald-100 text-emerald-700">متصل</Badge>
+                            <Badge className="bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300">متصل</Badge>
                           </div>
-                          <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                          <div className="flex items-center justify-between p-p-4 bg-gray-50 dark:bg-gray-800/50 rounded bg-gray-50 dark:bg-gray-800/50 rounded-xl">
                             <p className="text-sm text-muted-foreground">إجمالي الممرضين</p>
                             <span className="font-medium">{stats?.totalNurses || 0}</span>
                           </div>
-                          <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                          <div className="flex items-center justify-between p-p-4 bg-gray-50 dark:bg-gray-800/50 rounded bg-gray-50 dark:bg-gray-800/50 rounded-xl">
                             <p className="text-sm text-muted-foreground">إجمالي المستفيدين</p>
                             <span className="font-medium">{stats?.totalBeneficiaries || 0}</span>
                           </div>
-                          <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                          <div className="flex items-center justify-between p-p-4 bg-gray-50 dark:bg-gray-800/50 rounded bg-gray-50 dark:bg-gray-800/50 rounded-xl">
                             <p className="text-sm text-muted-foreground">إجمالي الطلبات</p>
                             <span className="font-medium">{stats?.totalRequests || 0}</span>
                           </div>
-                          <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                          <div className="flex items-center justify-between p-p-4 bg-gray-50 dark:bg-gray-800/50 rounded bg-gray-50 dark:bg-gray-800/50 rounded-xl">
                             <p className="text-sm text-muted-foreground">إجمالي الخدمات</p>
                             <span className="font-medium">{stats?.totalServices || 0}</span>
                           </div>
-                          <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                          <div className="flex items-center justify-between p-p-4 bg-gray-50 dark:bg-gray-800/50 rounded bg-gray-50 dark:bg-gray-800/50 rounded-xl">
                             <p className="text-sm text-muted-foreground">إصدار النظام</p>
                             <span className="font-medium">1.0.0</span>
                           </div>

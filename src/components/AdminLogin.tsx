@@ -164,7 +164,7 @@ export default function AdminLogin() {
                 </div>
               )}
               {firebaseStatus === 'checking' && (
-                <div className="inline-flex items-center gap-1.5 bg-gray-50 text-gray-600 px-3 py-1.5 rounded-full text-xs font-medium">
+                <div className="inline-flex items-center gap-1.5 bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-300 px-3 py-1.5 rounded-full text-xs font-medium">
                   <RefreshCw className="w-3 h-3 animate-spin" />
                   جاري التحقق...
                 </div>

@@ -350,7 +350,7 @@ export default function UnifiedLogin() {
             </button>
           )}
           {firebaseStatus === 'checking' && (
-            <div className="inline-flex items-center gap-1.5 bg-gray-50 text-gray-500 px-3 py-1 rounded-full text-xs">
+            <div className="inline-flex items-center gap-1.5 bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 px-3 py-1 rounded-full text-xs">
               <RefreshCw className="w-3 h-3 animate-spin" />
             </div>
           )}
@@ -370,8 +370,8 @@ export default function UnifiedLogin() {
                   onClick={() => setRole(r)}
                   className={`flex-1 flex items-center justify-center gap-2 py-4 text-sm font-medium transition-all duration-300 relative ${
                     isActive
-                      ? 'bg-white text-slate-900'
-                      : 'text-slate-400 hover:text-slate-600 hover:bg-white/50'
+                      ? 'bg-white dark:bg-gray-800 text-slate-900 dark:text-slate-100'
+                      : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-white/50 dark:hover:bg-gray-700/50'
                   }`}
                 >
                   <Icon className={`w-4 h-4 ${isActive ? config.textAccent : ''}`} />
@@ -496,7 +496,7 @@ export default function UnifiedLogin() {
                               <button
                                 type="button"
                                 onClick={() => setShowPassword(!showPassword)}
-                                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
                               >
                                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                               </button>
@@ -536,7 +536,7 @@ export default function UnifiedLogin() {
                               <button
                                 type="button"
                                 onClick={() => setShowPassword(!showPassword)}
-                                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
                               >
                                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                               </button>
@@ -576,7 +576,7 @@ export default function UnifiedLogin() {
                               <button
                                 type="button"
                                 onClick={() => setShowPassword(!showPassword)}
-                                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
                               >
                                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                               </button>

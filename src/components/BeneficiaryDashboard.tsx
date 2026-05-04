@@ -6,7 +6,7 @@ import {
   Heart, ClipboardList, CreditCard, LogOut, Loader2, Plus, XCircle,
   ShoppingBag, User, Menu, X, Bell, MapPin, Phone, Home, HelpCircle,
   Star, Filter, RefreshCw, Calendar, Gift, Tag, AlertTriangle,
-  Copy, Check, Award, Zap, Share2, MessageCircle
+  Copy, Check, Award, Zap, Share2, MessageCircle, Moon, Sun
 } from 'lucide-react'
 import { useAppStore, formatPrice, getStatusLabel, getStatusColor } from '@/lib/store'
 import { Button } from '@/components/ui/button'
@@ -71,7 +71,7 @@ const faqItems = [
 ]
 
 export default function BeneficiaryDashboard() {
-  const { user, setView, logout } = useAppStore()
+  const { user, setView, logout, darkMode, toggleDarkMode } = useAppStore()
   const { toast } = useToast()
   const [activeTab, setActiveTab] = useState<Tab>('services')
   const [services, setServices] = useState<any[]>([])
@@ -552,9 +552,9 @@ export default function BeneficiaryDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-rose-50/30 flex" dir="rtl">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 dark:from-gray-900 to-rose-50 dark:to-gray-900/30 dark:from-gray-950 dark:to-gray-900 flex" dir="rtl">
       {/* ===== Desktop Sidebar ===== */}
-      <aside className="w-72 bg-white border-l shadow-sm hidden lg:flex flex-col fixed right-0 top-0 bottom-0 z-40">
+      <aside className="w-72 bg-white dark:bg-gray-900 border-l dark:border-gray-800 shadow-sm hidden lg:flex flex-col fixed right-0 top-0 bottom-0 z-40">
         {/* Logo Header */}
         <div className="p-6 border-b bg-gradient-to-l from-rose-500 to-pink-600">
           <div className="flex items-center gap-3">
@@ -576,8 +576,8 @@ export default function BeneficiaryDashboard() {
               onClick={() => handleTabChange(tab.key)}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
                 activeTab === tab.key
-                  ? 'bg-gradient-to-l from-rose-50 to-pink-50 text-rose-700 shadow-sm border border-rose-100'
-                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-800'
+                  ? 'bg-gradient-to-l from-rose-50 dark:from-rose-950/30 to-pink-50 dark:to-pink-950/30 text-rose-700 dark:text-rose-300 shadow-sm border border-rose-100 dark:border-rose-900'
+                  : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-800'
               }`}
             >
               <tab.icon className={`w-5 h-5 ${activeTab === tab.key ? 'text-rose-600' : ''}`} />
@@ -592,7 +592,7 @@ export default function BeneficiaryDashboard() {
         </nav>
 
         {/* User Info & Logout */}
-        <div className="p-4 border-t bg-gray-50/50">
+        <div className="p-4 border-t bg-gray-50/50 dark:bg-gray-800/50">
           <div className="flex items-center gap-3 mb-3 p-2 rounded-xl">
             <div className="w-10 h-10 rounded-full bg-gradient-to-br from-rose-400 to-pink-500 flex items-center justify-center shadow-sm">
               <span className="text-white font-bold text-sm">{beneficiaryUser?.name?.charAt(0) || '?'}</span>
@@ -604,7 +604,15 @@ export default function BeneficiaryDashboard() {
           </div>
           <Button
             variant="ghost"
-            className="w-full justify-start text-red-600 hover:text-red-700 hover:bg-red-50 rounded-xl"
+            className="w-full justify-start rounded-xl mb-1"
+            onClick={toggleDarkMode}
+          >
+            {darkMode ? <Sun className="w-4 h-4 ml-2 text-amber-500" /> : <Moon className="w-4 h-4 ml-2" />}
+            {darkMode ? 'الوضع الفاتح' : 'الوضع الداكن'}
+          </Button>
+          <Button
+            variant="ghost"
+            className="w-full justify-start text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30 dark:bg-red-950/30 rounded-xl"
             onClick={handleLogout}
           >
             <LogOut className="w-4 h-4 ml-2" />
@@ -627,7 +635,7 @@ export default function BeneficiaryDashboard() {
       </AnimatePresence>
 
       {/* ===== Mobile Sidebar ===== */}
-      <div className={`lg:hidden fixed right-0 top-0 bottom-0 w-80 bg-white z-50 transform transition-transform duration-300 ease-in-out ${mobileMenuOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+      <div className={`lg:hidden fixed right-0 top-0 bottom-0 w-80 bg-white dark:bg-gray-900 z-50 transform transition-transform duration-300 ease-in-out ${mobileMenuOpen ? 'translate-x-0' : 'translate-x-full'}`}>
         {/* Mobile Header */}
         <div className="p-4 border-b bg-gradient-to-l from-rose-500 to-pink-600 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -647,8 +655,8 @@ export default function BeneficiaryDashboard() {
               onClick={() => handleTabChange(tab.key)}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
                 activeTab === tab.key
-                  ? 'bg-gradient-to-l from-rose-50 to-pink-50 text-rose-700 border border-rose-100'
-                  : 'text-gray-600 hover:bg-gray-50'
+                  ? 'bg-gradient-to-l from-rose-50 dark:from-rose-950/30 to-pink-50 dark:to-pink-950/30 text-rose-700 dark:text-rose-300 border border-rose-100 dark:border-rose-900'
+                  : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
               }`}
             >
               <tab.icon className={`w-5 h-5 ${activeTab === tab.key ? 'text-rose-600' : ''}`} />
@@ -663,7 +671,7 @@ export default function BeneficiaryDashboard() {
         </nav>
 
         {/* Mobile User Info & Logout */}
-        <div className="absolute bottom-0 left-0 right-0 p-4 border-t bg-gray-50/80">
+        <div className="absolute bottom-0 left-0 right-0 p-4 border-t bg-gray-50/80 dark:bg-gray-800/80">
           <div className="flex items-center gap-3 mb-3">
             <div className="w-9 h-9 rounded-full bg-gradient-to-br from-rose-400 to-pink-500 flex items-center justify-center">
               <span className="text-white font-bold text-xs">{beneficiaryUser?.name?.charAt(0)}</span>
@@ -673,7 +681,11 @@ export default function BeneficiaryDashboard() {
               <p className="text-muted-foreground text-xs">مستفيد</p>
             </div>
           </div>
-          <Button variant="ghost" className="w-full justify-start text-red-600 hover:bg-red-50" onClick={handleLogout}>
+          <Button variant="ghost" className="w-full justify-start mb-1" onClick={toggleDarkMode}>
+            {darkMode ? <Sun className="w-4 h-4 ml-2 text-amber-500" /> : <Moon className="w-4 h-4 ml-2" />}
+            {darkMode ? 'الوضع الفاتح' : 'الوضع الداكن'}
+          </Button>
+          <Button variant="ghost" className="w-full justify-start text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 dark:bg-red-950/30" onClick={handleLogout}>
             <LogOut className="w-4 h-4 ml-2" />
             تسجيل الخروج
           </Button>
@@ -681,10 +693,10 @@ export default function BeneficiaryDashboard() {
       </div>
 
       {/* ===== Mobile Top Header ===== */}
-      <div className="lg:hidden fixed top-0 left-0 right-0 bg-white border-b z-40 px-4 py-3 flex items-center justify-between shadow-sm">
+      <div className="lg:hidden fixed top-0 left-0 right-0 bg-white dark:bg-gray-900 border-b dark:border-gray-800 z-40 px-4 py-3 flex items-center justify-between shadow-sm">
         <div className="flex items-center gap-2">
           <Image src="/logo.png" alt="عافيتك" width={24} height={24} className="rounded" />
-          <span className="font-bold text-rose-700">عافيتك</span>
+          <span className="font-bold text-rose-700 dark:text-rose-300">عافيتك</span>
         </div>
         <div className="flex items-center gap-1">
           <Button variant="ghost" size="icon" className="relative h-9 w-9" onClick={() => handleTabChange('notifications')}>
@@ -694,6 +706,9 @@ export default function BeneficiaryDashboard() {
                 {unreadNotifications}
               </span>
             )}
+          </Button>
+          <Button variant="ghost" size="icon" className="h-9 w-9" onClick={toggleDarkMode}>
+            {darkMode ? <Sun className="w-4 h-4 text-amber-500" /> : <Moon className="w-4 h-4" />}
           </Button>
           <Button variant="ghost" size="icon" className="h-9 w-9" onClick={handleLogout}>
             <LogOut className="w-4 h-4 text-red-500" />
@@ -733,10 +748,10 @@ export default function BeneficiaryDashboard() {
                     {/* Stats Cards */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
                       {[
-                        { icon: ShoppingBag, value: services.length, label: 'خدمة متاحة', gradient: 'from-rose-50 to-pink-50', iconColor: 'text-rose-600', valueColor: 'text-rose-700' },
-                        { icon: ClipboardList, value: requests.length, label: 'إجمالي الطلبات', gradient: 'from-violet-50 to-purple-50', iconColor: 'text-violet-600', valueColor: 'text-violet-700' },
-                        { icon: Bell, value: pendingRequests, label: 'قيد الانتظار', gradient: 'from-amber-50 to-orange-50', iconColor: 'text-amber-600', valueColor: 'text-amber-700' },
-                        { icon: Heart, value: completedRequests, label: 'مكتملة', gradient: 'from-emerald-50 to-teal-50', iconColor: 'text-emerald-600', valueColor: 'text-emerald-700' },
+                        { icon: ShoppingBag, value: services.length, label: 'خدمة متاحة', gradient: 'from-rose-50 dark:from-rose-950/30 to-pink-50 dark:to-pink-950/30', iconColor: 'text-rose-600', valueColor: 'text-rose-700' },
+                        { icon: ClipboardList, value: requests.length, label: 'إجمالي الطلبات', gradient: 'from-violet-50 dark:from-violet-950/30 to-purple-50 dark:to-purple-950/30', iconColor: 'text-violet-600', valueColor: 'text-violet-700' },
+                        { icon: Bell, value: pendingRequests, label: 'قيد الانتظار', gradient: 'from-amber-50 dark:from-amber-950/30 to-orange-50 dark:to-orange-950/30', iconColor: 'text-amber-600', valueColor: 'text-amber-700' },
+                        { icon: Heart, value: completedRequests, label: 'مكتملة', gradient: 'from-emerald-50 dark:from-emerald-950/30 to-teal-50 dark:to-teal-950/30', iconColor: 'text-emerald-600', valueColor: 'text-emerald-700 dark:text-emerald-300' },
                       ].map((stat, i) => (
                         <motion.div
                           key={stat.label}
@@ -775,7 +790,7 @@ export default function BeneficiaryDashboard() {
                           className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
                             selectedCategory === 'all'
                               ? 'bg-gradient-to-l from-rose-500 to-pink-600 text-white shadow-md shadow-rose-200'
-                              : 'bg-white text-gray-600 border border-gray-200 hover:border-rose-200 hover:text-rose-600'
+                              : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:border-rose-200 dark:hover:border-rose-700 hover:text-rose-600 dark:hover:text-rose-400'
                           }`}
                         >
                           الكل
@@ -787,7 +802,7 @@ export default function BeneficiaryDashboard() {
                             className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
                               selectedCategory === cat
                                 ? 'bg-gradient-to-l from-rose-500 to-pink-600 text-white shadow-md shadow-rose-200'
-                                : 'bg-white text-gray-600 border border-gray-200 hover:border-rose-200 hover:text-rose-600'
+                                : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:border-rose-200 dark:hover:border-rose-700 hover:text-rose-600 dark:hover:text-rose-400'
                             }`}
                           >
                             {cat}
@@ -806,16 +821,16 @@ export default function BeneficiaryDashboard() {
                       >
                         {filteredServices.map(service => (
                           <motion.div key={service.id} variants={itemVariants} whileHover={{ y: -4 }} transition={{ duration: 0.2 }}>
-                            <Card className="border-0 shadow-sm hover:shadow-lg transition-all duration-300 h-full flex flex-col bg-white">
+                            <Card className="border-0 shadow-sm hover:shadow-lg transition-all duration-300 h-full flex flex-col bg-white dark:bg-card">
                               <CardContent className="p-5 flex flex-col flex-1">
                                 <div className="flex items-start justify-between mb-3">
                                   <h3 className="font-semibold text-lg leading-tight">{service.name}</h3>
-                                  <Badge variant="outline" className="text-xs shrink-0 mr-2 border-rose-200 text-rose-600 bg-rose-50/50">
+                                  <Badge variant="outline" className="text-xs shrink-0 mr-2 border-rose-200 dark:border-rose-800 text-rose-600 bg-rose-50/50 dark:bg-rose-950/20">
                                     {service.category}
                                   </Badge>
                                 </div>
                                 <p className="text-sm text-muted-foreground mb-4 flex-1 leading-relaxed">{service.description}</p>
-                                <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                                <div className="flex items-center justify-between pt-2 border-t border-gray-100 dark:border-gray-800">
                                   <span className="text-lg font-bold text-emerald-600">{formatPrice(service.price)}</span>
                                   <Button
                                     size="sm"
@@ -841,7 +856,7 @@ export default function BeneficiaryDashboard() {
                         animate={{ opacity: 1, y: 0 }}
                         className="text-center py-20"
                       >
-                        <div className="w-20 h-20 bg-rose-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <div className="w-20 h-20 bg-rose-50 dark:bg-rose-950/30 rounded-full flex items-center justify-center mx-auto mb-4">
                           <ShoppingBag className="w-10 h-10 text-rose-300" />
                         </div>
                         <p className="text-muted-foreground text-lg font-medium">لا توجد خدمات متاحة حالياً</p>
@@ -875,7 +890,7 @@ export default function BeneficiaryDashboard() {
                           className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
                             statusFilter === filter.key
                               ? 'bg-gradient-to-l from-rose-500 to-pink-600 text-white shadow-md shadow-rose-200'
-                              : 'bg-white text-gray-600 border border-gray-200 hover:border-rose-200 hover:text-rose-600'
+                              : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:border-rose-200 dark:hover:border-rose-700 hover:text-rose-600 dark:hover:text-rose-400'
                           }`}
                         >
                           {filter.label}
@@ -893,7 +908,7 @@ export default function BeneficiaryDashboard() {
                         animate={{ opacity: 1, y: 0 }}
                         className="text-center py-20"
                       >
-                        <div className="w-20 h-20 bg-rose-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <div className="w-20 h-20 bg-rose-50 dark:bg-rose-950/30 rounded-full flex items-center justify-center mx-auto mb-4">
                           <ClipboardList className="w-10 h-10 text-rose-300" />
                         </div>
                         <p className="text-muted-foreground text-lg font-medium">لم تقم بأي طلبات بعد</p>
@@ -912,8 +927,8 @@ export default function BeneficiaryDashboard() {
                         animate={{ opacity: 1, y: 0 }}
                         className="text-center py-16"
                       >
-                        <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                          <Filter className="w-8 h-8 text-gray-300" />
+                        <div className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-3">
+                          <Filter className="w-8 h-8 text-gray-300 dark:text-gray-600" />
                         </div>
                         <p className="text-muted-foreground font-medium">لا توجد طلبات بهذه الحالة</p>
                       </motion.div>
@@ -926,13 +941,13 @@ export default function BeneficiaryDashboard() {
                       >
                         {filteredRequests.map(req => (
                           <motion.div key={req.id} variants={itemVariants}>
-                            <Card className="border-0 shadow-sm hover:shadow-md transition-all duration-300 bg-white">
+                            <Card className="border-0 shadow-sm hover:shadow-md transition-all duration-300 bg-white dark:bg-card">
                               <CardContent className="p-5">
                                 <div className="flex items-start justify-between flex-wrap gap-4">
                                   <div className="flex-1 min-w-0">
                                     {/* Service Name & Status */}
                                     <div className="flex items-center gap-3 mb-4">
-                                      <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-rose-50 to-pink-50 flex items-center justify-center shrink-0">
+                                      <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-rose-50 dark:from-rose-950/30 to-pink-50 dark:to-pink-950/30 flex items-center justify-center shrink-0">
                                         <ClipboardList className="w-5 h-5 text-rose-600" />
                                       </div>
                                       <div className="min-w-0">
@@ -987,21 +1002,21 @@ export default function BeneficiaryDashboard() {
 
                                     {/* Admin Notes */}
                                     {req.adminNotes && (
-                                      <div className="mt-3 bg-amber-50 rounded-lg p-3 text-sm">
-                                        <span className="font-medium text-amber-800">ملاحظات الإدارة: </span>
-                                        <span className="text-amber-700">{req.adminNotes}</span>
+                                      <div className="mt-3 bg-amber-50 dark:bg-amber-950/30 rounded-lg p-3 text-sm">
+                                        <span className="font-medium text-amber-800 dark:text-amber-200">ملاحظات الإدارة: </span>
+                                        <span className="text-amber-700 dark:text-amber-300">{req.adminNotes}</span>
                                       </div>
                                     )}
 
                                     {/* Assigned Nurse */}
                                     {req.assignment?.nurse && (
-                                      <div className="mt-3 bg-violet-50 rounded-lg p-3 text-sm flex items-center gap-2">
+                                      <div className="mt-3 bg-violet-50 dark:bg-violet-950/30 rounded-lg p-3 text-sm flex items-center gap-2">
                                         <div className="w-7 h-7 rounded-full bg-violet-100 flex items-center justify-center shrink-0">
                                           <User className="w-3.5 h-3.5 text-violet-600" />
                                         </div>
                                         <div>
-                                          <span className="font-medium text-violet-800">الممرض/ة المعيّن/ة: </span>
-                                          <span className="text-violet-700">
+                                          <span className="font-medium text-violet-800 dark:text-violet-200">الممرض/ة المعيّن/ة: </span>
+                                          <span className="text-violet-700 dark:text-violet-300">
                                             {req.assignment.nurse.firstName} {req.assignment.nurse.lastName}
                                           </span>
                                         </div>
@@ -1015,7 +1030,7 @@ export default function BeneficiaryDashboard() {
                                       <Button
                                         size="sm"
                                         variant="outline"
-                                        className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+                                        className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30 dark:bg-red-950/30 border-red-200"
                                         onClick={() => handleCancelRequest(req.id)}
                                       >
                                         <XCircle className="w-4 h-4 ml-1" />
@@ -1036,7 +1051,7 @@ export default function BeneficiaryDashboard() {
                                       <Button
                                         size="sm"
                                         variant="outline"
-                                        className="text-violet-600 hover:text-violet-700 hover:bg-violet-50 border-violet-200"
+                                        className="text-violet-600 hover:text-violet-700 dark:hover:text-violet-300 dark:text-violet-300 hover:bg-violet-50 dark:hover:bg-violet-950/30 border-violet-200 dark:border-violet-800"
                                         onClick={() => setActiveChatRequestId(req.id)}
                                       >
                                         <MessageCircle className="w-4 h-4 ml-1" />
@@ -1069,23 +1084,23 @@ export default function BeneficiaryDashboard() {
                         طرق الدفع المتاحة
                       </h2>
                       {payments.length === 0 ? (
-                        <div className="text-center py-10 bg-white rounded-xl shadow-sm">
-                          <CreditCard className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+                        <div className="text-center py-10 bg-white dark:bg-card rounded-xl shadow-sm">
+                          <CreditCard className="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-2" />
                           <p className="text-muted-foreground text-sm">لا توجد طرق دفع متاحة حالياً</p>
                         </div>
                       ) : (
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                           {payments.map(payment => (
                             <motion.div key={payment.id} whileHover={{ y: -2 }} transition={{ duration: 0.2 }}>
-                              <Card className="border-0 shadow-sm hover:shadow-md transition-all duration-300 bg-white">
+                              <Card className="border-0 shadow-sm hover:shadow-md transition-all duration-300 bg-white dark:bg-card">
                                 <CardContent className="p-5">
                                   <div className="flex items-center gap-3 mb-3">
-                                    <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center">
+                                    <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 flex items-center justify-center">
                                       <CreditCard className="w-5 h-5 text-emerald-600" />
                                     </div>
                                     <h3 className="font-semibold">{payment.name}</h3>
                                   </div>
-                                  <div className="bg-gray-50 rounded-lg p-3 text-sm">
+                                  <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3 text-sm">
                                     <p className="text-muted-foreground leading-relaxed">{payment.accountInfo}</p>
                                   </div>
                                 </CardContent>
@@ -1105,18 +1120,18 @@ export default function BeneficiaryDashboard() {
                         سجل المدفوعات
                       </h2>
                       {paymentHistory.length === 0 ? (
-                        <div className="text-center py-10 bg-white rounded-xl shadow-sm">
-                          <ClipboardList className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+                        <div className="text-center py-10 bg-white dark:bg-card rounded-xl shadow-sm">
+                          <ClipboardList className="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-2" />
                           <p className="text-muted-foreground text-sm">لا توجد مدفوعات مكتملة بعد</p>
                           <p className="text-muted-foreground text-xs mt-1">ستظهر هنا المدفوعات للخدمات المكتملة</p>
                         </div>
                       ) : (
                         <div className="grid gap-3">
                           {paymentHistory.map(req => (
-                            <Card key={req.id} className="border-0 shadow-sm bg-white">
+                            <Card key={req.id} className="border-0 shadow-sm bg-white dark:bg-card dark:bg-card">
                               <CardContent className="p-4 flex items-center justify-between flex-wrap gap-3">
                                 <div className="flex items-center gap-3">
-                                  <div className="w-9 h-9 rounded-lg bg-emerald-50 flex items-center justify-center">
+                                  <div className="w-9 h-9 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 flex items-center justify-center">
                                     <CreditCard className="w-4 h-4 text-emerald-600" />
                                   </div>
                                   <div>
@@ -1144,7 +1159,7 @@ export default function BeneficiaryDashboard() {
                       <p className="text-muted-foreground text-sm mt-1">معلومات حسابك الشخصية</p>
                     </div>
 
-                    <Card className="border-0 shadow-sm bg-white">
+                    <Card className="border-0 shadow-sm bg-white dark:bg-card dark:bg-card">
                       <CardContent className="p-6">
                         {/* Avatar & Name Header */}
                         <div className="flex items-center gap-4 mb-6">
@@ -1154,7 +1169,7 @@ export default function BeneficiaryDashboard() {
                           <div>
                             <h3 className="text-xl font-bold">{beneficiaryUser?.name}</h3>
                             <div className="flex items-center gap-2 mt-1">
-                              <Badge className="bg-rose-100 text-rose-700 border-rose-200">مستفيد</Badge>
+                              <Badge className="bg-rose-100 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800">مستفيد</Badge>
                             </div>
                           </div>
                         </div>
@@ -1207,7 +1222,7 @@ export default function BeneficiaryDashboard() {
                           </div>
 
                           {/* Registration Date (Read-only) */}
-                          <div className="bg-gray-50 rounded-xl p-4">
+                          <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4">
                             <div className="flex items-center gap-2 text-sm text-muted-foreground">
                               <Calendar className="w-4 h-4" />
                               <span>تاريخ التسجيل:</span>
@@ -1270,7 +1285,7 @@ export default function BeneficiaryDashboard() {
                         animate={{ opacity: 1, y: 0 }}
                         className="text-center py-20"
                       >
-                        <div className="w-20 h-20 bg-rose-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <div className="w-20 h-20 bg-rose-50 dark:bg-rose-950/30 rounded-full flex items-center justify-center mx-auto mb-4">
                           <Bell className="w-10 h-10 text-rose-300" />
                         </div>
                         <p className="text-muted-foreground text-lg font-medium">لا توجد إشعارات</p>
@@ -1287,7 +1302,7 @@ export default function BeneficiaryDashboard() {
                           <motion.div key={notif.id} variants={itemVariants}>
                             <Card
                               className={`border-0 shadow-sm transition-all duration-200 cursor-pointer ${
-                                notif.read ? 'bg-white' : 'bg-rose-50/40 border-r-4 border-r-rose-400'
+                                notif.read ? 'bg-white dark:bg-card' : 'bg-rose-50 dark:bg-rose-950/30/40 border-r-4 border-r-rose-400'
                               }`}
                               onClick={() => markNotificationRead(notif.id)}
                             >
@@ -1295,17 +1310,17 @@ export default function BeneficiaryDashboard() {
                                 <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
                                   notif.type === 'status_change' ? 'bg-amber-100' :
                                   notif.type === 'assignment' ? 'bg-violet-100' :
-                                  notif.type === 'admin_message' ? 'bg-blue-100' :
+                                  notif.type === 'admin_message' ? 'bg-blue-100 dark:bg-blue-950/40' :
                                   'bg-gray-100'
                                 }`}>
                                   {notif.type === 'status_change' && <RefreshCw className="w-4 h-4 text-amber-600" />}
                                   {notif.type === 'assignment' && <User className="w-4 h-4 text-violet-600" />}
                                   {notif.type === 'admin_message' && <ClipboardList className="w-4 h-4 text-blue-600" />}
-                                  {notif.type === 'general' && <Bell className="w-4 h-4 text-gray-600" />}
+                                  {notif.type === 'general' && <Bell className="w-4 h-4 text-gray-600 dark:text-gray-400" />}
                                 </div>
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-2 mb-1">
-                                    <h4 className={`text-sm font-semibold ${notif.read ? 'text-gray-700' : 'text-gray-900'}`}>
+                                    <h4 className={`text-sm font-semibold ${notif.read ? 'text-gray-700 dark:text-gray-300' : 'text-gray-900 dark:text-gray-100'}`}>
                                       {notif.title}
                                     </h4>
                                     {!notif.read && (
@@ -1349,15 +1364,15 @@ export default function BeneficiaryDashboard() {
                     </div>
 
                     {/* Points Balance Card */}
-                    <Card className="border-0 shadow-sm bg-gradient-to-br from-amber-50 to-yellow-50">
+                    <Card className="border-0 shadow-sm bg-gradient-to-br from-amber-50 dark:from-amber-950/30 to-yellow-50 dark:to-yellow-950/30">
                       <CardContent className="p-6 text-center">
                         <Award className="w-12 h-12 text-amber-500 mx-auto mb-3" />
-                        <p className="text-4xl font-bold text-amber-700">{loyaltyBalance.toLocaleString('ar-YE')}</p>
+                        <p className="text-4xl font-bold text-amber-700 dark:text-amber-300">{loyaltyBalance.toLocaleString('ar-YE')}</p>
                         <p className="text-sm text-amber-600 mt-1">نقطة متاحة</p>
                         <Separator className="my-4" />
-                        <div className="bg-white/60 rounded-xl p-3 text-sm">
-                          <p className="text-amber-800 font-medium">💎 كل 100 نقطة = خصم على خدمة مجانية</p>
-                          <p className="text-amber-700 text-xs mt-1">تحصل على 10 نقاط لكل طلب خدمة</p>
+                        <div className="bg-white/60 dark:bg-gray-800/60 rounded-xl p-3 text-sm">
+                          <p className="text-amber-800 dark:text-amber-200 font-medium">💎 كل 100 نقطة = خصم على خدمة مجانية</p>
+                          <p className="text-amber-700 dark:text-amber-300 text-xs mt-1">تحصل على 10 نقاط لكل طلب خدمة</p>
                         </div>
                       </CardContent>
                     </Card>
@@ -1400,9 +1415,9 @@ export default function BeneficiaryDashboard() {
                         {loyaltyHistory.length > 0 ? (
                           <div className="space-y-3 max-h-96 overflow-y-auto">
                             {loyaltyHistory.map((item: any) => (
-                              <div key={item.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
+                              <div key={item.id} className="flex items-center justify-between p-p-3 bg-gray-50 dark:bg-gray-800/50 rounded bg-gray-50 dark:bg-gray-800/50 rounded-xl">
                                 <div className="flex items-center gap-3">
-                                  <div className={`w-8 h-8 rounded-full flex items-center justify-center ${item.type === 'earn' ? 'bg-emerald-100' : 'bg-red-100'}`}>
+                                  <div className={`w-8 h-8 rounded-full flex items-center justify-center ${item.type === 'earn' ? 'bg-emerald-100' : 'bg-red-100 dark:bg-red-950/40'}`}>
                                     {item.type === 'earn' ? <Plus className="w-4 h-4 text-emerald-600" /> : <XCircle className="w-4 h-4 text-red-600" />}
                                   </div>
                                   <div>
@@ -1435,19 +1450,19 @@ export default function BeneficiaryDashboard() {
                     </div>
 
                     {/* Referral Code Card */}
-                    <Card className="border-0 shadow-sm bg-gradient-to-br from-violet-50 to-purple-50">
+                    <Card className="border-0 shadow-sm bg-gradient-to-br from-violet-50 dark:from-violet-950/30 to-purple-50 dark:to-purple-950/30">
                       <CardContent className="p-6 text-center">
                         <Share2 className="w-12 h-12 text-violet-500 mx-auto mb-3" />
                         <h3 className="font-semibold text-lg mb-2">كود الإحالة الخاص بك</h3>
                         {referralCode ? (
                           <>
-                            <div className="bg-white rounded-xl p-4 inline-block border-2 border-dashed border-violet-300 mb-4">
-                              <p className="font-mono text-2xl font-bold text-violet-700 tracking-wider">{referralCode}</p>
+                            <div className="bg-white dark:bg-card rounded-xl p-4 inline-block border-2 border-dashed border-violet-300 dark:border-violet-800 mb-4">
+                              <p className="font-mono text-2xl font-bold text-violet-700 dark:text-violet-300 tracking-wider">{referralCode}</p>
                             </div>
                             <div className="flex justify-center gap-3">
                               <Button
                                 variant="outline"
-                                className="gap-2 border-violet-200 text-violet-700 hover:bg-violet-50"
+                                className="gap-2 border-violet-200 dark:border-violet-800 text-violet-700 dark:text-violet-300 hover:bg-violet-50 dark:hover:bg-violet-950/30"
                                 onClick={handleCopyReferral}
                               >
                                 {copiedReferral ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
@@ -1473,18 +1488,18 @@ export default function BeneficiaryDashboard() {
                       <CardContent className="p-6">
                         <h3 className="font-semibold text-lg mb-4">إحصائيات الإحالة</h3>
                         <div className="grid grid-cols-2 gap-4">
-                          <div className="bg-violet-50 rounded-xl p-4 text-center">
-                            <p className="text-2xl font-bold text-violet-700">{referralUses}</p>
+                          <div className="bg-violet-50 dark:bg-violet-950/30 rounded-xl p-4 text-center">
+                            <p className="text-2xl font-bold text-violet-700 dark:text-violet-300">{referralUses}</p>
                             <p className="text-xs text-muted-foreground">أشخاص استخدموا كودك</p>
                           </div>
-                          <div className="bg-emerald-50 rounded-xl p-4 text-center">
-                            <p className="text-2xl font-bold text-emerald-700">{referralUses * 50}</p>
+                          <div className="bg-emerald-50 dark:bg-emerald-950/30 rounded-xl p-4 text-center">
+                            <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-300">{referralUses * 50}</p>
                             <p className="text-xs text-muted-foreground">نقاط مكافأة مكتسبة</p>
                           </div>
                         </div>
-                        <div className="mt-4 bg-amber-50 rounded-xl p-3 text-sm">
-                          <p className="text-amber-800 font-medium">🎁 شارك كودك مع أصدقائك!</p>
-                          <p className="text-amber-700 text-xs mt-1">تحصل على 50 نقطة لكل شخص يستخدم كودك، ويحصل هو على 25 نقطة مكافأة</p>
+                        <div className="mt-4 bg-amber-50 dark:bg-amber-950/30 rounded-xl p-3 text-sm">
+                          <p className="text-amber-800 dark:text-amber-200 font-medium">🎁 شارك كودك مع أصدقائك!</p>
+                          <p className="text-amber-700 dark:text-amber-300 text-xs mt-1">تحصل على 50 نقطة لكل شخص يستخدم كودك، ويحصل هو على 25 نقطة مكافأة</p>
                         </div>
                       </CardContent>
                     </Card>
@@ -1537,7 +1552,7 @@ export default function BeneficiaryDashboard() {
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: i * 0.06 }}
                           >
-                            <Card className="border-0 shadow-sm bg-white hover:shadow-md transition-shadow duration-200">
+                            <Card className="border-0 shadow-sm bg-white dark:bg-card hover:shadow-md transition-shadow duration-200">
                               <CardContent className="p-5">
                                 <h3 className="font-bold mb-2 flex items-center gap-2 text-sm">
                                   <div className="w-6 h-6 rounded-full bg-rose-100 flex items-center justify-center shrink-0">
@@ -1562,9 +1577,9 @@ export default function BeneficiaryDashboard() {
                         معلومات التواصل
                       </h2>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <Card className="border-0 shadow-sm bg-white">
+                        <Card className="border-0 shadow-sm bg-white dark:bg-card dark:bg-card">
                           <CardContent className="p-5 flex items-center gap-4">
-                            <div className="w-11 h-11 rounded-xl bg-emerald-50 flex items-center justify-center shrink-0">
+                            <div className="w-11 h-11 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 flex items-center justify-center shrink-0">
                               <Phone className="w-5 h-5 text-emerald-600" />
                             </div>
                             <div>
@@ -1573,9 +1588,9 @@ export default function BeneficiaryDashboard() {
                             </div>
                           </CardContent>
                         </Card>
-                        <Card className="border-0 shadow-sm bg-white">
+                        <Card className="border-0 shadow-sm bg-white dark:bg-card dark:bg-card">
                           <CardContent className="p-5 flex items-center gap-4">
-                            <div className="w-11 h-11 rounded-xl bg-blue-50 flex items-center justify-center shrink-0">
+                            <div className="w-11 h-11 rounded-xl bg-blue-50 dark:bg-blue-950/30 flex items-center justify-center shrink-0">
                               <Home className="w-5 h-5 text-blue-600" />
                             </div>
                             <div>
@@ -1588,11 +1603,11 @@ export default function BeneficiaryDashboard() {
                     </div>
 
                     {/* App Info */}
-                    <Card className="border-0 shadow-sm bg-gradient-to-br from-rose-50 to-pink-50">
+                    <Card className="border-0 shadow-sm bg-gradient-to-br from-rose-50 dark:from-rose-950/30 to-pink-50 dark:to-pink-950/30">
                       <CardContent className="p-5 text-center">
                         <div className="flex items-center justify-center gap-2 mb-2">
                           <Image src="/logo.png" alt="عافيتك" width={24} height={24} className="rounded" />
-                          <span className="font-bold text-rose-700">عافيتك</span>
+                          <span className="font-bold text-rose-700 dark:text-rose-300">عافيتك</span>
                         </div>
                         <p className="text-sm text-muted-foreground">منصة التمريض المنزلي الأولى في اليمن</p>
                         <p className="text-xs text-muted-foreground mt-1">الإصدار 1.0.0</p>
@@ -1619,7 +1634,7 @@ export default function BeneficiaryDashboard() {
             {selectedService && (
               <>
                 {/* Service Summary */}
-                <div className="bg-gradient-to-l from-rose-50 to-pink-50 rounded-xl p-4 border border-rose-100">
+                <div className="bg-gradient-to-l from-rose-50 dark:from-rose-950/30 to-pink-50 dark:to-pink-950/30 rounded-xl p-4 border border-rose-100 dark:border-rose-900">
                   <h3 className="font-semibold text-base">{selectedService.name}</h3>
                   {selectedService.description && (
                     <p className="text-sm text-muted-foreground mt-1 leading-relaxed">{selectedService.description}</p>
@@ -1765,7 +1780,7 @@ export default function BeneficiaryDashboard() {
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
-            <div className="bg-red-50 rounded-xl p-3 text-sm border border-red-100">
+            <div className="bg-red-50 dark:bg-red-950/30 rounded-xl p-3 text-sm border border-red-100">
               <p className="text-red-700 font-medium">سيتم إرسال طلبك كحالة طوارئ وسيتم التواصل معك في أقرب وقت ممكن.</p>
             </div>
             <div className="space-y-2">

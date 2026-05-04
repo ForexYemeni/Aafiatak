@@ -1,11 +1,11 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Stethoscope, ClipboardList, User, LogOut, Loader2, Play, CheckCircle,
   Menu, X, Phone, MapPin, Clock, HelpCircle, Bell, Activity,
-  Calendar, Star, Filter, MessageSquare, ChevronDown, ChevronUp
+  Calendar, Star, Filter, MessageSquare, ChevronDown, ChevronUp, Moon, Sun
 } from 'lucide-react'
 import { useAppStore, formatPrice, getStatusLabel, getStatusColor } from '@/lib/store'
 import { Button } from '@/components/ui/button'
@@ -132,14 +132,15 @@ const faqItems = [
 // ==================== Main Component ====================
 
 export default function NurseDashboard() {
-  const { user, setView, logout } = useAppStore()
+  const { user, setView, logout, darkMode, toggleDarkMode } = useAppStore()
   const { toast } = useToast()
 
   // Core state
   const [activeTab, setActiveTab] = useState<Tab>('assignments')
   const [assignments, setAssignments] = useState<Assignment[]>([])
   const [profile, setProfile] = useState<NurseProfile | null>(null)
-  const [loading, setLoading] = useState(false)
+  const [assignmentsLoading, setAssignmentsLoading] = useState(false)
+  const [profileLoading, setProfileLoading] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   // Assignments tab state
@@ -165,7 +166,7 @@ export default function NurseDashboard() {
 
   // Notifications tab state (mock)
   const [notifications, setNotifications] = useState<Notification[]>([])
-  const [notifLoading, setNotifLoading] = useState(false)
+  const notifTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Ratings (mock data)
   const [ratings] = useState<Rating[]>([
@@ -202,7 +203,7 @@ export default function NurseDashboard() {
 
   const fetchAssignments = useCallback(async () => {
     if (!nurseId) return
-    setLoading(true)
+    setAssignmentsLoading(true)
     try {
       const res = await fetch(`/api/nurse/assignments?nurseId=${nurseId}`)
       if (res.ok) {
@@ -215,13 +216,13 @@ export default function NurseDashboard() {
       setAssignments([])
       toast({ title: 'خطأ', description: 'فشل تحميل المهام', variant: 'destructive' })
     } finally {
-      setLoading(false)
+      setAssignmentsLoading(false)
     }
   }, [nurseId, toast])
 
   const fetchProfile = useCallback(async () => {
     if (!nurseId) return
-    setLoading(true)
+    setProfileLoading(true)
     try {
       const res = await fetch(`/api/nurse/profile?nurseId=${nurseId}`)
       if (res.ok) {
@@ -235,80 +236,96 @@ export default function NurseDashboard() {
           phone: data.phone || '',
           location: data.location || '',
         })
+      } else {
+        setProfile(null)
+        toast({ title: 'خطأ', description: 'فشل تحميل الملف الشخصي', variant: 'destructive' })
       }
     } catch {
+      setProfile(null)
       toast({ title: 'خطأ', description: 'فشل تحميل الملف الشخصي', variant: 'destructive' })
     } finally {
-      setLoading(false)
+      setProfileLoading(false)
     }
   }, [nurseId, toast])
 
-  const fetchNotifications = useCallback(async () => {
-    setNotifLoading(true)
-    // Mock notifications based on assignments
-    setTimeout(() => {
-      const notifs: Notification[] = []
-      assignments.forEach((a, i) => {
-        if (a.status === 'assigned') {
-          notifs.push({
-            id: `notif-assign-${a.id}`,
-            title: 'مهمة جديدة',
-            message: `تم تعيين مهمة "${a.request?.service?.name || 'خدمة'}" لك`,
-            type: 'assignment',
-            read: false,
-            createdAt: a.createdAt || new Date().toISOString(),
-          })
-        }
-        if (a.status === 'in_progress') {
-          notifs.push({
-            id: `notif-progress-${a.id}`,
-            title: 'تحديث حالة المهمة',
-            message: `المهمة "${a.request?.service?.name || 'خدمة'}" قيد التنفيذ`,
-            type: 'status_change',
-            read: true,
-            createdAt: a.updatedAt || new Date().toISOString(),
-          })
-        }
-        if (a.status === 'completed') {
-          notifs.push({
-            id: `notif-complete-${a.id}`,
-            title: 'مهمة مكتملة',
-            message: `تم إكمال المهمة "${a.request?.service?.name || 'خدمة'}" بنجاح`,
-            type: 'status_change',
-            read: true,
-            createdAt: a.updatedAt || new Date().toISOString(),
-          })
-        }
+  // Build notifications from assignments (mock) - using functional update to preserve read state
+  useEffect(() => {
+    // Cleanup previous timeout if any
+    if (notifTimeoutRef.current) {
+      clearTimeout(notifTimeoutRef.current)
+    }
+
+    notifTimeoutRef.current = setTimeout(() => {
+      setNotifications(prev => {
+        // Preserve read state from previous notifications
+        const prevReadState: Record<string, boolean> = {}
+        prev.forEach(n => {
+          prevReadState[n.id] = n.read
+        })
+
+        const notifs: Notification[] = []
+        assignments.forEach(a => {
+          if (a.status === 'assigned') {
+            notifs.push({
+              id: `notif-assign-${a.id}`,
+              title: 'مهمة جديدة',
+              message: `تم تعيين مهمة "${a.request?.service?.name || 'خدمة'}" لك`,
+              type: 'assignment',
+              read: prevReadState[`notif-assign-${a.id}`] ?? false,
+              createdAt: a.createdAt || new Date().toISOString(),
+            })
+          }
+          if (a.status === 'in_progress') {
+            notifs.push({
+              id: `notif-progress-${a.id}`,
+              title: 'تحديث حالة المهمة',
+              message: `المهمة "${a.request?.service?.name || 'خدمة'}" قيد التنفيذ`,
+              type: 'status_change',
+              read: prevReadState[`notif-progress-${a.id}`] ?? true,
+              createdAt: a.updatedAt || new Date().toISOString(),
+            })
+          }
+          if (a.status === 'completed') {
+            notifs.push({
+              id: `notif-complete-${a.id}`,
+              title: 'مهمة مكتملة',
+              message: `تم إكمال المهمة "${a.request?.service?.name || 'خدمة'}" بنجاح`,
+              type: 'status_change',
+              read: prevReadState[`notif-complete-${a.id}`] ?? true,
+              createdAt: a.updatedAt || new Date().toISOString(),
+            })
+          }
+        })
+        // Add a system notification
+        notifs.push({
+          id: 'notif-system-1',
+          title: 'مرحباً بك',
+          message: 'أهلاً بك في منصة عافيتك. يمكنك البدء بمراجعة المهام المعينة لك.',
+          type: 'system',
+          read: prevReadState['notif-system-1'] ?? false,
+          createdAt: new Date().toISOString(),
+        })
+        return notifs
       })
-      // Add a system notification
-      notifs.push({
-        id: 'notif-system-1',
-        title: 'مرحباً بك',
-        message: 'أهلاً بك في منصة عافيتك. يمكنك البدء بمراجعة المهام المعينة لك.',
-        type: 'system',
-        read: false,
-        createdAt: new Date().toISOString(),
-      })
-      setNotifications(notifs)
-      setNotifLoading(false)
-    }, 300)
+    }, 100)
+
+    return () => {
+      if (notifTimeoutRef.current) {
+        clearTimeout(notifTimeoutRef.current)
+      }
+    }
   }, [assignments])
 
+  // Fetch data when tab changes
   useEffect(() => {
     if (activeTab === 'assignments' || activeTab === 'schedule') {
       fetchAssignments()
     } else if (activeTab === 'profile') {
       fetchProfile()
     } else if (activeTab === 'notifications') {
-      fetchAssignments() // fetch assignments first, then build notifications
+      fetchAssignments() // fetch assignments first, notifications are built from them via the effect above
     }
-  }, [activeTab, fetchAssignments, fetchProfile, fetchNotifications])
-
-  useEffect(() => {
-    if (activeTab === 'notifications' && assignments.length >= 0) {
-      fetchNotifications()
-    }
-  }, [activeTab, assignments, fetchNotifications])
+  }, [activeTab, fetchAssignments, fetchProfile])
 
   // ==================== Handlers ====================
 
@@ -339,12 +356,35 @@ export default function NurseDashboard() {
     }
   }
 
-  const handleCompleteWithNotes = () => {
+  const handleCompleteWithNotes = async () => {
     if (!selectedAssignment) return
-    handleUpdateStatus(selectedAssignment.id, 'completed', completionNotes)
-    setCompleteDialogOpen(false)
-    setCompletionNotes('')
-    setSelectedAssignment(null)
+    const assignmentId = selectedAssignment.id
+    const notes = completionNotes
+    // Close dialog optimistically but keep reference for error handling
+    setActionLoading(true)
+    try {
+      const body: Record<string, string> = { status: 'completed' }
+      if (notes) body.notes = notes
+      const res = await fetch(`/api/nurse/assignments/${assignmentId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      if (res.ok) {
+        toast({ title: 'تم إكمال المهمة بنجاح', description: 'شكراً لجهودك في إنجاز هذه المهمة' })
+        fetchAssignments()
+        setCompleteDialogOpen(false)
+        setCompletionNotes('')
+        setSelectedAssignment(null)
+      } else {
+        const data = await res.json()
+        toast({ title: 'خطأ', description: data.error || 'حدث خطأ', variant: 'destructive' })
+      }
+    } catch {
+      toast({ title: 'خطأ', description: 'حدث خطأ في الاتصال', variant: 'destructive' })
+    } finally {
+      setActionLoading(false)
+    }
   }
 
   const handleSaveProfile = async () => {
@@ -436,8 +476,8 @@ export default function NurseDashboard() {
               onClick={() => handleTabChange(tab.key)}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
                 activeTab === tab.key
-                  ? 'bg-violet-50 text-violet-700 shadow-sm'
-                  : 'text-gray-600 hover:bg-gray-50'
+                  ? 'bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300 shadow-sm'
+                  : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
               }`}
             >
               <tab.icon className="w-5 h-5" />
@@ -453,7 +493,7 @@ export default function NurseDashboard() {
       </nav>
 
       {/* User Info */}
-      <div className="p-4 border-t bg-gray-50/50">
+      <div className="p-4 border-t bg-gray-50/50 dark:bg-gray-800/50">
         <div className="flex items-center gap-3 mb-3 p-2 rounded-xl">
           <div className="w-10 h-10 rounded-full bg-violet-100 flex items-center justify-center">
             <Stethoscope className="w-5 h-5 text-violet-600" />
@@ -465,7 +505,15 @@ export default function NurseDashboard() {
         </div>
         <Button
           variant="ghost"
-          className="w-full justify-start text-red-600 hover:text-red-700 hover:bg-red-50 rounded-xl"
+          className="w-full justify-start rounded-xl mb-1"
+          onClick={toggleDarkMode}
+        >
+          {darkMode ? <Sun className="w-4 h-4 ml-2 text-amber-500" /> : <Moon className="w-4 h-4 ml-2" />}
+          {darkMode ? 'الوضع الفاتح' : 'الوضع الداكن'}
+        </Button>
+        <Button
+          variant="ghost"
+          className="w-full justify-start text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30 dark:bg-red-950/30 rounded-xl"
           onClick={handleLogout}
         >
           <LogOut className="w-4 h-4 ml-2" />
@@ -517,7 +565,7 @@ export default function NurseDashboard() {
     return Array.from({ length: 5 }, (_, i) => (
       <Star
         key={i}
-        className={`${size} ${i < count ? 'fill-amber-400 text-amber-400' : 'text-gray-300'}`}
+        className={`${size} ${i < count ? 'fill-amber-400 text-amber-400' : 'text-gray-300 dark:text-gray-600'}`}
       />
     ))
   }
@@ -527,7 +575,7 @@ export default function NurseDashboard() {
       case 'assignment': return <ClipboardList className="w-5 h-5 text-violet-500" />
       case 'status_change': return <Activity className="w-5 h-5 text-emerald-500" />
       case 'admin': return <User className="w-5 h-5 text-blue-500" />
-      default: return <Bell className="w-5 h-5 text-gray-500" />
+      default: return <Bell className="w-5 h-5 text-gray-500 dark:text-gray-500" />
     }
   }
 
@@ -538,37 +586,37 @@ export default function NurseDashboard() {
       {/* Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0 }}>
-          <Card className="border-0 shadow-sm bg-gradient-to-br from-violet-50 to-purple-50">
+          <Card className="border-0 shadow-sm bg-gradient-to-br from-violet-50 dark:from-violet-950/30 to-purple-50 dark:to-purple-950/30">
             <CardContent className="p-4 text-center">
               <ClipboardList className="w-6 h-6 text-violet-600 mx-auto mb-1" />
-              <p className="text-2xl font-bold text-violet-700">{assignments.length.toLocaleString('ar-YE')}</p>
+              <p className="text-2xl font-bold text-violet-700 dark:text-violet-300">{assignments.length.toLocaleString('ar-YE')}</p>
               <p className="text-xs text-muted-foreground">إجمالي المهام</p>
             </CardContent>
           </Card>
         </motion.div>
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
-          <Card className="border-0 shadow-sm bg-gradient-to-br from-amber-50 to-orange-50">
+          <Card className="border-0 shadow-sm bg-gradient-to-br from-amber-50 dark:from-amber-950/30 to-orange-50 dark:to-orange-950/30">
             <CardContent className="p-4 text-center">
               <Bell className="w-6 h-6 text-amber-600 mx-auto mb-1" />
-              <p className="text-2xl font-bold text-amber-700">{assignedCount.toLocaleString('ar-YE')}</p>
+              <p className="text-2xl font-bold text-amber-700 dark:text-amber-300">{assignedCount.toLocaleString('ar-YE')}</p>
               <p className="text-xs text-muted-foreground">بانتظار البدء</p>
             </CardContent>
           </Card>
         </motion.div>
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-          <Card className="border-0 shadow-sm bg-gradient-to-br from-orange-50 to-amber-50">
+          <Card className="border-0 shadow-sm bg-gradient-to-br from-orange-50 dark:from-orange-950/30 to-amber-50 dark:to-amber-950/30">
             <CardContent className="p-4 text-center">
               <Activity className="w-6 h-6 text-orange-600 mx-auto mb-1" />
-              <p className="text-2xl font-bold text-orange-700">{inProgressCount.toLocaleString('ar-YE')}</p>
+              <p className="text-2xl font-bold text-orange-700 dark:text-orange-300">{inProgressCount.toLocaleString('ar-YE')}</p>
               <p className="text-xs text-muted-foreground">قيد التنفيذ</p>
             </CardContent>
           </Card>
         </motion.div>
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
-          <Card className="border-0 shadow-sm bg-gradient-to-br from-emerald-50 to-teal-50">
+          <Card className="border-0 shadow-sm bg-gradient-to-br from-emerald-50 dark:from-emerald-950/30 to-teal-50 dark:to-teal-950/30">
             <CardContent className="p-4 text-center">
               <CheckCircle className="w-6 h-6 text-emerald-600 mx-auto mb-1" />
-              <p className="text-2xl font-bold text-emerald-700">{completedCount.toLocaleString('ar-YE')}</p>
+              <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-300">{completedCount.toLocaleString('ar-YE')}</p>
               <p className="text-xs text-muted-foreground">مكتملة</p>
             </CardContent>
           </Card>
@@ -594,8 +642,8 @@ export default function NurseDashboard() {
               onClick={() => setStatusFilter(filter.key)}
               className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
                 statusFilter === filter.key
-                  ? 'bg-violet-100 text-violet-700 shadow-sm'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  ? 'bg-violet-100 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300 shadow-sm'
+                  : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
               }`}
             >
               {filter.label}
@@ -605,7 +653,7 @@ export default function NurseDashboard() {
       </div>
 
       {/* Assignment Cards */}
-      {loading ? (
+      {assignmentsLoading ? (
         <div className="space-y-4">
           <CardSkeleton />
           <CardSkeleton />
@@ -617,10 +665,10 @@ export default function NurseDashboard() {
           animate={{ opacity: 1, scale: 1 }}
           className="text-center py-16"
         >
-          <div className="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
-            <ClipboardList className="w-10 h-10 text-gray-300" />
+          <div className="w-20 h-20 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mx-auto mb-4">
+            <ClipboardList className="w-10 h-10 text-gray-300 dark:text-gray-600" />
           </div>
-          <p className="text-lg font-medium text-gray-500 mb-2">لا توجد مهام {statusFilter !== 'all' ? 'بهذه الحالة' : 'معينة حالياً'}</p>
+          <p className="text-lg font-medium text-gray-500 dark:text-gray-400 mb-2">لا توجد مهام {statusFilter !== 'all' ? 'بهذه الحالة' : 'معينة حالياً'}</p>
           <p className="text-sm text-muted-foreground">
             {statusFilter !== 'all' ? 'جرّب تصفية أخرى' : 'سيتم إشعارك عند تعيين مهمة جديدة لك'}
           </p>
@@ -642,7 +690,7 @@ export default function NurseDashboard() {
                       <div className="flex-1 min-w-0">
                         {/* Service & Status */}
                         <div className="flex items-center gap-2 mb-3">
-                          <div className="w-10 h-10 rounded-full bg-violet-50 flex items-center justify-center shrink-0">
+                          <div className="w-10 h-10 rounded-full bg-violet-50 dark:bg-violet-950/30 flex items-center justify-center shrink-0">
                             <Stethoscope className="w-5 h-5 text-violet-600" />
                           </div>
                           <div className="min-w-0">
@@ -688,12 +736,12 @@ export default function NurseDashboard() {
 
                         {/* Notes */}
                         {assignment.request?.notes && (
-                          <div className="mt-3 bg-amber-50 rounded-lg p-2.5 text-sm">
+                          <div className="mt-3 bg-amber-50 dark:bg-amber-950/30 rounded-lg p-2.5 text-sm">
                             <div className="flex items-center gap-1.5 mb-1">
                               <MessageSquare className="w-3.5 h-3.5 text-amber-600" />
-                              <span className="font-medium text-amber-800">ملاحظات المستفيد:</span>
+                              <span className="font-medium text-amber-800 dark:text-amber-200">ملاحظات المستفيد:</span>
                             </div>
-                            <p className="text-amber-700">{assignment.request.notes}</p>
+                            <p className="text-amber-700 dark:text-amber-300">{assignment.request.notes}</p>
                           </div>
                         )}
 
@@ -708,12 +756,12 @@ export default function NurseDashboard() {
 
                         {/* Assignment Notes (from nurse) */}
                         {assignment.notes && (
-                          <div className="mt-2 bg-violet-50 rounded-lg p-2.5 text-sm">
+                          <div className="mt-2 bg-violet-50 dark:bg-violet-950/30 rounded-lg p-2.5 text-sm">
                             <div className="flex items-center gap-1.5 mb-1">
                               <MessageSquare className="w-3.5 h-3.5 text-violet-600" />
-                              <span className="font-medium text-violet-800">ملاحظات التنفيذ:</span>
+                              <span className="font-medium text-violet-800 dark:text-violet-200">ملاحظات التنفيذ:</span>
                             </div>
-                            <p className="text-violet-700">{assignment.notes}</p>
+                            <p className="text-violet-700 dark:text-violet-300">{assignment.notes}</p>
                           </div>
                         )}
                       </div>
@@ -746,7 +794,7 @@ export default function NurseDashboard() {
                           </Button>
                         )}
                         {assignment.status === 'completed' && (
-                          <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200">
+                          <Badge className="bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800">
                             <CheckCircle className="w-3.5 h-3.5 ml-1" />
                             تم الإكمال
                           </Badge>
@@ -755,7 +803,7 @@ export default function NurseDashboard() {
                           <Button
                             size="sm"
                             variant="outline"
-                            className="text-rose-600 hover:text-rose-700 hover:bg-rose-50 border-rose-200"
+                            className="text-rose-600 hover:text-rose-700 dark:text-rose-300 hover:bg-rose-50 dark:bg-rose-950/30 border-rose-200 dark:border-rose-800"
                             onClick={() => setActiveChatRequestId(assignment.requestId)}
                           >
                             <MessageSquare className="w-4 h-4 ml-1" />
@@ -825,13 +873,13 @@ export default function NurseDashboard() {
                 <div
                   key={day.dateStr}
                   className={`flex flex-col items-center p-2 rounded-xl transition-colors ${
-                    day.isToday ? 'bg-violet-50 ring-2 ring-violet-300' : 'hover:bg-gray-50'
+                    day.isToday ? 'bg-violet-50 dark:bg-violet-950/30 ring-2 ring-violet-300' : 'hover:bg-gray-50 dark:hover:bg-gray-800'
                   }`}
                 >
-                  <span className={`text-xs font-medium ${day.isToday ? 'text-violet-700' : 'text-muted-foreground'}`}>
+                  <span className={`text-xs font-medium ${day.isToday ? 'text-violet-700 dark:text-violet-300' : 'text-muted-foreground'}`}>
                     {day.dayName}
                   </span>
-                  <span className={`text-lg font-bold mt-1 ${day.isToday ? 'text-violet-700' : ''}`}>
+                  <span className={`text-lg font-bold mt-1 ${day.isToday ? 'text-violet-700 dark:text-violet-300' : ''}`}>
                     {day.date.getDate().toLocaleString('ar-YE')}
                   </span>
                   {day.hasTasks && (
@@ -839,7 +887,7 @@ export default function NurseDashboard() {
                       {day.dayAssignments.map(a => (
                         <div
                           key={a.id}
-                          className={`w-2 h-2 rounded-full ${statusColorMap[a.status] || 'bg-gray-400'}`}
+                          className={`w-2 h-2 rounded-full ${statusColorMap[a.status] || 'bg-gray-400 dark:bg-gray-500'}`}
                           title={getStatusLabel(a.status)}
                         />
                       ))}
@@ -869,7 +917,7 @@ export default function NurseDashboard() {
         </div>
 
         {/* Grouped by Date */}
-        {loading ? (
+        {assignmentsLoading ? (
           <div className="space-y-4">
             <CardSkeleton />
             <CardSkeleton />
@@ -880,10 +928,10 @@ export default function NurseDashboard() {
             animate={{ opacity: 1, scale: 1 }}
             className="text-center py-16"
           >
-            <div className="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
-              <Calendar className="w-10 h-10 text-gray-300" />
+            <div className="w-20 h-20 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mx-auto mb-4">
+              <Calendar className="w-10 h-10 text-gray-300 dark:text-gray-600" />
             </div>
-            <p className="text-lg font-medium text-gray-500 mb-2">لا توجد مهام في الجدول</p>
+            <p className="text-lg font-medium text-gray-500 dark:text-gray-400 mb-2">لا توجد مهام في الجدول</p>
             <p className="text-sm text-muted-foreground">سيتم عرض المهام هنا عند تعيينها لك</p>
           </motion.div>
         ) : (
@@ -901,7 +949,7 @@ export default function NurseDashboard() {
                       <CardContent className="p-4">
                         <div className="flex items-center justify-between gap-4">
                           <div className="flex items-center gap-3 min-w-0">
-                            <div className={`w-2 h-2 rounded-full shrink-0 ${statusColorMap[assignment.status] || 'bg-gray-400'}`} />
+                            <div className={`w-2 h-2 rounded-full shrink-0 ${statusColorMap[assignment.status] || 'bg-gray-400 dark:bg-gray-500'}`} />
                             <div className="min-w-0">
                               <p className="font-medium text-sm truncate">
                                 {assignment.request?.service?.name || 'خدمة'}
@@ -935,12 +983,12 @@ export default function NurseDashboard() {
       </div>
 
       {/* Average Rating Card */}
-      <Card className="border-0 shadow-sm bg-gradient-to-br from-amber-50 to-yellow-50">
+      <Card className="border-0 shadow-sm bg-gradient-to-br from-amber-50 dark:from-amber-950/30 to-yellow-50 dark:to-yellow-950/30">
         <CardContent className="p-6 text-center">
           <div className="flex items-center justify-center gap-1 mb-2">
             {renderStars(Math.round(averageRating), 'w-8 h-8')}
           </div>
-          <p className="text-4xl font-bold text-amber-700 mb-1">{averageRating.toFixed(1)}</p>
+          <p className="text-4xl font-bold text-amber-700 dark:text-amber-300 mb-1">{averageRating.toFixed(1)}</p>
           <p className="text-sm text-muted-foreground">
             متوسط التقييم من {ratings.length.toLocaleString('ar-YE')} تقييم
           </p>
@@ -952,7 +1000,7 @@ export default function NurseDashboard() {
                 <div key={star} className="flex items-center gap-1 text-xs">
                   <span>{star}</span>
                   <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
-                  <div className="w-16 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                  <div className="w-16 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
                     <div className="h-full bg-amber-400 rounded-full" style={{ width: `${pct}%` }} />
                   </div>
                   <span className="text-muted-foreground">{count}</span>
@@ -970,10 +1018,10 @@ export default function NurseDashboard() {
           animate={{ opacity: 1, scale: 1 }}
           className="text-center py-16"
         >
-          <div className="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
-            <Star className="w-10 h-10 text-gray-300" />
+          <div className="w-20 h-20 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mx-auto mb-4">
+            <Star className="w-10 h-10 text-gray-300 dark:text-gray-600" />
           </div>
-          <p className="text-lg font-medium text-gray-500 mb-2">لا توجد تقييمات بعد</p>
+          <p className="text-lg font-medium text-gray-500 dark:text-gray-400 mb-2">لا توجد تقييمات بعد</p>
           <p className="text-sm text-muted-foreground">ستظهر تقييمات المستفيدين هنا عند إكمال المهام</p>
         </motion.div>
       ) : (
@@ -989,7 +1037,7 @@ export default function NurseDashboard() {
                 <CardContent className="p-5">
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex items-start gap-3">
-                      <div className="w-10 h-10 rounded-full bg-amber-50 flex items-center justify-center shrink-0">
+                      <div className="w-10 h-10 rounded-full bg-amber-50 dark:bg-amber-950/30 flex items-center justify-center shrink-0">
                         <User className="w-5 h-5 text-amber-600" />
                       </div>
                       <div>
@@ -1023,7 +1071,7 @@ export default function NurseDashboard() {
         <p className="text-muted-foreground text-sm">معلوماتك المهنية والشخصية</p>
       </div>
 
-      {loading ? (
+      {profileLoading ? (
         <Card className="border-0 shadow-sm">
           <CardContent className="p-6">
             <div className="flex items-center gap-4 mb-6">
@@ -1059,28 +1107,28 @@ export default function NurseDashboard() {
 
               {/* Read-only fields */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm mb-6">
-                <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
+                <div className="flex items-center gap-3 p-p-3 bg-gray-50 dark:bg-gray-800/50 rounded bg-gray-50 dark:bg-gray-800/50 rounded-xl">
                   <Stethoscope className="w-5 h-5 text-violet-600" />
                   <div>
                     <p className="text-muted-foreground text-xs">رقم المزاولة</p>
                     <p className="font-medium">{profile.licenseNumber}</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
+                <div className="flex items-center gap-3 p-p-3 bg-gray-50 dark:bg-gray-800/50 rounded bg-gray-50 dark:bg-gray-800/50 rounded-xl">
                   <Clock className="w-5 h-5 text-violet-600" />
                   <div>
                     <p className="text-muted-foreground text-xs">انتهاء المزاولة</p>
                     <p className="font-medium">{profile.licenseExpiryDate}</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
+                <div className="flex items-center gap-3 p-p-3 bg-gray-50 dark:bg-gray-800/50 rounded bg-gray-50 dark:bg-gray-800/50 rounded-xl">
                   <User className="w-5 h-5 text-violet-600" />
                   <div>
                     <p className="text-muted-foreground text-xs">الرقم الوطني</p>
                     <p className="font-medium">{profile.nationalId}</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
+                <div className="flex items-center gap-3 p-p-3 bg-gray-50 dark:bg-gray-800/50 rounded bg-gray-50 dark:bg-gray-800/50 rounded-xl">
                   <Clock className="w-5 h-5 text-violet-600" />
                   <div>
                     <p className="text-muted-foreground text-xs">تاريخ التسجيل</p>
@@ -1176,10 +1224,10 @@ export default function NurseDashboard() {
           animate={{ opacity: 1, scale: 1 }}
           className="text-center py-16"
         >
-          <div className="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
-            <User className="w-10 h-10 text-gray-300" />
+          <div className="w-20 h-20 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mx-auto mb-4">
+            <User className="w-10 h-10 text-gray-300 dark:text-gray-600" />
           </div>
-          <p className="text-lg font-medium text-gray-500 mb-2">فشل تحميل الملف الشخصي</p>
+          <p className="text-lg font-medium text-gray-500 dark:text-gray-400 mb-2">فشل تحميل الملف الشخصي</p>
           <Button variant="outline" onClick={fetchProfile} className="mt-2">
             إعادة المحاولة
           </Button>
@@ -1202,7 +1250,7 @@ export default function NurseDashboard() {
         )}
       </div>
 
-      {notifLoading ? (
+      {assignmentsLoading ? (
         <div className="space-y-3">
           {[1, 2, 3].map(i => (
             <Card key={i} className="border-0 shadow-sm">
@@ -1224,10 +1272,10 @@ export default function NurseDashboard() {
           animate={{ opacity: 1, scale: 1 }}
           className="text-center py-16"
         >
-          <div className="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
-            <Bell className="w-10 h-10 text-gray-300" />
+          <div className="w-20 h-20 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mx-auto mb-4">
+            <Bell className="w-10 h-10 text-gray-300 dark:text-gray-600" />
           </div>
-          <p className="text-lg font-medium text-gray-500 mb-2">لا توجد إشعارات</p>
+          <p className="text-lg font-medium text-gray-500 dark:text-gray-400 mb-2">لا توجد إشعارات</p>
           <p className="text-sm text-muted-foreground">ستظهر الإشعارات هنا عند توفر تحديثات</p>
         </motion.div>
       ) : (
@@ -1247,7 +1295,7 @@ export default function NurseDashboard() {
               >
                 <CardContent className="p-4">
                   <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center shrink-0">
+                    <div className="w-10 h-10 rounded-full bg-gray-50 dark:bg-gray-800 flex items-center justify-center shrink-0">
                       {getNotificationIcon(notif.type)}
                     </div>
                     <div className="flex-1 min-w-0">
@@ -1309,7 +1357,7 @@ export default function NurseDashboard() {
       </Card>
 
       {/* Contact Support */}
-      <Card className="border-0 shadow-sm bg-gradient-to-br from-violet-50 to-purple-50">
+      <Card className="border-0 shadow-sm bg-gradient-to-br from-violet-50 dark:from-violet-950/30 to-purple-50 dark:to-purple-950/30">
         <CardContent className="p-6 text-center">
           <div className="w-14 h-14 rounded-full bg-violet-100 flex items-center justify-center mx-auto mb-4">
             <Phone className="w-7 h-7 text-violet-600" />
@@ -1336,9 +1384,9 @@ export default function NurseDashboard() {
   // ==================== Main Render ====================
 
   return (
-    <div className="min-h-screen bg-gray-50 flex" dir="rtl">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex" dir="rtl">
       {/* Desktop Sidebar */}
-      <aside className="w-72 bg-white border-l shadow-sm hidden lg:flex flex-col fixed right-0 top-0 bottom-0 z-40">
+      <aside className="w-72 bg-white dark:bg-gray-900 border-l dark:border-gray-800 shadow-sm hidden lg:flex flex-col fixed right-0 top-0 bottom-0 z-40">
         <SidebarContent />
       </aside>
 
@@ -1356,15 +1404,15 @@ export default function NurseDashboard() {
       </AnimatePresence>
 
       {/* Mobile Sidebar */}
-      <div className={`lg:hidden fixed right-0 top-0 bottom-0 w-72 bg-white z-50 transform transition-transform duration-300 ${mobileMenuOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+      <div className={`lg:hidden fixed right-0 top-0 bottom-0 w-72 bg-white dark:bg-gray-900 z-50 transform transition-transform duration-300 ${mobileMenuOpen ? 'translate-x-0' : 'translate-x-full'}`}>
         <SidebarContent />
       </div>
 
       {/* Mobile Header */}
-      <div className="lg:hidden fixed top-0 left-0 right-0 bg-white border-b z-40 px-4 py-3 flex items-center justify-between shadow-sm">
+      <div className="lg:hidden fixed top-0 left-0 right-0 bg-white dark:bg-gray-900 border-b dark:border-gray-800 z-40 px-4 py-3 flex items-center justify-between shadow-sm">
         <div className="flex items-center gap-2">
           <Image src="/logo.png" alt="عافيتك" width={24} height={24} className="rounded" />
-          <span className="font-bold text-violet-700">عافيتك</span>
+          <span className="font-bold text-violet-700 dark:text-violet-300">عافيتك</span>
         </div>
         <div className="flex items-center gap-2">
           {unreadNotifications > 0 && (
@@ -1375,6 +1423,9 @@ export default function NurseDashboard() {
               </span>
             </Button>
           )}
+          <Button variant="ghost" size="sm" onClick={toggleDarkMode}>
+            {darkMode ? <Sun className="w-4 h-4 text-amber-500" /> : <Moon className="w-4 h-4" />}
+          </Button>
           <Button variant="ghost" size="sm" onClick={handleLogout}>
             <LogOut className="w-4 h-4 text-red-500" />
           </Button>
@@ -1417,7 +1468,7 @@ export default function NurseDashboard() {
           </DialogHeader>
           <div className="space-y-4 py-4">
             {selectedAssignment && (
-              <div className="bg-gray-50 rounded-xl p-3">
+              <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-3">
                 <p className="font-medium text-sm">{selectedAssignment.request?.service?.name || 'خدمة'}</p>
                 <p className="text-xs text-muted-foreground">
                   المستفيد: {selectedAssignment.request?.beneficiary?.name || 'غير محدد'}
