@@ -4,7 +4,7 @@ import { useState, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Shield, Stethoscope, Heart, Loader2, UserPlus, Eye, EyeOff,
-  CheckCircle, Sparkles, ArrowRight, Navigation, MapPin
+  CheckCircle, Sparkles, ArrowRight, Navigation, MapPin, AlertTriangle, Check, X
 } from 'lucide-react'
 import { useAppStore } from '@/lib/store'
 import { Button } from '@/components/ui/button'
@@ -94,7 +94,7 @@ export default function LandingPage() {
 
   // ─── Register forms ───
   const [nurseRegForm, setNurseRegForm] = useState({
-    firstName: '', secondName: '', thirdName: '', lastName: '',
+    fullName: '',
     phone: '', location: '', nationalId: '', licenseNumber: '',
     licenseExpiryDate: '', password: '', confirmPassword: '',
   })
@@ -205,12 +205,21 @@ export default function LandingPage() {
   // ═══════════════════════════════════════════
 
   const handleNurseRegister = async () => {
-    const required = ['firstName', 'secondName', 'thirdName', 'lastName', 'phone', 'location', 'nationalId', 'licenseNumber', 'licenseExpiryDate', 'password']
-    for (const field of required) {
-      if (!nurseRegForm[field as keyof typeof nurseRegForm]) {
-        toast({ title: 'خطأ', description: 'يرجى ملء جميع الحقول المطلوبة', variant: 'destructive' })
-        return
-      }
+    if (!nurseRegForm.fullName || !nurseRegForm.phone || !nurseRegForm.location || !nurseRegForm.nationalId || !nurseRegForm.licenseNumber || !nurseRegForm.licenseExpiryDate || !nurseRegForm.password) {
+      toast({ title: 'خطأ', description: 'يرجى ملء جميع الحقول المطلوبة', variant: 'destructive' })
+      return
+    }
+    const nameParts = nurseRegForm.fullName.trim().split(/\s+/)
+    if (nameParts.length < 3) {
+      toast({ title: 'خطأ', description: 'يرجى إدخال الاسم الرباعي كاملاً (3 أسماء على الأقل)', variant: 'destructive' })
+      return
+    }
+    const expiryDate = new Date(nurseRegForm.licenseExpiryDate)
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    if (expiryDate < today) {
+      toast({ title: 'ترخيص منتهي', description: 'لا يمكن التسجيل برخصة مزاولة منتهية الصلاحية. يرجى تجديد رخصتك أولاً', variant: 'destructive' })
+      return
     }
     if (nurseRegForm.password !== nurseRegForm.confirmPassword) {
       toast({ title: 'خطأ', description: 'كلمتا المرور غير متطابقتين', variant: 'destructive' })
@@ -222,10 +231,22 @@ export default function LandingPage() {
     }
     setLoading(true)
     try {
+      const parts = nurseRegForm.fullName.trim().split(/\s+/)
       const res = await fetch('/api/nurse/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(nurseRegForm),
+        body: JSON.stringify({
+          firstName: parts[0] || '',
+          secondName: parts[1] || '',
+          thirdName: parts[2] || '',
+          lastName: parts[3] || parts[2] || '',
+          phone: nurseRegForm.phone,
+          location: nurseRegForm.location,
+          nationalId: nurseRegForm.nationalId,
+          licenseNumber: nurseRegForm.licenseNumber,
+          licenseExpiryDate: nurseRegForm.licenseExpiryDate,
+          password: nurseRegForm.password,
+        }),
       })
       const data = await res.json()
       if (res.ok) {
@@ -646,31 +667,76 @@ export default function LandingPage() {
                         {/* Nurse Register Form */}
                         {registerRole === 'nurse' && (
                           <div className="space-y-3 max-w-lg mx-auto">
+                            {/* Section: Personal Info */}
+                            <div className="bg-blue-50/50 rounded-xl p-3 border border-blue-100/50">
+                              <p className="text-xs font-bold text-blue-600 mb-2 flex items-center gap-1.5"><UserPlus className="w-3.5 h-3.5" />المعلومات الشخصية</p>
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label className="text-xs font-semibold text-slate-600">الاسم الرباعي *</Label>
+                              <Input
+                                value={nurseRegForm.fullName}
+                                onChange={e => setNurseRegForm(f => ({ ...f, fullName: e.target.value }))}
+                                placeholder="أدخل اسمك الرباعي كاملاً"
+                                className="h-10 bg-white/60 backdrop-blur-sm border-blue-200/50 focus:border-blue-400 focus:ring-blue-400/20 transition-all duration-300"
+                                onKeyDown={handleRegisterKeyDown}
+                              />
+                              <p className="text-[10px] text-gray-400">يجب أن يحتوي على 3 أسماء على الأقل</p>
+                            </div>
                             <div className="grid grid-cols-2 gap-3">
-                              <div className="space-y-1.5">
-                                <Label className="text-xs font-semibold text-slate-600">الاسم الأول *</Label>
-                                <Input value={nurseRegForm.firstName} onChange={e => setNurseRegForm(f => ({ ...f, firstName: e.target.value }))} placeholder="الاسم الأول" className="h-10 bg-white/60 backdrop-blur-sm border-blue-200/50 focus:border-blue-400 focus:ring-blue-400/20 transition-all duration-300" />
-                              </div>
-                              <div className="space-y-1.5">
-                                <Label className="text-xs font-semibold text-slate-600">الاسم الثاني *</Label>
-                                <Input value={nurseRegForm.secondName} onChange={e => setNurseRegForm(f => ({ ...f, secondName: e.target.value }))} placeholder="الاسم الثاني" className="h-10 bg-white/60 backdrop-blur-sm border-blue-200/50 focus:border-blue-400 focus:ring-blue-400/20 transition-all duration-300" />
-                              </div>
-                              <div className="space-y-1.5">
-                                <Label className="text-xs font-semibold text-slate-600">الاسم الثالث *</Label>
-                                <Input value={nurseRegForm.thirdName} onChange={e => setNurseRegForm(f => ({ ...f, thirdName: e.target.value }))} placeholder="الاسم الثالث" className="h-10 bg-white/60 backdrop-blur-sm border-blue-200/50 focus:border-blue-400 focus:ring-blue-400/20 transition-all duration-300" />
-                              </div>
-                              <div className="space-y-1.5">
-                                <Label className="text-xs font-semibold text-slate-600">الاسم الرابع *</Label>
-                                <Input value={nurseRegForm.lastName} onChange={e => setNurseRegForm(f => ({ ...f, lastName: e.target.value }))} placeholder="اللقب" className="h-10 bg-white/60 backdrop-blur-sm border-blue-200/50 focus:border-blue-400 focus:ring-blue-400/20 transition-all duration-300" />
-                              </div>
                               <div className="space-y-1.5">
                                 <Label className="text-xs font-semibold text-slate-600">رقم الهاتف *</Label>
                                 <Input value={nurseRegForm.phone} onChange={e => setNurseRegForm(f => ({ ...f, phone: e.target.value }))} placeholder="7XXXXXXXX" dir="ltr" className="h-10 bg-white/60 backdrop-blur-sm border-blue-200/50 focus:border-blue-400 focus:ring-blue-400/20 text-left transition-all duration-300" />
                               </div>
                               <div className="space-y-1.5">
-                                <Label className="text-xs font-semibold text-slate-600">الموقع *</Label>
-                                <Input value={nurseRegForm.location} onChange={e => setNurseRegForm(f => ({ ...f, location: e.target.value }))} placeholder="المدينة" className="h-10 bg-white/60 backdrop-blur-sm border-blue-200/50 focus:border-blue-400 focus:ring-blue-400/20 transition-all duration-300" />
+                                <Label className="text-xs font-semibold text-slate-600">
+                                  <MapPin className="w-3 h-3 inline ml-1" />
+                                  الموقع *
+                                </Label>
+                                <div className="flex gap-1.5">
+                                  <Input value={nurseRegForm.location} onChange={e => setNurseRegForm(f => ({ ...f, location: e.target.value }))} placeholder="المدينة أو العنوان" className="h-10 bg-white/60 backdrop-blur-sm border-blue-200/50 focus:border-blue-400 focus:ring-blue-400/20 transition-all duration-300 flex-1" />
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    className="shrink-0 h-10 rounded-xl border-blue-200 text-blue-600 hover:bg-blue-50 px-2.5"
+                                    disabled={loading}
+                                    onClick={() => {
+                                      if (navigator.geolocation) {
+                                        toast({ title: 'جارٍ تحديد الموقع...', description: 'يرجى الانتظار' })
+                                        navigator.geolocation.getCurrentPosition(
+                                          async (pos) => {
+                                            const { latitude, longitude } = pos.coords
+                                            try {
+                                              const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&accept-language=ar`)
+                                              const data = await res.json()
+                                              const address = data.display_name || `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`
+                                              setNurseRegForm(f => ({ ...f, location: address }))
+                                              toast({ title: 'تم تحديد الموقع بنجاح', description: address.substring(0, 80) })
+                                            } catch {
+                                              setNurseRegForm(f => ({ ...f, location: `${latitude.toFixed(6)}, ${longitude.toFixed(6)}` }))
+                                              toast({ title: 'تم تحديد الموقع', description: `${latitude.toFixed(4)}, ${longitude.toFixed(4)}` })
+                                            }
+                                          },
+                                          (err) => {
+                                            toast({ title: 'خطأ في تحديد الموقع', description: 'يرجى السماح بالوصول إلى الموقع أو إدخاله يدوياً', variant: 'destructive' })
+                                          },
+                                          { enableHighAccuracy: true, timeout: 15000 }
+                                        )
+                                      } else {
+                                        toast({ title: 'غير مدعوم', description: 'متصفحك لا يدعم تحديد الموقع', variant: 'destructive' })
+                                      }
+                                    }}
+                                  >
+                                    <Navigation className="w-4 h-4" />
+                                  </Button>
+                                </div>
                               </div>
+                            </div>
+
+                            {/* Section: License Info */}
+                            <div className="bg-amber-50/50 rounded-xl p-3 border border-amber-100/50 mt-1">
+                              <p className="text-xs font-bold text-amber-600 mb-0 flex items-center gap-1.5"><Shield className="w-3.5 h-3.5" />معلومات الترخيص</p>
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
                               <div className="space-y-1.5">
                                 <Label className="text-xs font-semibold text-slate-600">رقم الهوية *</Label>
                                 <Input value={nurseRegForm.nationalId} onChange={e => setNurseRegForm(f => ({ ...f, nationalId: e.target.value }))} placeholder="رقم الهوية" className="h-10 bg-white/60 backdrop-blur-sm border-blue-200/50 focus:border-blue-400 focus:ring-blue-400/20 transition-all duration-300" />
@@ -682,13 +748,30 @@ export default function LandingPage() {
                             </div>
                             <div className="space-y-1.5">
                               <Label className="text-xs font-semibold text-slate-600">تاريخ انتهاء الترخيص *</Label>
-                              <Input
-                                type="date"
-                                value={nurseRegForm.licenseExpiryDate}
-                                onChange={e => setNurseRegForm(f => ({ ...f, licenseExpiryDate: e.target.value }))}
-                                className="h-10 bg-white/60 backdrop-blur-sm border-blue-200/50 focus:border-blue-400 focus:ring-blue-400/20 transition-all duration-300"
-                                onKeyDown={handleRegisterKeyDown}
-                              />
+                              <div className="relative">
+                                <Input
+                                  type="date"
+                                  value={nurseRegForm.licenseExpiryDate}
+                                  onChange={e => setNurseRegForm(f => ({ ...f, licenseExpiryDate: e.target.value }))}
+                                  className={`h-10 bg-white/60 backdrop-blur-sm transition-all duration-300 ${nurseRegForm.licenseExpiryDate && new Date(nurseRegForm.licenseExpiryDate) < new Date() ? 'border-red-300 focus:border-red-400 focus:ring-red-400/20' : 'border-blue-200/50 focus:border-blue-400 focus:ring-blue-400/20'}`}
+                                  onKeyDown={handleRegisterKeyDown}
+                                />
+                                {nurseRegForm.licenseExpiryDate && (
+                                  <div className="absolute left-3 top-1/2 -translate-y-1/2">
+                                    {new Date(nurseRegForm.licenseExpiryDate) >= new Date() ? (
+                                      <Check className="w-4 h-4 text-emerald-500" />
+                                    ) : (
+                                      <X className="w-4 h-4 text-red-500" />
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                              {nurseRegForm.licenseExpiryDate && new Date(nurseRegForm.licenseExpiryDate) < new Date() && (
+                                <div className="flex items-center gap-2 p-2 bg-red-50 rounded-lg border border-red-200">
+                                  <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
+                                  <p className="text-xs text-red-600 font-bold">ترخيص منتهي! لا يمكن التسجيل برخصة منتهية الصلاحية</p>
+                                </div>
+                              )}
                             </div>
                             <div className="space-y-1.5">
                               <Label className="text-xs font-semibold text-slate-600">كلمة المرور *</Label>
@@ -779,16 +862,25 @@ export default function LandingPage() {
                                   disabled={loading}
                                   onClick={() => {
                                     if (navigator.geolocation) {
+                                      toast({ title: 'جارٍ تحديد الموقع...', description: 'يرجى الانتظار' })
                                       navigator.geolocation.getCurrentPosition(
-                                        (pos) => {
+                                        async (pos) => {
                                           const { latitude, longitude } = pos.coords
-                                          setBeneficiaryRegForm(f => ({ ...f, location: `${latitude.toFixed(6)}, ${longitude.toFixed(6)}` }))
-                                          toast({ title: 'تم تحديد الموقع', description: `خط العرض: ${latitude.toFixed(4)}, خط الطول: ${longitude.toFixed(4)}` })
+                                          try {
+                                            const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&accept-language=ar`)
+                                            const data = await res.json()
+                                            const address = data.display_name || `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`
+                                            setBeneficiaryRegForm(f => ({ ...f, location: address }))
+                                            toast({ title: 'تم تحديد الموقع بنجاح', description: address.substring(0, 80) })
+                                          } catch {
+                                            setBeneficiaryRegForm(f => ({ ...f, location: `${latitude.toFixed(6)}, ${longitude.toFixed(6)}` }))
+                                            toast({ title: 'تم تحديد الموقع', description: `${latitude.toFixed(4)}, ${longitude.toFixed(4)}` })
+                                          }
                                         },
                                         (err) => {
                                           toast({ title: 'خطأ في تحديد الموقع', description: 'يرجى السماح بالوصول إلى الموقع أو إدخاله يدوياً', variant: 'destructive' })
                                         },
-                                        { enableHighAccuracy: true, timeout: 10000 }
+                                        { enableHighAccuracy: true, timeout: 15000 }
                                       )
                                     } else {
                                       toast({ title: 'غير مدعوم', description: 'متصفحك لا يدعم تحديد الموقع', variant: 'destructive' })

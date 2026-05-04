@@ -678,14 +678,15 @@ export default function AdminDashboard() {
                         { label: 'طلبات بانتظار المراجعة', value: stats.pendingRequests, gradient: 'from-orange-400 to-red-500', shadow: 'shadow-orange-500/20', icon: ClipboardList },
                         { label: 'طلبات مكتملة', value: stats.completedRequests, gradient: 'from-blue-400 to-indigo-500', shadow: 'shadow-blue-500/20', icon: CheckCircle },
                       ].map((item, i) => (
-                        <motion.div key={i} variants={cardVariants} initial="hidden" animate="visible" transition={{ delay: i * 0.05, duration: 0.4 }}>
-                          <Card className={`border-0 shadow-lg ${item.shadow} hover:-translate-y-1 hover:shadow-xl transition-all duration-300 overflow-hidden`}>
-                            <CardContent className="p-4">
+                        <motion.div key={i} variants={cardVariants} initial="hidden" animate="visible" transition={{ delay: i * 0.05, duration: 0.4 }} whileHover={{ y: -4 }}>
+                          <Card className={`border-0 shadow-lg ${item.shadow} hover:shadow-xl transition-all duration-300 overflow-hidden relative group`}>
+                            <div className={`absolute inset-0 bg-gradient-to-br ${item.gradient} opacity-0 group-hover:opacity-5 transition-opacity duration-300`} />
+                            <CardContent className="p-4 relative z-10">
                               <div className="flex items-center gap-3 mb-3">
                                 <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${item.gradient} flex items-center justify-center shadow-md`}><item.icon className="w-5 h-5 text-white" /></div>
                                 <p className="text-xs text-gray-500 leading-tight">{item.label}</p>
                               </div>
-                              <p className={`text-2xl font-bold bg-gradient-to-l ${item.gradient} bg-clip-text text-transparent`}>{item.value}</p>
+                              <p className={`text-3xl font-black bg-gradient-to-l ${item.gradient} bg-clip-text text-transparent`}>{item.value}</p>
                             </CardContent>
                           </Card>
                         </motion.div>
@@ -779,10 +780,11 @@ export default function AdminDashboard() {
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                       {services.map((svc: any) => (
                         <motion.div key={svc.id} variants={cardVariants} initial="hidden" animate="visible">
-                          <Card className="border-0 shadow-lg hover:-translate-y-1 hover:shadow-xl transition-all duration-300">
-                            <CardContent className="p-4">
+                          <Card className="border-0 shadow-lg hover:-translate-y-1 hover:shadow-xl transition-all duration-300 overflow-hidden relative group">
+                            <div className="absolute inset-0 bg-gradient-to-br from-amber-400 to-orange-500 opacity-0 group-hover:opacity-5 transition-opacity duration-300" />
+                            <CardContent className="p-4 relative z-10">
                               <div className="flex items-start justify-between mb-3">
-                                <div className="flex items-center gap-2"><div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-md"><Wrench className="w-5 h-5 text-white" /></div><div><p className="font-bold">{svc.name}</p><p className="text-xs text-gray-500">{svc.category}</p></div></div>
+                                <div className="flex items-center gap-2"><div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-md"><Wrench className="w-5 h-5 text-white" /></div><div><p className="font-bold">{svc.name}</p><Badge className="text-[10px] bg-amber-50 text-amber-700 border-amber-200 border mt-0.5">{svc.category}</Badge></div></div>
                                 <Badge className={`${getStatusColor(svc.isActive ? 'active' : 'suspended')} border text-xs`}>{svc.isActive ? 'نشطة' : 'معطلة'}</Badge>
                               </div>
                               <p className="text-sm text-gray-600 mb-2 line-clamp-2">{svc.description}</p>
@@ -985,8 +987,17 @@ export default function AdminDashboard() {
                     <div className="space-y-3 max-h-[70vh] overflow-y-auto">
                       {filteredRequests.map((r: any) => (
                         <motion.div key={r.id} variants={cardVariants} initial="hidden" animate="visible">
-                          <Card className={`border-0 shadow-lg hover:shadow-xl transition-all duration-300 ${r.isEmergency ? 'ring-2 ring-red-400' : ''}`}>
-                            <CardContent className="p-4">
+                          <Card className={`border-0 shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden ${r.isEmergency ? 'ring-2 ring-red-400' : ''}`}>
+                            {/* Status gradient left border */}
+                            <div className={`absolute top-0 right-0 w-1.5 h-full ${
+                              r.status === 'pending' ? 'bg-gradient-to-b from-amber-400 to-orange-500' :
+                              r.status === 'approved' ? 'bg-gradient-to-b from-blue-400 to-indigo-500' :
+                              r.status === 'in_progress' ? 'bg-gradient-to-b from-cyan-400 to-teal-500' :
+                              r.status === 'completed' ? 'bg-gradient-to-b from-emerald-400 to-green-500' :
+                              r.status === 'rejected' || r.status === 'cancelled' ? 'bg-gradient-to-b from-red-400 to-rose-500' :
+                              'bg-gray-300'
+                            }`} />
+                            <CardContent className="p-4 relative">
                               <div className="flex items-start gap-3">
                                 {r.status === 'pending' && (
                                   <button onClick={() => toggleRequestSelection(r.id)} className="mt-1 shrink-0">
@@ -996,7 +1007,7 @@ export default function AdminDashboard() {
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-2 flex-wrap">
                                     <p className="font-bold">{r.service?.name || 'خدمة غير محددة'}</p>
-                                    <Badge className={`${getStatusColor(r.status)} border text-xs`}>{getStatusLabel(r.status)}</Badge>
+                                    <Badge className={`${getStatusColor(r.status)} border text-xs font-bold px-2.5 py-0.5`}>{getStatusLabel(r.status)}</Badge>
                                     {r.isEmergency && <Badge className="bg-red-500 text-white border-0 text-xs animate-pulse"><AlertTriangle className="w-3 h-3 ml-1" />طوارئ</Badge>}
                                   </div>
                                   <p className="text-sm text-gray-500 mt-1">المستفيد: {r.beneficiary?.name || 'غير محدد'} {r.beneficiary?.phone && `• ${r.beneficiary.phone}`}</p>
@@ -1064,16 +1075,27 @@ export default function AdminDashboard() {
                       ) : (
                         emergencyRequests.map((req: any) => (
                           <motion.div key={req.id} variants={cardVariants} initial="hidden" animate="visible">
-                            <Card className={`border-0 shadow-lg hover:shadow-xl transition-all duration-300 ${req.status === 'pending' ? 'ring-2 ring-red-400 animate-pulse' : req.status === 'in_progress' ? 'ring-2 ring-blue-400' : ''}`}>
-                              <CardContent className="p-4">
+                            <Card className={`border-0 shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden ${req.status === 'pending' ? 'ring-2 ring-red-400' : req.status === 'in_progress' ? 'ring-2 ring-blue-400' : ''}`}>
+                              {/* Emergency gradient left border */}
+                              <div className={`absolute top-0 right-0 w-2 h-full ${
+                                req.status === 'pending' ? 'bg-gradient-to-b from-red-400 via-red-500 to-orange-500 animate-pulse' :
+                                req.status === 'in_progress' ? 'bg-gradient-to-b from-blue-400 to-cyan-500' :
+                                req.status === 'completed' ? 'bg-gradient-to-b from-emerald-400 to-green-500' :
+                                'bg-gradient-to-b from-gray-300 to-gray-400'
+                              }`} />
+                              <CardContent className="p-4 relative">
                                 <div className="flex items-start gap-3">
-                                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-red-500 to-orange-500 flex items-center justify-center shrink-0 shadow-lg shadow-red-500/25">
+                                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-red-500 to-orange-500 flex items-center justify-center shrink-0 shadow-lg shadow-red-500/25 relative">
                                     <AlertTriangle className="w-6 h-6 text-white" />
+                                    {req.status === 'pending' && (
+                                      <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full animate-ping" />
+                                    )}
                                   </div>
                                   <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-2 flex-wrap">
                                       <p className="font-bold text-lg">{req.serviceType || 'طلب طوارئ'}</p>
-                                      <Badge className={`${req.status === 'pending' ? 'bg-red-100 text-red-700 border-red-300' : req.status === 'in_progress' ? 'bg-blue-100 text-blue-700 border-blue-300' : 'bg-emerald-100 text-emerald-700 border-emerald-300'} border text-xs font-bold`}>
+                                      <Badge className={`${req.status === 'pending' ? 'bg-red-100 text-red-700 border-red-300' : req.status === 'in_progress' ? 'bg-blue-100 text-blue-700 border-blue-300' : 'bg-emerald-100 text-emerald-700 border-emerald-300'} border text-xs font-bold px-2.5 py-0.5`}>
+                                        {req.status === 'pending' && <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-500 ml-1 animate-pulse" />}
                                         {req.status === 'pending' ? 'بانتظار المعالجة' : req.status === 'in_progress' ? 'قيد التنفيذ' : req.status === 'completed' ? 'تم المعالجة' : req.status === 'rejected' ? 'مرفوض' : req.status}
                                       </Badge>
                                       <Badge className="bg-gradient-to-l from-red-500 to-orange-500 text-white border-0 text-xs"><AlertTriangle className="w-3 h-3 ml-1" />طوارئ</Badge>

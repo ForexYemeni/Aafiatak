@@ -1403,16 +1403,25 @@ export default function NurseDashboard() {
                     className="shrink-0 rounded-xl border-blue-200 text-blue-600 hover:bg-blue-50"
                     onClick={() => {
                       if (navigator.geolocation) {
+                        toast({ title: 'جارٍ تحديد الموقع...', description: 'يرجى الانتظار' })
                         navigator.geolocation.getCurrentPosition(
-                          (pos) => {
+                          async (pos) => {
                             const { latitude, longitude } = pos.coords
-                            setLocationValue(`${latitude.toFixed(6)}, ${longitude.toFixed(6)}`)
-                            toast({ title: 'تم تحديد الموقع', description: `خط العرض: ${latitude.toFixed(4)}, خط الطول: ${longitude.toFixed(4)}` })
+                            try {
+                              const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&accept-language=ar`)
+                              const data = await res.json()
+                              const address = data.display_name || `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`
+                              setLocationValue(address)
+                              toast({ title: 'تم تحديد الموقع بنجاح', description: address.substring(0, 80) })
+                            } catch {
+                              setLocationValue(`${latitude.toFixed(6)}, ${longitude.toFixed(6)}`)
+                              toast({ title: 'تم تحديد الموقع', description: `${latitude.toFixed(4)}, ${longitude.toFixed(4)}` })
+                            }
                           },
                           (err) => {
                             toast({ title: 'خطأ في تحديد الموقع', description: 'يرجى السماح بالوصول إلى الموقع أو إدخاله يدوياً', variant: 'destructive' })
                           },
-                          { enableHighAccuracy: true, timeout: 10000 }
+                          { enableHighAccuracy: true, timeout: 15000 }
                         )
                       } else {
                         toast({ title: 'غير مدعوم', description: 'متصفحك لا يدعم تحديد الموقع', variant: 'destructive' })

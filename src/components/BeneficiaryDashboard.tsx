@@ -1007,8 +1007,9 @@ export default function BeneficiaryDashboard() {
                       >
                         {filteredServices.map(service => (
                           <motion.div key={service.id} variants={itemVariants} whileHover={{ y: -6 }} transition={{ duration: 0.2 }}>
-                            <Card className="border-0 bg-white/80 backdrop-blur-sm shadow-lg hover:shadow-xl transition-all duration-300 h-full flex flex-col">
-                              <CardContent className="p-5 flex flex-col flex-1">
+                            <Card className="border-0 bg-white/80 backdrop-blur-sm shadow-lg hover:shadow-xl transition-all duration-300 h-full flex flex-col overflow-hidden relative group">
+                              <div className="absolute inset-0 bg-gradient-to-br from-violet-400 to-fuchsia-500 opacity-0 group-hover:opacity-5 transition-opacity duration-300" />
+                              <CardContent className="p-5 flex flex-col flex-1 relative z-10">
                                 <div className="flex items-start justify-between mb-3">
                                   <h3 className="font-semibold text-lg leading-tight">{service.name}</h3>
                                   <Badge className="text-xs shrink-0 mr-2 bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white border-0 shadow-sm shadow-violet-500/20">
@@ -1017,7 +1018,7 @@ export default function BeneficiaryDashboard() {
                                 </div>
                                 <p className="text-sm text-muted-foreground mb-4 flex-1 leading-relaxed">{service.description}</p>
                                 <div className="flex items-center justify-between pt-3 border-t border-gray-100">
-                                  <span className="text-lg font-bold text-emerald-600">{formatPrice(service.price)}</span>
+                                  <span className="text-xl font-black text-emerald-600">{formatPrice(service.price)}</span>
                                   <Button
                                     size="sm"
                                     className="bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white hover:scale-[1.02] active:scale-[0.98] hover:shadow-lg hover:shadow-violet-500/25 transition-all duration-200"
@@ -1339,16 +1340,25 @@ export default function BeneficiaryDashboard() {
                               className="shrink-0 rounded-xl border-violet-200 text-violet-600 hover:bg-violet-50"
                               onClick={() => {
                                 if (navigator.geolocation) {
+                                  toast({ title: 'جارٍ تحديد الموقع...', description: 'يرجى الانتظار' })
                                   navigator.geolocation.getCurrentPosition(
-                                    (pos) => {
+                                    async (pos) => {
                                       const { latitude, longitude } = pos.coords
-                                      setProfileLocation(`${latitude.toFixed(6)}, ${longitude.toFixed(6)}`)
-                                      toast({ title: 'تم تحديد الموقع', description: `خط العرض: ${latitude.toFixed(4)}, خط الطول: ${longitude.toFixed(4)}` })
+                                      try {
+                                        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&accept-language=ar`)
+                                        const data = await res.json()
+                                        const address = data.display_name || `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`
+                                        setProfileLocation(address)
+                                        toast({ title: 'تم تحديد الموقع بنجاح', description: address.substring(0, 80) })
+                                      } catch {
+                                        setProfileLocation(`${latitude.toFixed(6)}, ${longitude.toFixed(6)}`)
+                                        toast({ title: 'تم تحديد الموقع', description: `${latitude.toFixed(4)}, ${longitude.toFixed(4)}` })
+                                      }
                                     },
                                     (err) => {
                                       toast({ title: 'خطأ في تحديد الموقع', description: 'يرجى السماح بالوصول إلى الموقع أو إدخاله يدوياً', variant: 'destructive' })
                                     },
-                                    { enableHighAccuracy: true, timeout: 10000 }
+                                    { enableHighAccuracy: true, timeout: 15000 }
                                   )
                                 } else {
                                   toast({ title: 'غير مدعوم', description: 'متصفحك لا يدعم تحديد الموقع', variant: 'destructive' })
@@ -1869,16 +1879,25 @@ export default function BeneficiaryDashboard() {
                   className="shrink-0 rounded-xl"
                   onClick={() => {
                     if (navigator.geolocation) {
+                      toast({ title: 'جارٍ تحديد الموقع...', description: 'يرجى الانتظار' })
                       navigator.geolocation.getCurrentPosition(
-                        (pos) => {
+                        async (pos) => {
                           const { latitude, longitude } = pos.coords
-                          setEmergencyForm(prev => ({ ...prev, address: `${latitude.toFixed(6)}, ${longitude.toFixed(6)}` }))
-                          toast({ title: 'تم تحديد الموقع', description: `خط العرض: ${latitude.toFixed(4)}, خط الطول: ${longitude.toFixed(4)}` })
+                          try {
+                            const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&accept-language=ar`)
+                            const data = await res.json()
+                            const address = data.display_name || `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`
+                            setEmergencyForm(prev => ({ ...prev, address }))
+                            toast({ title: 'تم تحديد الموقع بنجاح', description: address.substring(0, 80) })
+                          } catch {
+                            setEmergencyForm(prev => ({ ...prev, address: `${latitude.toFixed(6)}, ${longitude.toFixed(6)}` }))
+                            toast({ title: 'تم تحديد الموقع', description: `${latitude.toFixed(4)}, ${longitude.toFixed(4)}` })
+                          }
                         },
                         (err) => {
                           toast({ title: 'خطأ في تحديد الموقع', description: 'يرجى السماح بالوصول إلى الموقع أو إدخاله يدوياً', variant: 'destructive' })
                         },
-                        { enableHighAccuracy: true, timeout: 10000 }
+                        { enableHighAccuracy: true, timeout: 15000 }
                       )
                     } else {
                       toast({ title: 'غير مدعوم', description: 'متصفحك لا يدعم تحديد الموقع', variant: 'destructive' })
@@ -1977,16 +1996,25 @@ export default function BeneficiaryDashboard() {
                   className="shrink-0 rounded-xl"
                   onClick={() => {
                     if (navigator.geolocation) {
+                      toast({ title: 'جارٍ تحديد الموقع...', description: 'يرجى الانتظار' })
                       navigator.geolocation.getCurrentPosition(
-                        (pos) => {
+                        async (pos) => {
                           const { latitude, longitude } = pos.coords
-                          setRequestForm(prev => ({ ...prev, address: `${latitude.toFixed(6)}, ${longitude.toFixed(6)}` }))
-                          toast({ title: 'تم تحديد الموقع', description: `خط العرض: ${latitude.toFixed(4)}, خط الطول: ${longitude.toFixed(4)}` })
+                          try {
+                            const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&accept-language=ar`)
+                            const data = await res.json()
+                            const address = data.display_name || `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`
+                            setRequestForm(prev => ({ ...prev, address }))
+                            toast({ title: 'تم تحديد الموقع بنجاح', description: address.substring(0, 80) })
+                          } catch {
+                            setRequestForm(prev => ({ ...prev, address: `${latitude.toFixed(6)}, ${longitude.toFixed(6)}` }))
+                            toast({ title: 'تم تحديد الموقع', description: `${latitude.toFixed(4)}, ${longitude.toFixed(4)}` })
+                          }
                         },
                         (err) => {
                           toast({ title: 'خطأ في تحديد الموقع', description: 'يرجى السماح بالوصول إلى الموقع أو إدخاله يدوياً', variant: 'destructive' })
                         },
-                        { enableHighAccuracy: true, timeout: 10000 }
+                        { enableHighAccuracy: true, timeout: 15000 }
                       )
                     } else {
                       toast({ title: 'غير مدعوم', description: 'متصفحك لا يدعم تحديد الموقع', variant: 'destructive' })
