@@ -9,7 +9,7 @@ import {
   FileText, Activity, Search, Filter, BarChart3,
   TrendingUp, Tag, Sparkles, Star, Phone, Mail, Gift,
   Ban, Unlock, Eye, AlertTriangle, UsersRound, Settings,
-  ChevronDown, AlertCircle, MessageSquare, Clock
+  ChevronDown, AlertCircle, MessageSquare, Clock, MapPin, Calendar
 } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RTooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts'
 import { useAppStore, formatPrice, getStatusLabel, getStatusColor } from '@/lib/store'
@@ -793,37 +793,129 @@ export default function AdminDashboard() {
                 ═══════════════════════════════════════════════════ */}
                 {activeTab === 'nurses' && (
                   <div className="space-y-6">
-                    <div><h1 className="text-2xl font-bold bg-gradient-to-l from-amber-600 via-orange-600 to-rose-600 bg-clip-text text-transparent">إدارة الممرضين</h1><p className="text-gray-500 text-sm mt-1">قبول ورفض وحظر الممرضين</p></div>
-                    <div className="flex flex-wrap gap-3 items-center">
-                      <div className="relative flex-1 min-w-[200px]"><Search className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" /><Input placeholder="بحث بالاسم أو الهاتف..." value={nurseSearch} onChange={e => setNurseSearch(e.target.value)} className="pr-9 border-amber-200" /></div>
-                      <Select value={nurseFilter} onValueChange={setNurseFilter}><SelectTrigger className="w-40 border-amber-200"><Filter className="w-4 h-4 ml-2" /><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">الكل</SelectItem><SelectItem value="pending">قيد الانتظار</SelectItem><SelectItem value="approved">مقبول</SelectItem><SelectItem value="rejected">مرفوض</SelectItem><SelectItem value="blocked">محظور</SelectItem></SelectContent></Select>
-                    </div>
-                    <div className="space-y-3 max-h-[70vh] overflow-y-auto">
-                      {filteredNurses.map((n: any) => (
-                        <motion.div key={n.id} variants={cardVariants} initial="hidden" animate="visible">
-                          <Card className="border-0 shadow-lg hover:shadow-xl transition-all duration-300">
+                    <div><h1 className="text-2xl font-bold bg-gradient-to-l from-amber-600 via-orange-600 to-rose-600 bg-clip-text text-transparent">إدارة الممرضين</h1><p className="text-gray-500 text-sm mt-1">قبول ورفض وحظر وإدارة الممرضين</p></div>
+
+                    {/* Stats Cards */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      {[
+                        { label: 'إجمالي الممرضين', value: nurses.length, gradient: 'from-amber-400 to-orange-500', icon: Users },
+                        { label: 'بانتظار الموافقة', value: nurses.filter((n: any) => n.status === 'pending').length, gradient: 'from-yellow-400 to-amber-500', icon: Clock },
+                        { label: 'معتمدين', value: nurses.filter((n: any) => n.status === 'approved').length, gradient: 'from-emerald-400 to-teal-500', icon: CheckCircle },
+                        { label: 'محظورين', value: nurses.filter((n: any) => n.status === 'blocked').length, gradient: 'from-red-400 to-rose-500', icon: Ban },
+                      ].map((item, i) => (
+                        <motion.div key={i} variants={cardVariants} initial="hidden" animate="visible" transition={{ delay: i * 0.05, duration: 0.4 }}>
+                          <Card className="border-0 shadow-lg hover:-translate-y-1 hover:shadow-xl transition-all duration-300">
                             <CardContent className="p-4">
-                              <div className="flex items-start gap-3">
-                                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-md shrink-0"><Users className="w-6 h-6 text-white" /></div>
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-2 flex-wrap"><p className="font-bold">{n.firstName} {n.secondName} {n.thirdName} {n.lastName}</p><Badge className={`${getStatusColor(n.status)} border text-xs`}>{getStatusLabel(n.status)}</Badge></div>
-                                  <p className="text-sm text-gray-500 mt-1">{n.phone} • {n.location}</p>
-                                  <p className="text-xs text-gray-400">رقم الترخيص: {n.licenseNumber} • انتهاء: {formatDate(n.licenseExpiryDate)}</p>
-                                </div>
-                                <div className="flex gap-2 flex-wrap">
-                                  <Button size="sm" variant="outline" onClick={() => setNurseDetail(n)}><Eye className="w-3.5 h-3.5" /></Button>
-                                  {n.status === 'pending' && (<><Button size="sm" className="bg-emerald-500 hover:bg-emerald-600 text-white" onClick={() => handleNurseAction(n.id, 'approved')}><CheckCircle className="w-3.5 h-3.5 ml-1" />قبول</Button><Button size="sm" variant="outline" className="text-red-500 hover:bg-red-50" onClick={() => handleNurseAction(n.id, 'rejected')}><XCircle className="w-3.5 h-3.5 ml-1" />رفض</Button></>)}
-                                  {n.status === 'approved' && <Button size="sm" variant="outline" className="text-orange-500 hover:bg-orange-50" onClick={() => handleNurseAction(n.id, 'blocked')}><Ban className="w-3.5 h-3.5 ml-1" />حظر</Button>}
-                                  {n.status === 'blocked' && <Button size="sm" className="bg-emerald-500 hover:bg-emerald-600 text-white" onClick={() => handleNurseAction(n.id, 'approved')}><Unlock className="w-3.5 h-3.5 ml-1" />إلغاء الحظر</Button>}
-                                  <Button size="sm" variant="outline" className="text-red-500 hover:bg-red-50" onClick={() => setDeleteTarget({ type: 'nurse', id: n.id, name: `${n.firstName} ${n.lastName}` })}><Trash2 className="w-3.5 h-3.5" /></Button>
-                                </div>
+                              <div className="flex items-center gap-3 mb-3">
+                                <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${item.gradient} flex items-center justify-center shadow-md`}><item.icon className="w-5 h-5 text-white" /></div>
+                                <p className="text-xs text-gray-500 leading-tight">{item.label}</p>
                               </div>
+                              <p className={`text-2xl font-bold bg-gradient-to-l ${item.gradient} bg-clip-text text-transparent`}>{item.value}</p>
                             </CardContent>
                           </Card>
                         </motion.div>
                       ))}
                     </div>
-                    {filteredNurses.length === 0 && <div className="text-center py-16"><Users className="w-12 h-12 text-gray-300 mx-auto mb-3" /><p className="text-gray-400">لا يوجد ممرضين</p></div>}
+
+                    {/* Search & Filter */}
+                    <div className="flex flex-wrap gap-3 items-center">
+                      <div className="relative flex-1 min-w-[200px]"><Search className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" /><Input placeholder="بحث بالاسم أو الهاتف أو الرقم الوطني..." value={nurseSearch} onChange={e => setNurseSearch(e.target.value)} className="pr-9 border-amber-200 rounded-xl" /></div>
+                      <div className="flex gap-2 flex-wrap">
+                        {[
+                          { key: 'all', label: 'الكل', count: nurses.length },
+                          { key: 'pending', label: 'بانتظار الموافقة', count: nurses.filter((n: any) => n.status === 'pending').length },
+                          { key: 'approved', label: 'معتمد', count: nurses.filter((n: any) => n.status === 'approved').length },
+                          { key: 'rejected', label: 'مرفوض', count: nurses.filter((n: any) => n.status === 'rejected').length },
+                          { key: 'blocked', label: 'محظور', count: nurses.filter((n: any) => n.status === 'blocked').length },
+                        ].map(filter => (
+                          <button key={filter.key} onClick={() => setNurseFilter(filter.key)}
+                            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all duration-300 ${
+                              nurseFilter === filter.key
+                                ? 'bg-gradient-to-l from-amber-500 via-orange-500 to-rose-500 text-white shadow-lg shadow-amber-500/25'
+                                : 'bg-white/70 backdrop-blur-sm text-gray-500 hover:text-gray-700 hover:bg-white ring-1 ring-gray-200/50'
+                            }`}
+                          >
+                            {filter.label} {filter.count > 0 && <span className="opacity-75">({filter.count})</span>}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Nurse Cards */}
+                    <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
+                      {filteredNurses.length === 0 ? (
+                        <div className="text-center py-16">
+                          <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-amber-100 to-orange-100 flex items-center justify-center mx-auto mb-4">
+                            <Users className="w-10 h-10 text-amber-400" />
+                          </div>
+                          <p className="text-lg font-bold text-gray-600 mb-2">لا يوجد ممرضين</p>
+                          <p className="text-sm text-gray-400">لا توجد نتائج مطابقة للبحث</p>
+                        </div>
+                      ) : (
+                        filteredNurses.map((n: any, index: number) => {
+                          const statusConfig: Record<string, { gradient: string; border: string; bg: string; shadow: string; label: string }> = {
+                            pending: { gradient: 'from-yellow-500 to-amber-500', border: 'border-r-yellow-400', bg: 'from-yellow-50/50 to-amber-50/50', shadow: 'shadow-yellow-500/10', label: 'بانتظار الموافقة' },
+                            approved: { gradient: 'from-emerald-500 to-teal-500', border: 'border-r-emerald-400', bg: 'from-emerald-50/30 to-teal-50/30', shadow: 'shadow-emerald-500/10', label: 'معتمد' },
+                            rejected: { gradient: 'from-red-500 to-rose-500', border: 'border-r-red-400', bg: 'from-red-50/30 to-rose-50/30', shadow: 'shadow-red-500/10', label: 'مرفوض' },
+                            blocked: { gradient: 'from-gray-500 to-slate-500', border: 'border-r-gray-400', bg: 'from-gray-50/50 to-slate-50/50', shadow: 'shadow-gray-500/10', label: 'محظور' },
+                          }
+                          const cfg = statusConfig[n.status] || statusConfig.pending
+                          const isExpired = n.licenseExpiryDate && new Date(n.licenseExpiryDate) < new Date()
+
+                          return (
+                            <motion.div key={n.id} variants={cardVariants} initial="hidden" animate="visible" transition={{ delay: index * 0.03 }}>
+                              <Card className={`border-0 shadow-lg ${cfg.shadow} hover:shadow-xl transition-all duration-300 border-r-4 ${cfg.border} overflow-hidden`}>
+                                <CardContent className="p-0">
+                                  {/* Top Section: Name + Status + Actions */}
+                                  <div className="p-4 pb-3">
+                                    <div className="flex items-start gap-4">
+                                      {/* Avatar */}
+                                      <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${cfg.gradient} flex items-center justify-center shadow-lg shrink-0`}>
+                                        <span className="text-white font-bold text-xl">{(n.firstName || '?').charAt(0)}</span>
+                                      </div>
+                                      {/* Info */}
+                                      <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                          <h3 className="font-bold text-lg truncate">{n.firstName} {n.secondName} {n.thirdName} {n.lastName}</h3>
+                                          <Badge className={`bg-gradient-to-l ${cfg.gradient} text-white border-0 text-[10px] font-bold px-2 py-0.5`}>{cfg.label}</Badge>
+                                          {isExpired && <Badge className="bg-gradient-to-l from-red-500 to-rose-500 text-white border-0 text-[10px] font-bold px-2 py-0.5"><AlertTriangle className="w-3 h-3 ml-0.5" />ترخيص منتهي</Badge>}
+                                        </div>
+                                        {/* Quick Info Row */}
+                                        <div className="flex items-center gap-4 mt-2 text-sm text-gray-500 flex-wrap">
+                                          <span className="flex items-center gap-1"><Phone className="w-3.5 h-3.5" />{n.phone}</span>
+                                          <span className="flex items-center gap-1"><MapPin className="w-3.5 h-3.5" />{n.location}</span>
+                                        </div>
+                                      </div>
+                                      {/* Actions */}
+                                      <div className="flex gap-2 shrink-0 flex-wrap">
+                                        <Button size="sm" variant="outline" className="rounded-xl border-amber-200 hover:bg-amber-50" onClick={() => setNurseDetail(n)}><Eye className="w-3.5 h-3.5 ml-1" />التفاصيل</Button>
+                                        {n.status === 'pending' && (
+                                          <>
+                                            <Button size="sm" className="bg-gradient-to-l from-emerald-500 to-teal-500 text-white rounded-xl shadow-lg shadow-emerald-500/25 hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all" onClick={() => handleNurseAction(n.id, 'approved')}><CheckCircle className="w-3.5 h-3.5 ml-1" />قبول</Button>
+                                            <Button size="sm" className="bg-gradient-to-l from-red-500 to-rose-500 text-white rounded-xl shadow-lg shadow-red-500/25 hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all" onClick={() => handleNurseAction(n.id, 'rejected')}><XCircle className="w-3.5 h-3.5 ml-1" />رفض</Button>
+                                          </>
+                                        )}
+                                        {n.status === 'approved' && <Button size="sm" variant="outline" className="rounded-xl text-orange-600 border-orange-200 hover:bg-orange-50" onClick={() => handleNurseAction(n.id, 'blocked')}><Ban className="w-3.5 h-3.5 ml-1" />حظر</Button>}
+                                        {n.status === 'blocked' && <Button size="sm" className="bg-gradient-to-l from-emerald-500 to-teal-500 text-white rounded-xl shadow-lg shadow-emerald-500/25" onClick={() => handleNurseAction(n.id, 'approved')}><Unlock className="w-3.5 h-3.5 ml-1" />إلغاء الحظر</Button>}
+                                        <Button size="sm" variant="ghost" className="rounded-xl text-red-400 hover:text-red-600 hover:bg-red-50" onClick={() => setDeleteTarget({ type: 'nurse', id: n.id, name: `${n.firstName} ${n.lastName}` })}><Trash2 className="w-3.5 h-3.5" /></Button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                  {/* Bottom Section: License Info */}
+                                  <div className={`px-4 py-3 bg-gradient-to-l ${cfg.bg} border-t border-gray-100/50`}>
+                                    <div className="flex items-center gap-6 text-xs text-gray-500 flex-wrap">
+                                      <span className="flex items-center gap-1.5"><Shield className="w-3.5 h-3.5 text-amber-500" />ترخيص: <span className="font-semibold text-gray-700">{n.licenseNumber || 'غير محدد'}</span></span>
+                                      <span className="flex items-center gap-1.5"><FileText className="w-3.5 h-3.5 text-blue-500" />الرقم الوطني: <span className="font-semibold text-gray-700">{n.nationalId || 'غير محدد'}</span></span>
+                                      <span className={`flex items-center gap-1.5 ${isExpired ? 'text-red-500 font-bold' : ''}`}><Calendar className="w-3.5 h-3.5" />انتهاء الترخيص: <span className={isExpired ? 'text-red-600 font-bold' : 'font-semibold text-gray-700'}>{formatDate(n.licenseExpiryDate)}</span></span>
+                                    </div>
+                                  </div>
+                                </CardContent>
+                              </Card>
+                            </motion.div>
+                          )
+                        })
+                      )}
+                    </div>
                   </div>
                 )}
 
@@ -1472,24 +1564,93 @@ export default function AdminDashboard() {
 
       {/* Nurse Detail Dialog */}
       <Dialog open={!!nurseDetail} onOpenChange={() => setNurseDetail(null)}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader><DialogTitle>تفاصيل الممرض</DialogTitle></DialogHeader>
-          {nurseDetail && (
-            <div className="space-y-4 py-2">
-              <div className="flex items-center gap-3">
-                <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-lg"><Users className="w-7 h-7 text-white" /></div>
-                <div><p className="text-lg font-bold">{nurseDetail.firstName} {nurseDetail.secondName} {nurseDetail.thirdName} {nurseDetail.lastName}</p><Badge className={`${getStatusColor(nurseDetail.status)} border`}>{getStatusLabel(nurseDetail.status)}</Badge></div>
-              </div>
-              <Separator />
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div><span className="text-gray-500">الهاتف:</span><p className="font-medium">{nurseDetail.phone}</p></div>
-                <div><span className="text-gray-500">الموقع:</span><p className="font-medium">{nurseDetail.location}</p></div>
-                <div><span className="text-gray-500">الرقم الوطني:</span><p className="font-medium">{nurseDetail.nationalId}</p></div>
-                <div><span className="text-gray-500">رقم الترخيص:</span><p className="font-medium">{nurseDetail.licenseNumber}</p></div>
-                <div><span className="text-gray-500">انتهاء الترخيص:</span><p className="font-medium">{formatDate(nurseDetail.licenseExpiryDate)}</p></div>
-              </div>
-            </div>
-          )}
+        <DialogContent className="sm:max-w-xl p-0 overflow-hidden">
+          {nurseDetail && (() => {
+            const isExpired = nurseDetail.licenseExpiryDate && new Date(nurseDetail.licenseExpiryDate) < new Date()
+            const statusConfig: Record<string, { gradient: string; label: string }> = {
+              pending: { gradient: 'from-yellow-500 to-amber-500', label: 'بانتظار الموافقة' },
+              approved: { gradient: 'from-emerald-500 to-teal-500', label: 'معتمد' },
+              rejected: { gradient: 'from-red-500 to-rose-500', label: 'مرفوض' },
+              blocked: { gradient: 'from-gray-500 to-slate-500', label: 'محظور' },
+            }
+            const cfg = statusConfig[nurseDetail.status] || statusConfig.pending
+            return (
+              <>
+                {/* Header with gradient */}
+                <div className={`bg-gradient-to-l ${cfg.gradient} p-6 text-white relative overflow-hidden`}>
+                  <div className="absolute top-0 left-0 w-32 h-32 bg-white/10 rounded-full -translate-x-1/2 -translate-y-1/2" />
+                  <div className="absolute bottom-0 right-0 w-24 h-24 bg-white/10 rounded-full translate-x-1/3 translate-y-1/3" />
+                  <div className="relative flex items-center gap-4">
+                    <div className="w-16 h-16 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center shadow-lg ring-2 ring-white/30">
+                      <span className="text-white font-bold text-2xl">{(nurseDetail.firstName || '?').charAt(0)}</span>
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-bold">{nurseDetail.firstName} {nurseDetail.secondName} {nurseDetail.thirdName} {nurseDetail.lastName}</h2>
+                      <div className="flex items-center gap-2 mt-1">
+                        <Badge className="bg-white/20 text-white border-0 text-xs backdrop-blur-sm">{cfg.label}</Badge>
+                        {isExpired && <Badge className="bg-red-500/80 text-white border-0 text-xs backdrop-blur-sm"><AlertTriangle className="w-3 h-3 ml-0.5" />ترخيص منتهي</Badge>}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                {/* Content */}
+                <div className="p-6 space-y-5">
+                  {/* Contact Info */}
+                  <div>
+                    <h3 className="text-sm font-bold text-gray-400 mb-3 flex items-center gap-2"><Phone className="w-4 h-4" />معلومات الاتصال</h3>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="p-3 rounded-xl bg-gray-50/80 border border-gray-100">
+                        <p className="text-xs text-gray-400 mb-1">الهاتف</p>
+                        <p className="font-semibold text-sm" dir="ltr">{nurseDetail.phone || '-'}</p>
+                      </div>
+                      <div className="p-3 rounded-xl bg-gray-50/80 border border-gray-100">
+                        <p className="text-xs text-gray-400 mb-1">الموقع</p>
+                        <p className="font-semibold text-sm">{nurseDetail.location || '-'}</p>
+                      </div>
+                    </div>
+                  </div>
+                  {/* License Info */}
+                  <div>
+                    <h3 className="text-sm font-bold text-gray-400 mb-3 flex items-center gap-2"><Shield className="w-4 h-4" />معلومات الترخيص</h3>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="p-3 rounded-xl bg-amber-50/80 border border-amber-100">
+                        <p className="text-xs text-amber-500 mb-1">رقم الترخيص</p>
+                        <p className="font-semibold text-sm">{nurseDetail.licenseNumber || '-'}</p>
+                      </div>
+                      <div className={`p-3 rounded-xl border ${isExpired ? 'bg-red-50/80 border-red-100' : 'bg-emerald-50/80 border-emerald-100'}`}>
+                        <p className={`text-xs mb-1 ${isExpired ? 'text-red-500' : 'text-emerald-500'}`}>انتهاء الترخيص</p>
+                        <p className={`font-semibold text-sm ${isExpired ? 'text-red-600' : ''}`}>{formatDate(nurseDetail.licenseExpiryDate)}</p>
+                      </div>
+                      <div className="p-3 rounded-xl bg-blue-50/80 border border-blue-100">
+                        <p className="text-xs text-blue-500 mb-1">الرقم الوطني</p>
+                        <p className="font-semibold text-sm" dir="ltr">{nurseDetail.nationalId || '-'}</p>
+                      </div>
+                    </div>
+                  </div>
+                  {/* Registration Date */}
+                  <div className="flex items-center justify-between text-xs text-gray-400 pt-2 border-t border-gray-100">
+                    <span>تاريخ التسجيل: {formatDate(nurseDetail.createdAt)}</span>
+                    <span>آخر تحديث: {formatDate(nurseDetail.updatedAt)}</span>
+                  </div>
+                  {/* Actions */}
+                  <div className="flex gap-3 pt-2">
+                    {nurseDetail.status === 'pending' && (
+                      <>
+                        <Button className="flex-1 bg-gradient-to-l from-emerald-500 to-teal-500 text-white rounded-xl shadow-lg shadow-emerald-500/25" onClick={() => { handleNurseAction(nurseDetail.id, 'approved'); setNurseDetail(null) }}><CheckCircle className="w-4 h-4 ml-2" />قبول الممرض</Button>
+                        <Button className="flex-1 bg-gradient-to-l from-red-500 to-rose-500 text-white rounded-xl shadow-lg shadow-red-500/25" onClick={() => { handleNurseAction(nurseDetail.id, 'rejected'); setNurseDetail(null) }}><XCircle className="w-4 h-4 ml-2" />رفض الممرض</Button>
+                      </>
+                    )}
+                    {nurseDetail.status === 'approved' && (
+                      <Button className="flex-1 bg-gradient-to-l from-orange-500 to-amber-500 text-white rounded-xl shadow-lg shadow-orange-500/25" onClick={() => { handleNurseAction(nurseDetail.id, 'blocked'); setNurseDetail(null) }}><Ban className="w-4 h-4 ml-2" />حظر الممرض</Button>
+                    )}
+                    {nurseDetail.status === 'blocked' && (
+                      <Button className="flex-1 bg-gradient-to-l from-emerald-500 to-teal-500 text-white rounded-xl shadow-lg shadow-emerald-500/25" onClick={() => { handleNurseAction(nurseDetail.id, 'approved'); setNurseDetail(null) }}><Unlock className="w-4 h-4 ml-2" />إلغاء الحظر</Button>
+                    )}
+                  </div>
+                </div>
+              </>
+            )
+          })()}
         </DialogContent>
       </Dialog>
 
