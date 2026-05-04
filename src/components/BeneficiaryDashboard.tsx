@@ -949,10 +949,11 @@ export default function BeneficiaryDashboard() {
           requestId: ratingRequestId,
           nurseId: ratingNurseId,
           beneficiaryId: beneficiaryUser?.id,
-          rating: overallRating,
+          overallRating: overallRating,
           criteria: ratingCriteria,
           comment: ratingComment || undefined,
-          photos: ratingPhotos.length > 0 ? ratingPhotos : undefined,
+          beforePhotos: [],
+          afterPhotos: ratingPhotos.length > 0 ? ratingPhotos : [],
         }),
       })
       if (res.ok) {
