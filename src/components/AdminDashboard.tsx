@@ -49,7 +49,7 @@ function formatDateTime(ts: any): string {
 }
 
 // ─── Types ─────────────────────────────────────────────────────
-type Tab = 'dashboard' | 'services' | 'nurses' | 'beneficiaries' | 'requests' | 'emergency' | 'payments' | 'coupons' | 'ratings' | 'reports' | 'activity' | 'settings'
+type Tab = 'dashboard' | 'services' | 'nurses' | 'beneficiaries' | 'requests' | 'emergency' | 'payments' | 'coupons' | 'ratings' | 'reports' | 'activity' | 'sub-admins' | 'settings'
 
 interface DashboardStats {
   totalNurses: number
@@ -144,12 +144,22 @@ export default function AdminDashboard() {
   // Ratings
   const [ratingsNurseFilter, setRatingsNurseFilter] = useState<string>('all')
 
+  // Reset all data
+  const [resetDataDialog, setResetDataDialog] = useState(false)
+  const [resetPassword, setResetPassword] = useState('')
+  const [resetConfirmText, setResetConfirmText] = useState('')
+  const [resetLoading, setResetLoading] = useState(false)
+
+  // Nearby nurses geocoding cache
+  const [nurseDistances, setNurseDistances] = useState<Record<string, number>>({})
+  const [geocodingLoading, setGeocodingLoading] = useState(false)
+
   // Settings
   const [settings, setSettings] = useState<any>(null)
   const [subAdmins, setSubAdmins] = useState<any[]>([])
   const [subAdminDialog, setSubAdminDialog] = useState(false)
   const [editingSubAdmin, setEditingSubAdmin] = useState<any>(null)
-  const [subAdminForm, setSubAdminForm] = useState({ name: '', phone: '', password: '', permissions: { services: false, nurses: false, beneficiaries: false, requests: false, payments: false, coupons: false, reports: false } })
+  const [subAdminForm, setSubAdminForm] = useState({ name: '', phone: '', password: '', permissions: { services: false, nurses: false, beneficiaries: false, requests: false, payments: false, coupons: false, reports: false, emergency: false, ratings: false } })
 
   // ─── mustChangePassword check ──────────────────────────────
   useEffect(() => {
@@ -219,13 +229,12 @@ export default function AdminDashboard() {
         if (dashRes.ok) setStats(await dashRes.json())
         if (reqRes.ok) setRequests(await reqRes.json())
         if (svcRes.ok) setServices(await svcRes.json())
-      } else if (activeTab === 'settings') {
-        const [setRes, saRes] = await Promise.all([
-          fetch('/api/admin/settings'),
-          fetch(`/api/admin/sub-admins?adminId=${(user as any)?.id}`),
-        ])
-        if (setRes.ok) setSettings(await setRes.json())
+      } else if (activeTab === 'sub-admins') {
+        const saRes = await fetch(`/api/admin/sub-admins?adminId=${(user as any)?.id}`)
         if (saRes.ok) setSubAdmins(await saRes.json())
+      } else if (activeTab === 'settings') {
+        const setRes = await fetch('/api/admin/settings')
+        if (setRes.ok) setSettings(await setRes.json())
       }
     } catch {
       toast({ title: 'خطأ', description: 'فشل تحميل البيانات', variant: 'destructive' })
@@ -329,7 +338,10 @@ export default function AdminDashboard() {
 
   // ─── Request actions ───────────────────────────────────────
   const handleOpenApproveDialog = (req: any) => {
-    setSelectedRequest(req); setApproveMode('assign'); setSelectedNurseId(''); setApproveDialog(true)
+    setSelectedRequest(req); setApproveMode('assign'); setSelectedNurseId(''); setNurseDistances({}); setApproveDialog(true)
+    // Fetch distances for nearby nurses
+    const benefLoc = req.beneficiary?.location || req.address || req.location || ''
+    if (benefLoc) fetchNurseDistances(benefLoc)
   }
 
   const handleConfirmApprove = async () => {
@@ -459,6 +471,92 @@ export default function AdminDashboard() {
     try { const res = await fetch(`/api/admin/sub-admins/${id}`, { method: 'DELETE' }); if (res.ok) { toast({ title: 'تم حذف المسؤول الفرعي' }); fetchData() } } catch { toast({ title: 'خطأ', description: 'حدث خطأ', variant: 'destructive' }) }
   }
 
+  const handleBlockUnblockSubAdmin = async (id: string, currentStatus: string) => {
+    const newStatus = currentStatus === 'blocked' ? 'active' : 'blocked'
+    try {
+      const res = await fetch(`/api/admin/sub-admins/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: newStatus }) })
+      if (res.ok) { toast({ title: newStatus === 'blocked' ? 'تم حظر المسؤول الفرعي' : 'تم تفعيل المسؤول الفرعي' }); fetchData() }
+      else { const d = await res.json(); toast({ title: 'خطأ', description: d.error, variant: 'destructive' }) }
+    } catch { toast({ title: 'خطأ', description: 'حدث خطأ', variant: 'destructive' }) }
+  }
+
+  // ─── Reset All Data ──────────────────────────────────────────
+  const handleResetData = async () => {
+    if (resetConfirmText !== 'حذف') { toast({ title: 'خطأ', description: 'يرجى كتابة "حذف" للتأكيد', variant: 'destructive' }); return }
+    setResetLoading(true)
+    try {
+      const res = await fetch('/api/admin/reset-data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ adminId: (user as any)?.id, password: resetPassword }),
+      })
+      if (res.ok) {
+        toast({ title: 'تم حذف جميع البيانات بنجاح', description: 'تم الاحتفاظ بحساب المدير فقط' })
+        setResetDataDialog(false); setResetPassword(''); setResetConfirmText('')
+        fetchData()
+      } else {
+        const data = await res.json()
+        toast({ title: 'خطأ', description: data.error || 'فشل حذف البيانات', variant: 'destructive' })
+      }
+    } catch { toast({ title: 'خطأ', description: 'حدث خطأ في الاتصال', variant: 'destructive' }) }
+    finally { setResetLoading(false) }
+  }
+
+  // ─── Geocoding & Haversine for Nearby Nurses ────────────────
+  const geocodeCache = useCallback(async (address: string): Promise<{ lat: number; lng: number } | null> => {
+    if (!address || address === 'غير محدد') return null
+    try {
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&accept-language=ar&limit=1`)
+      const data = await res.json()
+      if (data && data.length > 0) return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) }
+    } catch { /* silently fail */ }
+    return null
+  }, [])
+
+  const haversine = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
+    const R = 6371 // km
+    const dLat = (lat2 - lat1) * Math.PI / 180
+    const dLon = (lon2 - lon1) * Math.PI / 180
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+  }
+
+  const fetchNurseDistances = useCallback(async (beneficiaryLocation: string) => {
+    if (!beneficiaryLocation || beneficiaryLocation === 'غير محدد') { setNurseDistances({}); return }
+    setGeocodingLoading(true)
+    try {
+      const benefCoords = await geocodeCache(beneficiaryLocation)
+      if (!benefCoords) { setNurseDistances({}); setGeocodingLoading(false); return }
+      const distances: Record<string, number> = {}
+      const approved = nurses.filter(n => n.status === 'approved')
+      // Geocode nurses in parallel (limit to 10 to avoid rate limiting)
+      const nursesToGeocode = approved.slice(0, 10)
+      const coords = await Promise.all(nursesToGeocode.map(async (n) => {
+        const loc = n.location || ''
+        const coords = await geocodeCache(loc)
+        return { id: n.id, coords }
+      }))
+      for (const c of coords) {
+        if (c.coords) {
+          distances[c.id] = haversine(benefCoords.lat, benefCoords.lng, c.coords.lat, c.coords.lng)
+        }
+      }
+      setNurseDistances(distances)
+    } catch { setNurseDistances({}) }
+    finally { setGeocodingLoading(false) }
+  }, [nurses, geocodeCache])
+
+  // Sorted nurses by proximity for the approve dialog
+  const sortedNursesByProximity = useMemo(() => {
+    const approved = nurses.filter(n => n.status === 'approved')
+    if (Object.keys(nurseDistances).length === 0) return approved
+    return [...approved].sort((a, b) => {
+      const distA = nurseDistances[a.id] ?? Infinity
+      const distB = nurseDistances[b.id] ?? Infinity
+      return distA - distB
+    })
+  }, [nurses, nurseDistances])
+
   // ─── Computed data ──────────────────────────────────────────
   const approvedNurses = nurses.filter(n => n.status === 'approved')
 
@@ -533,6 +631,7 @@ export default function AdminDashboard() {
     { key: 'ratings', label: 'التقييمات', icon: Star },
     { key: 'reports', label: 'التقارير', icon: BarChart3 },
     { key: 'activity', label: 'النشاط', icon: Activity },
+    { key: 'sub-admins', label: 'المدراء الفرعيين', icon: UserCog },
     { key: 'settings', label: 'الإعدادات', icon: Settings },
   ]
 
@@ -1380,7 +1479,89 @@ export default function AdminDashboard() {
                 )}
 
                 {/* ═══════════════════════════════════════════════════
-                    TAB 11: الإعدادات (Settings) — REDESIGNED
+                    TAB 11: المدراء الفرعيين (Sub-Admins)
+                ═══════════════════════════════════════════════════ */}
+                {activeTab === 'sub-admins' && (
+                  <div className="space-y-6">
+                    <div className="flex items-center justify-between flex-wrap gap-3">
+                      <div><h1 className="text-2xl font-bold bg-gradient-to-l from-amber-600 via-orange-600 to-rose-600 bg-clip-text text-transparent">المدراء الفرعيين</h1><p className="text-gray-500 text-sm mt-1">إدارة المسؤولين الفرعيين وصلاحياتهم</p></div>
+                      <Button className="bg-gradient-to-l from-amber-500 via-orange-500 to-rose-500 text-white shadow-lg shadow-amber-500/25 hover:scale-[1.02] active:scale-[0.98] transition-all" onClick={() => { setEditingSubAdmin(null); setSubAdminForm({ name: '', phone: '', password: '', permissions: { services: false, nurses: false, beneficiaries: false, requests: false, payments: false, coupons: false, reports: false, emergency: false, ratings: false } }); setSubAdminDialog(true) }}><Plus className="w-4 h-4 ml-2" />إضافة مدير فرعي</Button>
+                    </div>
+
+                    {/* Stats */}
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                      {[
+                        { label: 'إجمالي المدراء', value: subAdmins.length, gradient: 'from-amber-400 to-orange-500', icon: UsersRound },
+                        { label: 'نشطين', value: subAdmins.filter((s: any) => s.status !== 'blocked').length, gradient: 'from-emerald-400 to-teal-500', icon: CheckCircle },
+                        { label: 'محظورين', value: subAdmins.filter((s: any) => s.status === 'blocked').length, gradient: 'from-red-400 to-rose-500', icon: Ban },
+                      ].map((item, i) => (
+                        <motion.div key={i} variants={cardVariants} initial="hidden" animate="visible" transition={{ delay: i * 0.05, duration: 0.4 }}>
+                          <Card className="border-0 shadow-lg hover:-translate-y-1 hover:shadow-xl transition-all duration-300">
+                            <CardContent className="p-4">
+                              <div className="flex items-center gap-3 mb-3">
+                                <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${item.gradient} flex items-center justify-center shadow-md`}><item.icon className="w-5 h-5 text-white" /></div>
+                                <p className="text-xs text-gray-500 leading-tight">{item.label}</p>
+                              </div>
+                              <p className={`text-2xl font-bold bg-gradient-to-l ${item.gradient} bg-clip-text text-transparent`}>{item.value}</p>
+                            </CardContent>
+                          </Card>
+                        </motion.div>
+                      ))}
+                    </div>
+
+                    {/* Sub-Admins Cards */}
+                    {subAdmins.length > 0 ? (
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {subAdmins.map((sa: any, index: number) => (
+                          <motion.div key={sa.id} variants={cardVariants} initial="hidden" animate="visible" transition={{ delay: index * 0.05, duration: 0.4 }}>
+                            <Card className={`border-0 shadow-lg hover:-translate-y-1 hover:shadow-xl transition-all duration-300 overflow-hidden ${sa.status === 'blocked' ? 'opacity-60' : ''}`}>
+                              {/* Card Header */}
+                              <div className="bg-gradient-to-l from-amber-500 via-orange-500 to-rose-500 p-4 relative">
+                                <div className="absolute top-0 left-0 w-20 h-20 bg-white/10 rounded-full -translate-x-1/2 -translate-y-1/2" />
+                                <div className="flex items-center gap-3 relative">
+                                  <div className="w-12 h-12 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center shadow-md ring-2 ring-white/30"><UserCog className="w-6 h-6 text-white" /></div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="font-bold text-white truncate">{sa.name}</p>
+                                    <p className="text-amber-100 text-xs">{sa.phone}</p>
+                                  </div>
+                                  <Badge className={`${sa.status === 'blocked' ? 'bg-red-500/80 text-white' : 'bg-emerald-500/80 text-white'} border-0 text-xs`}>{sa.status === 'blocked' ? 'محظور' : 'نشط'}</Badge>
+                                </div>
+                              </div>
+                              <CardContent className="p-4 space-y-3">
+                                {/* Permission Badges */}
+                                <div>
+                                  <p className="text-xs text-gray-500 mb-2 font-medium">الصلاحيات</p>
+                                  <div className="flex gap-1.5 flex-wrap">
+                                    {Object.entries(sa.permissions || {}).filter(([, v]) => v).map(([k]) => {
+                                      const permLabels: Record<string, string> = { services: 'الخدمات', nurses: 'الممرضين', beneficiaries: 'المستفيدين', requests: 'الطلبات', payments: 'المدفوعات', coupons: 'الكوبونات', reports: 'التقارير', emergency: 'الطوارئ', ratings: 'التقييمات' }
+                                      return <Badge key={k} variant="outline" className="text-[10px] px-2 py-0.5 bg-amber-50/50 border-amber-200/50 text-amber-700">{permLabels[k] || k}</Badge>
+                                    })}
+                                    {Object.entries(sa.permissions || {}).filter(([, v]) => v).length === 0 && <span className="text-xs text-gray-400">لا توجد صلاحيات</span>}
+                                  </div>
+                                </div>
+                                {/* Actions */}
+                                <div className="flex gap-2 pt-2 border-t border-gray-100">
+                                  <Button size="sm" variant="outline" className="flex-1 hover:bg-amber-50" onClick={() => { setEditingSubAdmin(sa); setSubAdminForm({ name: sa.name, phone: sa.phone, password: '', permissions: { ...(sa.permissions || {}) } }); setSubAdminDialog(true) }}><Pencil className="w-3.5 h-3.5 ml-1" />تعديل</Button>
+                                  <Button size="sm" variant="outline" className={`flex-1 ${sa.status === 'blocked' ? 'text-emerald-500 hover:bg-emerald-50' : 'text-orange-500 hover:bg-orange-50'}`} onClick={() => handleBlockUnblockSubAdmin(sa.id, sa.status || 'active')}>{sa.status === 'blocked' ? <><Unlock className="w-3.5 h-3.5 ml-1" />تفعيل</> : <><Ban className="w-3.5 h-3.5 ml-1" />حظر</>}</Button>
+                                  <Button size="sm" variant="outline" className="text-red-500 hover:bg-red-50" onClick={() => handleDeleteSubAdmin(sa.id)}><Trash2 className="w-3.5 h-3.5" /></Button>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          </motion.div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-16">
+                        <UserCog className="w-16 h-16 text-gray-200 mx-auto mb-4" />
+                        <p className="text-gray-400 text-lg">لا يوجد مدراء فرعيين</p>
+                        <p className="text-gray-300 text-sm mt-1">اضغط على "إضافة مدير فرعي" لإضافة مدير جديد</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* ═══════════════════════════════════════════════════
+                    TAB 12: الإعدادات (Settings) — REDESIGNED
                 ═══════════════════════════════════════════════════ */}
                 {activeTab === 'settings' && settings && (
                   <div className="space-y-6">
@@ -1424,37 +1605,16 @@ export default function AdminDashboard() {
                       </CardContent>
                     </Card>
 
-                    {/* Sub-Admins Section */}
-                    <Card className="border-0 shadow-lg">
+                    {/* Dangerous Zone */}
+                    <Card className="border-2 border-red-200 shadow-lg bg-red-50/20">
                       <CardHeader className="pb-3">
-                        <div className="flex items-center justify-between">
-                          <CardTitle className="text-lg flex items-center gap-2"><UsersRound className="w-5 h-5 text-amber-500" />المسؤولون الفرعيون</CardTitle>
-                          <Button size="sm" className="bg-gradient-to-l from-amber-500 via-orange-500 to-rose-500 text-white shadow-lg shadow-amber-500/25" onClick={() => { setEditingSubAdmin(null); setSubAdminForm({ name: '', phone: '', password: '', permissions: { services: false, nurses: false, beneficiaries: false, requests: false, payments: false, coupons: false, reports: false } }); setSubAdminDialog(true) }}><Plus className="w-4 h-4 ml-1" />إضافة</Button>
-                        </div>
+                        <CardTitle className="text-lg flex items-center gap-2 text-red-600"><AlertTriangle className="w-5 h-5" />منطقة خطرة</CardTitle>
                       </CardHeader>
-                      <CardContent>
-                        {subAdmins.length > 0 ? (
-                          <div className="space-y-3">
-                            {subAdmins.map((sa: any) => (
-                              <div key={sa.id} className="flex items-center gap-3 p-3 bg-amber-50/30 rounded-xl">
-                                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-md"><UserCog className="w-5 h-5 text-white" /></div>
-                                <div className="flex-1 min-w-0">
-                                  <p className="font-medium">{sa.name}</p>
-                                  <p className="text-xs text-gray-500">{sa.phone}</p>
-                                  <div className="flex gap-1 mt-1 flex-wrap">
-                                    {Object.entries(sa.permissions || {}).filter(([, v]) => v).map(([k]) => (
-                                      <Badge key={k} variant="outline" className="text-[10px] px-1.5 py-0">{k === 'services' ? 'الخدمات' : k === 'nurses' ? 'الممرضين' : k === 'beneficiaries' ? 'المستفيدين' : k === 'requests' ? 'الطلبات' : k === 'payments' ? 'المدفوعات' : k === 'coupons' ? 'الكوبونات' : k === 'reports' ? 'التقارير' : k}</Badge>
-                                    ))}
-                                  </div>
-                                </div>
-                                <div className="flex gap-1">
-                                  <Button size="sm" variant="outline" onClick={() => { setEditingSubAdmin(sa); setSubAdminForm({ name: sa.name, phone: sa.phone, password: '', permissions: sa.permissions || {} }); setSubAdminDialog(true) }}><Pencil className="w-3.5 h-3.5" /></Button>
-                                  <Button size="sm" variant="outline" className="text-red-500 hover:bg-red-50" onClick={() => handleDeleteSubAdmin(sa.id)}><Trash2 className="w-3.5 h-3.5" /></Button>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        ) : <p className="text-gray-400 text-center py-4">لا يوجد مسؤولون فرعيون</p>}
+                      <CardContent className="space-y-4">
+                        <div className="p-4 bg-red-50/80 rounded-xl border border-red-200/50">
+                          <p className="text-sm text-red-700 font-medium mb-3">⚠️ تحذير: حذف جميع البيانات لا يمكن التراجع عنه. سيتم حذف جميع الممرضين، المستفيدين، الطلبات، الخدمات، المدفوعات، الكوبونات، التقييمات، سجل النشاط، طلبات الطوارئ، والمدراء الفرعيين. سيتم الاحتفاظ بحساب المدير فقط.</p>
+                          <Button className="bg-gradient-to-l from-red-500 to-red-600 text-white shadow-lg shadow-red-500/25 hover:shadow-red-500/40 hover:scale-[1.02] active:scale-[0.98] transition-all" onClick={() => { setResetPassword(''); setResetConfirmText(''); setResetDataDialog(true) }}><Trash2 className="w-4 h-4 ml-2" />حذف جميع البيانات</Button>
+                        </div>
                       </CardContent>
                     </Card>
                   </div>
@@ -1530,15 +1690,18 @@ export default function AdminDashboard() {
         </DialogContent>
       </Dialog>
 
-      {/* Approve Request Dialog — with TWO options */}
+      {/* Approve Request Dialog — with TWO options + Nearby Nurses */}
       <Dialog open={approveDialog} onOpenChange={setApproveDialog}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader><DialogTitle>قبول الطلب</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
             {selectedRequest && (
               <div className="p-3 bg-amber-50/50 rounded-xl">
                 <p className="font-medium">{selectedRequest.service?.name || 'خدمة'}</p>
                 <p className="text-sm text-gray-500">المستفيد: {selectedRequest.beneficiary?.name || 'غير محدد'}</p>
+                {(selectedRequest.beneficiary?.location || selectedRequest.address || selectedRequest.location) && (
+                  <p className="text-xs text-gray-400 mt-1 flex items-center gap-1"><MapPin className="w-3 h-3" />{selectedRequest.beneficiary?.location || selectedRequest.address || selectedRequest.location}</p>
+                )}
               </div>
             )}
 
@@ -1547,12 +1710,40 @@ export default function AdminDashboard() {
               <div className="flex items-center gap-2 mb-2"><UserPlus className="w-5 h-5 text-amber-500" /><p className="font-bold">تعيين ممرض</p></div>
               <p className="text-sm text-gray-500">اختيار ممرض معتمد وتعيينه للطلب</p>
               {approveMode === 'assign' && (
-                <div className="mt-3">
-                  <Label>اختر الممرض</Label>
-                  <Select value={selectedNurseId} onValueChange={setSelectedNurseId}>
-                    <SelectTrigger className="border-amber-200 mt-1"><SelectValue placeholder="اختر ممرض" /></SelectTrigger>
-                    <SelectContent>{approvedNurses.map((n: any) => <SelectItem key={n.id} value={n.id}>{n.firstName} {n.lastName}</SelectItem>)}</SelectContent>
-                  </Select>
+                <div className="mt-3 space-y-3">
+                  {/* Nearby Nurses Suggestions */}
+                  {geocodingLoading && (
+                    <div className="flex items-center gap-2 p-2 bg-blue-50/50 rounded-lg">
+                      <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
+                      <span className="text-sm text-blue-600">جارٍ البحث عن الممرضين القريبين...</span>
+                    </div>
+                  )}
+                  {!geocodingLoading && Object.keys(nurseDistances).length > 0 && (
+                    <div className="p-3 bg-gradient-to-l from-emerald-50/80 to-teal-50/50 rounded-xl border border-emerald-200/50">
+                      <p className="text-xs font-bold text-emerald-700 mb-2 flex items-center gap-1"><MapPin className="w-3.5 h-3.5" />مقترحات الممرضين القريبين</p>
+                      <div className="space-y-1.5 max-h-32 overflow-y-auto">
+                        {sortedNursesByProximity.filter((n: any) => nurseDistances[n.id] !== undefined).slice(0, 5).map((n: any) => (
+                          <button key={n.id} onClick={() => setSelectedNurseId(n.id)} className={`w-full flex items-center justify-between p-2 rounded-lg text-sm transition-all ${selectedNurseId === n.id ? 'bg-emerald-500 text-white' : 'bg-white/80 hover:bg-emerald-50'}`}>
+                            <span className="font-medium">{n.firstName} {n.lastName}</span>
+                            <Badge className={`${selectedNurseId === n.id ? 'bg-white/20 text-white' : 'bg-emerald-100 text-emerald-700'} border-0 text-xs`}>{nurseDistances[n.id]?.toFixed(1)} كم</Badge>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  <div>
+                    <Label>اختر الممرض</Label>
+                    <Select value={selectedNurseId} onValueChange={setSelectedNurseId}>
+                      <SelectTrigger className="border-amber-200 mt-1"><SelectValue placeholder="اختر ممرض" /></SelectTrigger>
+                      <SelectContent>
+                        {sortedNursesByProximity.map((n: any) => (
+                          <SelectItem key={n.id} value={n.id}>
+                            {n.firstName} {n.lastName}{nurseDistances[n.id] !== undefined ? ` (${nurseDistances[n.id].toFixed(1)} كم)` : ''}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
               )}
             </div>
@@ -1724,35 +1915,76 @@ export default function AdminDashboard() {
         </DialogContent>
       </Dialog>
 
-      {/* Sub-Admin Dialog */}
+      {/* Sub-Admin Dialog — Enhanced */}
       <Dialog open={subAdminDialog} onOpenChange={setSubAdminDialog}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader><DialogTitle>{editingSubAdmin ? 'تعديل مسؤول فرعي' : 'إضافة مسؤول فرعي'}</DialogTitle></DialogHeader>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader><DialogTitle>{editingSubAdmin ? 'تعديل مدير فرعي' : 'إضافة مدير فرعي'}</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
             <div><Label>الاسم *</Label><Input value={subAdminForm.name} onChange={e => setSubAdminForm({ ...subAdminForm, name: e.target.value })} className="border-amber-200 mt-1" /></div>
             <div><Label>الهاتف *</Label><Input value={subAdminForm.phone} onChange={e => setSubAdminForm({ ...subAdminForm, phone: e.target.value })} className="border-amber-200 mt-1" /></div>
             <div><Label>{editingSubAdmin ? 'كلمة المرور (اتركه فارغاً للإبقاء)' : 'كلمة المرور *'}</Label><Input type="password" value={subAdminForm.password} onChange={e => setSubAdminForm({ ...subAdminForm, password: e.target.value })} className="border-amber-200 mt-1" /></div>
             <div>
-              <Label className="mb-2 block">الصلاحيات</Label>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="flex items-center justify-between mb-2">
+                <Label>الصلاحيات</Label>
+                <Button variant="ghost" size="sm" className="text-xs text-amber-600 hover:text-amber-700 hover:bg-amber-50" onClick={() => {
+                  const allPerms = ['services', 'nurses', 'beneficiaries', 'requests', 'payments', 'coupons', 'reports', 'emergency', 'ratings'] as const
+                  const allChecked = allPerms.every(k => subAdminForm.permissions[k as keyof typeof subAdminForm.permissions])
+                  const newPerms = { ...subAdminForm.permissions }
+                  allPerms.forEach(k => { newPerms[k as keyof typeof subAdminForm.permissions] = !allChecked })
+                  setSubAdminForm({ ...subAdminForm, permissions: newPerms })
+                }}>
+                  {['services', 'nurses', 'beneficiaries', 'requests', 'payments', 'coupons', 'reports', 'emergency', 'ratings'].every(k => subAdminForm.permissions[k as keyof typeof subAdminForm.permissions]) ? 'إلغاء الكل' : 'تحديد الكل'}
+                </Button>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
                 {[
-                  { key: 'services', label: 'الخدمات' },
-                  { key: 'nurses', label: 'الممرضين' },
-                  { key: 'beneficiaries', label: 'المستفيدين' },
-                  { key: 'requests', label: 'الطلبات' },
-                  { key: 'payments', label: 'المدفوعات' },
-                  { key: 'coupons', label: 'الكوبونات' },
-                  { key: 'reports', label: 'التقارير' },
+                  { key: 'services', label: 'الخدمات', icon: Wrench },
+                  { key: 'nurses', label: 'الممرضين', icon: Users },
+                  { key: 'beneficiaries', label: 'المستفيدين', icon: Heart },
+                  { key: 'requests', label: 'الطلبات', icon: ClipboardList },
+                  { key: 'payments', label: 'المدفوعات', icon: CreditCard },
+                  { key: 'coupons', label: 'الكوبونات', icon: Tag },
+                  { key: 'reports', label: 'التقارير', icon: BarChart3 },
+                  { key: 'emergency', label: 'الطوارئ', icon: AlertTriangle },
+                  { key: 'ratings', label: 'التقييمات', icon: Star },
                 ].map(p => (
-                  <label key={p.key} className="flex items-center gap-2 p-2 rounded-lg hover:bg-amber-50/50 cursor-pointer">
-                    <input type="checkbox" checked={!!subAdminForm.permissions[p.key as keyof typeof subAdminForm.permissions]} onChange={e => setSubAdminForm({ ...subAdminForm, permissions: { ...subAdminForm.permissions, [p.key]: e.target.checked } })} className="accent-amber-500" />
-                    <span className="text-sm">{p.label}</span>
+                  <label key={p.key} className={`flex items-center gap-2 p-2.5 rounded-xl cursor-pointer transition-all border ${!!subAdminForm.permissions[p.key as keyof typeof subAdminForm.permissions] ? 'bg-amber-50/80 border-amber-300 shadow-sm' : 'bg-white border-gray-200 hover:bg-gray-50'}`}>
+                    <Switch checked={!!subAdminForm.permissions[p.key as keyof typeof subAdminForm.permissions]} onCheckedChange={checked => setSubAdminForm({ ...subAdminForm, permissions: { ...subAdminForm.permissions, [p.key]: checked } })} className="scale-75" />
+                    <div className="flex items-center gap-1.5">
+                      <p.icon className="w-3.5 h-3.5 text-amber-500" />
+                      <span className="text-xs font-medium">{p.label}</span>
+                    </div>
                   </label>
                 ))}
               </div>
             </div>
           </div>
           <DialogFooter><Button variant="outline" onClick={() => setSubAdminDialog(false)}>إلغاء</Button><Button className="bg-gradient-to-l from-amber-500 via-orange-500 to-rose-500 text-white" onClick={handleSaveSubAdmin}>{editingSubAdmin ? 'تحديث' : 'إضافة'}</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reset Data Confirmation Dialog */}
+      <Dialog open={resetDataDialog} onOpenChange={setResetDataDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader><DialogTitle className="text-red-600 flex items-center gap-2"><AlertTriangle className="w-5 h-5" />حذف جميع البيانات</DialogTitle></DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="p-4 bg-red-50/80 rounded-xl border border-red-200/50">
+              <p className="text-sm text-red-700 font-bold mb-2">⚠️ تحذير: هذا الإجراء لا يمكن التراجع عنه!</p>
+              <p className="text-xs text-red-600">سيتم حذف جميع البيانات نهائياً مع الاحتفاظ بحساب المدير فقط.</p>
+            </div>
+            <div><Label>كلمة مرور المدير *</Label><Input type="password" value={resetPassword} onChange={e => setResetPassword(e.target.value)} placeholder="أدخل كلمة المرور الحالية" className="border-red-200 mt-1 focus:border-red-400 focus:ring-red-400/20" /></div>
+            <div>
+              <Label>اكتب &quot;حذف&quot; للتأكيد *</Label>
+              <Input value={resetConfirmText} onChange={e => setResetConfirmText(e.target.value)} placeholder='اكتب "حذف" هنا' className="border-red-200 mt-1 focus:border-red-400 focus:ring-red-400/20" />
+              {resetConfirmText && resetConfirmText !== 'حذف' && <p className="text-xs text-red-500 mt-1">يرجى كتابة "حذف" بالضبط</p>}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setResetDataDialog(false); setResetPassword(''); setResetConfirmText('') }}>إلغاء</Button>
+            <Button variant="destructive" disabled={!resetPassword || resetConfirmText !== 'حذف' || resetLoading} onClick={handleResetData}>
+              {resetLoading ? <><Loader2 className="w-4 h-4 ml-2 animate-spin" />جارٍ الحذف...</> : 'حذف جميع البيانات'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
