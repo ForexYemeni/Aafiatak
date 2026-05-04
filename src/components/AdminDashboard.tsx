@@ -1526,26 +1526,26 @@ export default function AdminDashboard() {
                     </div>
 
                     {/* Finance Sub-Tabs - Professional Pill Design */}
-                    <div className="flex gap-1 p-1.5 bg-gradient-to-l from-gray-100 to-gray-50 rounded-2xl shadow-inner border border-gray-200/50">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-1 p-1.5 bg-gradient-to-l from-gray-100 to-gray-50 rounded-2xl shadow-inner border border-gray-200/50">
                       {[
                         { key: 'methods' as FinanceSubTab, label: 'طرق الدفع', icon: Wallet, count: payments.length, activeGradient: 'from-blue-500 to-indigo-600', activeShadow: 'shadow-blue-500/25' },
                         { key: 'transactions' as FinanceSubTab, label: 'المعاملات', icon: CreditCard, count: transactions.filter((t: any) => t.status === 'pending_confirmation' || t.status === 'pending').length, countColor: true, activeGradient: 'from-amber-500 to-orange-600', activeShadow: 'shadow-amber-500/25' },
-                        { key: 'settings' as FinanceSubTab, label: 'إعدادات الدفع', icon: Settings, activeGradient: 'from-emerald-500 to-teal-600', activeShadow: 'shadow-emerald-500/25' },
-                        { key: 'pricing' as FinanceSubTab, label: 'التسعير الديناميكي', icon: TrendingUp, activeGradient: 'from-violet-500 to-purple-600', activeShadow: 'shadow-violet-500/25' },
+                        { key: 'settings' as FinanceSubTab, label: 'الإعدادات', icon: Settings, activeGradient: 'from-emerald-500 to-teal-600', activeShadow: 'shadow-emerald-500/25' },
+                        { key: 'pricing' as FinanceSubTab, label: 'التسعير', icon: TrendingUp, activeGradient: 'from-violet-500 to-purple-600', activeShadow: 'shadow-violet-500/25' },
                       ].map(({ key, label, icon: Icon, count, countColor, activeGradient, activeShadow }) => (
                         <button
                           key={key}
                           onClick={() => setFinanceSubTab(key)}
-                          className={`relative flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-bold transition-all duration-300 flex-1 justify-center ${
+                          className={`relative flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs md:text-sm font-bold transition-all duration-300 justify-center whitespace-nowrap ${
                             financeSubTab === key
                               ? `bg-gradient-to-l ${activeGradient} text-white shadow-lg ${activeShadow} scale-[1.02]`
                               : 'text-gray-500 hover:text-gray-700 hover:bg-white/60'
                           }`}
                         >
-                          <Icon className="w-4 h-4" />
+                          <Icon className="w-3.5 h-3.5 md:w-4 md:h-4" />
                           {label}
                           {count !== undefined && count > 0 && (
-                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
                               financeSubTab === key
                                 ? 'bg-white/25 text-white'
                                 : countColor
