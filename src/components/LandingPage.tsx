@@ -47,15 +47,15 @@ const categoryIcons: Record<string, React.ElementType> = {
 }
 
 const categoryColors: Record<string, string> = {
-  'تمريض': 'from-violet-500 to-purple-600',
+  'تمريض': 'from-teal-500 to-emerald-600',
   'علاج طبيعي': 'from-emerald-500 to-teal-600',
-  'رعاية مسنين': 'from-rose-500 to-pink-600',
-  'أطفال': 'from-sky-500 to-cyan-600',
-  'حقن': 'from-amber-500 to-orange-600',
-  'فحوصات': 'from-indigo-500 to-blue-600',
-  'علاج نفسي': 'from-fuchsia-500 to-purple-600',
-  'رعاية منزلية': 'from-lime-500 to-green-600',
-  'أدوية': 'from-red-500 to-rose-600',
+  'رعاية مسنين': 'from-rose-400 to-pink-500',
+  'أطفال': 'from-sky-400 to-cyan-500',
+  'حقن': 'from-amber-400 to-orange-500',
+  'فحوصات': 'from-teal-400 to-cyan-600',
+  'علاج نفسي': 'from-violet-400 to-purple-500',
+  'رعاية منزلية': 'from-emerald-400 to-green-600',
+  'أدوية': 'from-red-400 to-rose-500',
 }
 
 // ─── Animated Counter ───
@@ -140,6 +140,65 @@ function PasswordInput({
         {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
       </button>
     </div>
+  )
+}
+
+// ─── Heartbeat Pulse SVG Animation ───
+function HeartbeatPulse() {
+  return (
+    <div className="absolute bottom-8 left-0 right-0 flex justify-center pointer-events-none opacity-20">
+      <svg width="600" height="80" viewBox="0 0 600 80" className="text-teal-600 max-w-full">
+        <motion.path
+          d="M0 40 L80 40 L100 40 L120 10 L140 70 L160 20 L180 60 L200 40 L280 40 L300 40 L320 10 L340 70 L360 20 L380 60 L400 40 L480 40 L500 40 L520 10 L540 70 L560 20 L580 60 L600 40"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          initial={{ pathLength: 0, opacity: 0 }}
+          animate={{ pathLength: 1, opacity: 1 }}
+          transition={{ duration: 2, ease: 'easeInOut' }}
+        />
+      </svg>
+    </div>
+  )
+}
+
+// ─── Floating Medical Icons ───
+function FloatingIcons() {
+  const icons = [
+    { Icon: Stethoscope, x: '15%', y: '20%', delay: 0, size: 32 },
+    { Icon: Heart, x: '75%', y: '15%', delay: 0.5, size: 28 },
+    { Icon: Shield, x: '85%', y: '55%', delay: 1, size: 26 },
+    { Icon: Activity, x: '25%', y: '70%', delay: 1.5, size: 30 },
+    { Icon: Heart, x: '60%', y: '75%', delay: 0.8, size: 24 },
+    { Icon: Stethoscope, x: '50%', y: '30%', delay: 1.2, size: 22 },
+  ]
+
+  return (
+    <>
+      {icons.map((item, i) => (
+        <motion.div
+          key={i}
+          className="absolute"
+          style={{ left: item.x, top: item.y }}
+          animate={{
+            y: [0, -15, 0],
+            rotate: [0, 5, -5, 0],
+          }}
+          transition={{
+            duration: 4 + i * 0.5,
+            repeat: Infinity,
+            ease: 'easeInOut',
+            delay: item.delay,
+          }}
+        >
+          <div className="rounded-2xl bg-teal-50/80 backdrop-blur-sm border border-teal-100 p-3 shadow-lg shadow-teal-500/5">
+            <item.Icon className="text-teal-500" style={{ width: item.size, height: item.size }} />
+          </div>
+        </motion.div>
+      ))}
+    </>
   )
 }
 
@@ -423,17 +482,17 @@ export default function LandingPage() {
   const roleConfig = {
     beneficiary: {
       icon: Heart, label: 'مستفيد',
-      gradient: 'from-rose-500 to-pink-600',
-      btnGradient: 'from-rose-500 to-pink-600',
-      textAccent: 'text-rose-600',
-      bgLight: 'bg-rose-50',
+      gradient: 'from-teal-500 to-emerald-600',
+      btnGradient: 'from-teal-500 to-emerald-600',
+      textAccent: 'text-teal-600',
+      bgLight: 'bg-teal-50',
     },
     nurse: {
       icon: Stethoscope, label: 'ممرض',
-      gradient: 'from-violet-500 to-purple-600',
-      btnGradient: 'from-violet-500 to-purple-600',
-      textAccent: 'text-violet-600',
-      bgLight: 'bg-violet-50',
+      gradient: 'from-emerald-500 to-teal-600',
+      btnGradient: 'from-emerald-500 to-teal-600',
+      textAccent: 'text-emerald-600',
+      bgLight: 'bg-emerald-50',
     },
     admin: {
       icon: Shield, label: 'مدير',
@@ -452,19 +511,6 @@ export default function LandingPage() {
   ]
 
   // ═══════════════════════════════════════════
-  //  PARTICLE DATA (hero background)
-  // ═══════════════════════════════════════════
-
-  const particles = Array.from({ length: 20 }).map((_, i) => ({
-    id: i,
-    size: Math.random() * 4 + 1,
-    x: Math.random() * 100,
-    y: Math.random() * 100,
-    duration: Math.random() * 4 + 3,
-    delay: Math.random() * 3,
-  }))
-
-  // ═══════════════════════════════════════════
   //  RENDER
   // ═══════════════════════════════════════════
 
@@ -477,18 +523,18 @@ export default function LandingPage() {
       <nav
         className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${
           scrolled
-            ? 'bg-white/95 backdrop-blur-2xl shadow-lg shadow-black/[0.04] border-b border-slate-100/80'
-            : 'bg-transparent'
+            ? 'bg-white/95 backdrop-blur-xl shadow-md shadow-slate-200/50 border-b border-slate-100'
+            : 'bg-white/70 backdrop-blur-md'
         }`}
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16 md:h-20">
             {/* Logo */}
             <div className="flex items-center gap-3 cursor-pointer" onClick={() => scrollTo('hero')}>
-              <div className={`relative p-1 rounded-xl transition-all duration-300 ${scrolled ? 'bg-white shadow-md' : ''}`}>
+              <div className="relative p-1 rounded-xl">
                 <Image src="/logo.png" alt="عافيتك" width={36} height={36} className="rounded-lg" priority />
               </div>
-              <span className={`text-xl font-bold transition-colors duration-300 ${scrolled ? 'text-slate-900' : 'text-white'}`}>
+              <span className="text-xl font-bold text-slate-900">
                 عافيتك
               </span>
             </div>
@@ -499,9 +545,7 @@ export default function LandingPage() {
                 <button
                   key={item.id}
                   onClick={() => scrollTo(item.id)}
-                  className={`relative px-4 py-2 text-sm font-medium transition-colors duration-300 rounded-lg hover:bg-white/10 ${
-                    scrolled ? 'text-slate-600 hover:text-rose-500 hover:bg-slate-50' : 'text-white/80 hover:text-white'
-                  }`}
+                  className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-teal-600 transition-colors duration-200 rounded-lg hover:bg-teal-50/50"
                 >
                   {item.label}
                 </button>
@@ -512,18 +556,14 @@ export default function LandingPage() {
             <div className="hidden md:flex items-center gap-3">
               <Button
                 variant="ghost"
-                className={`text-sm font-medium transition-all duration-300 ${
-                  scrolled
-                    ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-                    : 'text-white/90 hover:text-white hover:bg-white/10'
-                }`}
+                className="text-sm font-medium text-slate-600 hover:text-teal-600 hover:bg-teal-50/50"
                 onClick={() => openAuth('login', 'beneficiary')}
               >
                 تسجيل الدخول
               </Button>
               <Button
                 size="sm"
-                className="bg-gradient-to-l from-rose-500 to-purple-600 text-white hover:shadow-lg hover:shadow-purple-500/25 transition-all duration-300 hover:scale-105 border-0"
+                className="bg-gradient-to-l from-teal-500 to-emerald-600 text-white hover:shadow-lg hover:shadow-teal-500/25 transition-all duration-300 hover:scale-105 border-0"
                 onClick={() => openAuth('register', 'beneficiary')}
               >
                 <Sparkles className="w-4 h-4 ml-1.5" />
@@ -533,12 +573,12 @@ export default function LandingPage() {
 
             {/* Mobile Menu Toggle */}
             <button
-              className="md:hidden p-2 rounded-lg hover:bg-white/10 transition-colors"
+              className="md:hidden p-2 rounded-lg hover:bg-slate-100 transition-colors"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             >
               {mobileMenuOpen
-                ? <X className={`w-6 h-6 ${scrolled ? 'text-slate-900' : 'text-white'}`} />
-                : <Menu className={`w-6 h-6 ${scrolled ? 'text-slate-900' : 'text-white'}`} />}
+                ? <X className="w-6 h-6 text-slate-900" />
+                : <Menu className="w-6 h-6 text-slate-900" />}
             </button>
           </div>
         </div>
@@ -551,14 +591,14 @@ export default function LandingPage() {
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
               transition={{ duration: 0.3, ease: 'easeInOut' }}
-              className="md:hidden bg-white/95 backdrop-blur-2xl border-t border-slate-100 shadow-2xl overflow-hidden"
+              className="md:hidden bg-white/95 backdrop-blur-xl border-t border-slate-100 shadow-xl overflow-hidden"
             >
               <div className="p-4 space-y-1">
                 {navLinks.map((item) => (
                   <button
                     key={item.id}
                     onClick={() => scrollTo(item.id)}
-                    className="block w-full text-right px-4 py-3 rounded-xl text-slate-700 hover:bg-rose-50 hover:text-rose-600 font-medium transition-colors duration-200"
+                    className="block w-full text-right px-4 py-3 rounded-xl text-slate-700 hover:bg-teal-50 hover:text-teal-600 font-medium transition-colors duration-200"
                   >
                     {item.label}
                   </button>
@@ -572,7 +612,7 @@ export default function LandingPage() {
                     تسجيل الدخول
                   </Button>
                   <Button
-                    className="w-full justify-center h-11 rounded-xl bg-gradient-to-l from-rose-500 to-purple-600 text-white hover:opacity-90 border-0"
+                    className="w-full justify-center h-11 rounded-xl bg-gradient-to-l from-teal-500 to-emerald-600 text-white hover:opacity-90 border-0"
                     onClick={() => openAuth('register', 'beneficiary')}
                   >
                     <Sparkles className="w-4 h-4 ml-1.5" />
@@ -590,60 +630,25 @@ export default function LandingPage() {
       {/* ═══════════════════════════════════════ */}
       <section
         id="hero"
-        className="relative overflow-hidden bg-gradient-to-br from-slate-950 via-purple-900/90 to-slate-950 text-white min-h-screen flex items-center"
+        className="relative overflow-hidden bg-gradient-to-bl from-teal-50 via-white to-emerald-50/30 min-h-screen flex items-center"
       >
-        {/* Animated Background */}
+        {/* Subtle background decorations */}
         <div className="absolute inset-0">
-          {/* Radial gradients */}
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_20%_40%,rgba(244,63,94,0.12),transparent)]" />
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_80%_60%,rgba(139,92,246,0.12),transparent)]" />
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(168,85,247,0.08),transparent_60%)]" />
+          {/* Soft radial gradients */}
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_60%_50%_at_80%_30%,rgba(13,148,136,0.06),transparent)]" />
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_50%_50%_at_20%_70%,rgba(16,185,129,0.05),transparent)]" />
 
-          {/* Large blur orbs */}
-          <div className="absolute top-10 right-[10%] w-[500px] h-[500px] bg-purple-500/[0.07] rounded-full blur-[100px]" />
-          <div className="absolute bottom-10 left-[10%] w-[400px] h-[400px] bg-rose-500/[0.07] rounded-full blur-[100px]" />
-          <div className="absolute top-[40%] left-[40%] w-[300px] h-[300px] bg-pink-500/[0.05] rounded-full blur-[80px]" />
-
-          {/* Grid pattern */}
-          <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:64px_64px]" />
-
-          {/* Animated particles */}
-          {particles.map((p) => (
-            <motion.div
-              key={p.id}
-              className="absolute rounded-full bg-white/[0.15]"
-              style={{
-                width: p.size,
-                height: p.size,
-                top: `${p.y}%`,
-                left: `${p.x}%`,
-              }}
-              animate={{
-                y: [0, -40, 0],
-                opacity: [0.2, 0.6, 0.2],
-                scale: [1, 1.2, 1],
-              }}
-              transition={{
-                duration: p.duration,
-                repeat: Infinity,
-                ease: 'easeInOut',
-                delay: p.delay,
-              }}
-            />
-          ))}
-
-          {/* Shimmer lines */}
-          <motion.div
-            className="absolute top-[20%] left-0 right-0 h-px bg-gradient-to-l from-transparent via-white/[0.06] to-transparent"
-            animate={{ opacity: [0.3, 0.8, 0.3] }}
-            transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
-          />
-          <motion.div
-            className="absolute top-[60%] left-0 right-0 h-px bg-gradient-to-l from-transparent via-white/[0.04] to-transparent"
-            animate={{ opacity: [0.5, 0.2, 0.5] }}
-            transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut', delay: 1 }}
-          />
+          {/* Dot pattern */}
+          <div className="absolute inset-0 bg-[radial-gradient(circle,rgba(13,148,136,0.04)_1px,transparent_1px)] bg-[size:32px_32px]" />
         </div>
+
+        {/* Floating medical icons */}
+        <div className="absolute inset-0 hidden lg:block">
+          <FloatingIcons />
+        </div>
+
+        {/* Heartbeat pulse line */}
+        <HeartbeatPulse />
 
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-32 md:py-40 w-full">
           <div className="flex flex-col lg:flex-row items-center gap-12 lg:gap-20">
@@ -659,16 +664,16 @@ export default function LandingPage() {
                   initial={{ opacity: 0, scale: 0.9 }}
                   animate={{ opacity: 1, scale: 1 }}
                   transition={{ delay: 0.2, duration: 0.5 }}
-                  className="inline-flex items-center gap-2 bg-white/[0.08] backdrop-blur-md rounded-full px-5 py-2.5 mb-8 border border-white/[0.08]"
+                  className="inline-flex items-center gap-2 bg-teal-50 border border-teal-100 rounded-full px-5 py-2.5 mb-8"
                 >
-                  <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                  <Sparkles className="w-4 h-4 text-rose-400" />
-                  <span className="text-sm font-medium text-white/90">رعاية صحية منزلية موثوقة</span>
+                  <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  <Stethoscope className="w-4 h-4 text-teal-500" />
+                  <span className="text-sm font-medium text-teal-700">رعاية صحية منزلية موثوقة</span>
                 </motion.div>
 
                 {/* Title */}
                 <h1 className="text-5xl sm:text-6xl lg:text-8xl font-bold mb-6 leading-tight">
-                  <span className="bg-gradient-to-l from-rose-400 via-pink-400 to-purple-400 bg-clip-text text-transparent">
+                  <span className="bg-gradient-to-l from-teal-600 via-emerald-500 to-teal-700 bg-clip-text text-transparent">
                     عافيتك
                   </span>
                 </h1>
@@ -676,7 +681,7 @@ export default function LandingPage() {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.4, duration: 0.6 }}
-                  className="text-2xl sm:text-3xl lg:text-4xl font-semibold text-white/90 mb-4"
+                  className="text-2xl sm:text-3xl lg:text-4xl font-semibold text-slate-800 mb-4"
                 >
                   رعاية صحية في منزلك
                 </motion.p>
@@ -684,7 +689,7 @@ export default function LandingPage() {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.5, duration: 0.6 }}
-                  className="text-base sm:text-lg text-white/50 mb-10 max-w-xl mx-auto lg:mx-0 leading-relaxed"
+                  className="text-base sm:text-lg text-slate-500 mb-10 max-w-xl mx-auto lg:mx-0 leading-relaxed"
                 >
                   منصة متكاملة لربط المستفيدين بممرضين مؤهلين لتقديم خدمات صحية منزلية بأعلى معايير الجودة والسلامة
                 </motion.p>
@@ -698,66 +703,50 @@ export default function LandingPage() {
                 >
                   <Button
                     size="lg"
-                    className="bg-gradient-to-l from-rose-500 to-purple-600 text-white hover:opacity-90 text-lg px-8 h-14 shadow-2xl shadow-purple-500/30 group rounded-xl border-0"
+                    className="bg-gradient-to-l from-teal-500 to-emerald-600 text-white hover:opacity-90 text-lg px-8 h-14 shadow-xl shadow-teal-500/20 group rounded-xl border-0"
                     onClick={() => openAuth('register', 'beneficiary')}
                   >
                     <Heart className="w-5 h-5 ml-2 group-hover:scale-110 transition-transform" />
-                    ابدأ الآن
+                    سجّل الآن
                   </Button>
                   <Button
                     size="lg"
                     variant="outline"
-                    className="border-white/20 text-white hover:bg-white/10 text-lg px-8 h-14 backdrop-blur-sm rounded-xl"
+                    className="border-teal-200 text-teal-700 hover:bg-teal-50 hover:text-teal-800 text-lg px-8 h-14 rounded-xl"
                     onClick={() => scrollTo('services')}
                   >
                     <Play className="w-5 h-5 ml-2" />
                     اكتشف خدماتنا
                   </Button>
                 </motion.div>
-
-                {/* Quick Stats */}
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.8, duration: 0.6 }}
-                  className="flex items-center gap-6 sm:gap-10 mt-12 justify-center lg:justify-start"
-                >
-                  {[
-                    { value: '٥٠٠+', label: 'ممرض معتمد', icon: Stethoscope },
-                    { value: '١٠٠٠+', label: 'مستفيد', icon: Users },
-                    { value: '٤.٩', label: 'تقييم', icon: Star },
-                  ].map((stat, i) => (
-                    <div key={i} className="text-center group">
-                      <stat.icon className="w-4 h-4 mx-auto mb-2 text-white/30 group-hover:text-rose-400 transition-colors" />
-                      <div className="text-xl sm:text-2xl font-bold text-white">{stat.value}</div>
-                      <div className="text-xs text-white/40 mt-1">{stat.label}</div>
-                    </div>
-                  ))}
-                </motion.div>
               </motion.div>
             </div>
 
-            {/* Logo Display */}
+            {/* Decorative Illustration Area */}
             <motion.div
-              initial={{ opacity: 0, scale: 0.8, rotateY: 30 }}
-              animate={{ opacity: 1, scale: 1, rotateY: 0 }}
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 1, delay: 0.3, ease: 'easeOut' }}
-              className="flex-shrink-0"
+              className="flex-shrink-0 hidden lg:block"
             >
               <div className="relative">
-                {/* Glow rings */}
-                <div className="absolute inset-0 bg-gradient-to-br from-rose-500/30 to-purple-500/30 rounded-3xl blur-3xl scale-150" />
+                {/* Glow */}
+                <div className="absolute inset-0 bg-gradient-to-br from-teal-200/30 to-emerald-200/30 rounded-3xl blur-3xl scale-150" />
+
+                {/* Rotating border */}
                 <motion.div
                   animate={{ rotate: 360 }}
                   transition={{ duration: 30, repeat: Infinity, ease: 'linear' }}
-                  className="absolute -inset-4 rounded-3xl border border-white/[0.06]"
+                  className="absolute -inset-4 rounded-3xl border border-teal-200/30"
                 />
                 <motion.div
                   animate={{ rotate: -360 }}
                   transition={{ duration: 40, repeat: Infinity, ease: 'linear' }}
-                  className="absolute -inset-8 rounded-3xl border border-dashed border-white/[0.04]"
+                  className="absolute -inset-8 rounded-3xl border border-dashed border-teal-200/20"
                 />
-                <div className="relative p-3 rounded-3xl bg-white/[0.05] backdrop-blur-2xl border border-white/[0.1] shadow-2xl">
+
+                {/* Main illustration card */}
+                <div className="relative p-3 rounded-3xl bg-white/80 backdrop-blur-xl border border-teal-100 shadow-2xl shadow-teal-500/5">
                   <Image
                     src="/logo.png"
                     alt="عافيتك - رعاية صحية منزلية"
@@ -767,35 +756,82 @@ export default function LandingPage() {
                     priority
                   />
                 </div>
+
+                {/* Floating mini cards */}
+                <motion.div
+                  className="absolute -top-6 -right-6 bg-white rounded-xl shadow-lg shadow-teal-500/10 border border-teal-50 p-3 flex items-center gap-2"
+                  animate={{ y: [0, -8, 0] }}
+                  transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+                >
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-teal-400 to-emerald-500 flex items-center justify-center">
+                    <Shield className="w-4 h-4 text-white" />
+                  </div>
+                  <span className="text-xs font-semibold text-slate-700">معتمدون</span>
+                </motion.div>
+
+                <motion.div
+                  className="absolute -bottom-4 -left-6 bg-white rounded-xl shadow-lg shadow-teal-500/10 border border-teal-50 p-3 flex items-center gap-2"
+                  animate={{ y: [0, 8, 0] }}
+                  transition={{ duration: 3.5, repeat: Infinity, ease: 'easeInOut', delay: 0.5 }}
+                >
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center">
+                    <Star className="w-4 h-4 text-white" />
+                  </div>
+                  <span className="text-xs font-semibold text-slate-700">4.9 تقييم</span>
+                </motion.div>
               </div>
             </motion.div>
           </div>
         </div>
 
-        {/* Wave divider */}
+        {/* Stats Bar */}
         <div className="absolute bottom-0 left-0 right-0">
-          <svg viewBox="0 0 1440 120" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full" preserveAspectRatio="none">
-            <path d="M0 120L48 110C96 100 192 80 288 65C384 50 480 40 576 42C672 44 768 58 864 67C960 76 1056 80 1152 77C1248 74 1344 64 1392 59L1440 54V120H0Z" fill="white" />
-          </svg>
+          <div className="bg-white/80 backdrop-blur-lg border-t border-teal-100/50">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5">
+              <div className="flex items-center justify-center gap-8 sm:gap-16">
+                {[
+                  { value: '٥٠٠+', label: 'ممرض معتمد', icon: Stethoscope, color: 'text-teal-500' },
+                  { value: '١٠٠٠+', label: 'مستفيد', icon: Users, color: 'text-emerald-500' },
+                  { value: '٤.٩', label: 'تقييم', icon: Star, color: 'text-amber-500' },
+                ].map((stat, i) => (
+                  <motion.div
+                    key={i}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 1 + i * 0.15, duration: 0.5 }}
+                    className="flex items-center gap-3 group"
+                  >
+                    <div className={`w-10 h-10 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center group-hover:bg-teal-50 group-hover:border-teal-100 transition-colors`}>
+                      <stat.icon className={`w-5 h-5 ${stat.color}`} />
+                    </div>
+                    <div>
+                      <div className="text-lg sm:text-xl font-bold text-slate-900">{stat.value}</div>
+                      <div className="text-xs text-slate-400">{stat.label}</div>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
       {/* ═══════════════════════════════════════ */}
       {/* ─── SERVICES SECTION ─── */}
       {/* ═══════════════════════════════════════ */}
-      <section id="services" className="py-20 md:py-28 bg-white relative">
+      <section id="services" className="py-20 md:py-28 bg-slate-50/50 relative">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           {/* Section Header */}
           <FadeIn>
             <div className="text-center mb-14">
-              <Badge variant="secondary" className="mb-4 px-4 py-1.5 text-sm bg-purple-50 text-purple-700 border-purple-100 rounded-full">
+              <Badge variant="secondary" className="mb-4 px-4 py-1.5 text-sm bg-teal-50 text-teal-700 border-teal-100 rounded-full">
                 <Stethoscope className="w-3.5 h-3.5 ml-1.5" />
                 خدماتنا
               </Badge>
-              <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-4">
-                خدمات <span className="bg-gradient-to-l from-rose-500 to-purple-600 bg-clip-text text-transparent">صحية متكاملة</span>
+              <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-4 text-slate-900">
+                خدمات <span className="bg-gradient-to-l from-teal-600 to-emerald-500 bg-clip-text text-transparent">صحية متكاملة</span>
               </h2>
-              <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
+              <p className="text-slate-500 text-lg max-w-2xl mx-auto">
                 نقدم مجموعة واسعة من الخدمات الصحية المنزلية على يد ممرضين مؤهلين ومعتمدين
               </p>
             </div>
@@ -810,8 +846,8 @@ export default function LandingPage() {
                   onClick={() => setActiveCategory(cat)}
                   className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all duration-300 ${
                     activeCategory === cat
-                      ? 'bg-gradient-to-l from-rose-500 to-purple-600 text-white shadow-lg shadow-purple-500/20 scale-105'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:scale-105'
+                      ? 'bg-gradient-to-l from-teal-500 to-emerald-600 text-white shadow-lg shadow-teal-500/20 scale-105'
+                      : 'bg-white text-slate-600 hover:bg-teal-50 hover:text-teal-600 border border-slate-200 hover:border-teal-200'
                   }`}
                 >
                   {cat}
@@ -824,22 +860,22 @@ export default function LandingPage() {
           {servicesLoading ? (
             <div className="flex items-center justify-center py-20">
               <div className="relative">
-                <Loader2 className="w-10 h-10 animate-spin text-purple-500" />
-                <div className="absolute inset-0 blur-xl bg-purple-500/30 rounded-full" />
+                <Loader2 className="w-10 h-10 animate-spin text-teal-500" />
+                <div className="absolute inset-0 blur-xl bg-teal-500/20 rounded-full" />
               </div>
             </div>
           ) : services.length === 0 ? (
             <div className="text-center py-16">
               <Stethoscope className="w-16 h-16 mx-auto mb-4 text-slate-200" />
-              <p className="text-lg text-muted-foreground">لا توجد خدمات متاحة حالياً</p>
-              <p className="text-sm text-muted-foreground/70 mt-2">سيتم إضافة خدمات جديدة قريباً</p>
+              <p className="text-lg text-slate-400">لا توجد خدمات متاحة حالياً</p>
+              <p className="text-sm text-slate-300 mt-2">سيتم إضافة خدمات جديدة قريباً</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               <AnimatePresence mode="popLayout">
                 {filteredServices.map((service, i) => {
                   const Icon = categoryIcons[service.category] || Stethoscope
-                  const color = categoryColors[service.category] || 'from-slate-500 to-slate-600'
+                  const color = categoryColors[service.category] || 'from-teal-500 to-emerald-600'
                   return (
                     <motion.div
                       key={service.id}
@@ -849,11 +885,11 @@ export default function LandingPage() {
                       exit={{ opacity: 0, scale: 0.9 }}
                       transition={{ duration: 0.4, delay: i * 0.05 }}
                     >
-                      <Card className="group hover:shadow-2xl hover:shadow-purple-500/[0.06] transition-all duration-500 border border-slate-100 hover:border-purple-200/60 h-full overflow-hidden hover:-translate-y-1">
+                      <Card className="group hover:shadow-xl hover:shadow-teal-500/[0.06] transition-all duration-500 border border-slate-200/80 hover:border-teal-200 h-full overflow-hidden hover:-translate-y-1 bg-white border-t-2 border-t-teal-400">
                         <CardContent className="p-6">
                           {/* Icon & Category */}
                           <div className="flex items-start justify-between mb-4">
-                            <div className={`inline-flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br ${color} shadow-lg group-hover:scale-110 transition-transform duration-300`}>
+                            <div className={`inline-flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br ${color} shadow-md group-hover:scale-110 transition-transform duration-300`}>
                               <Icon className="w-6 h-6 text-white" />
                             </div>
                             <Badge variant="secondary" className="text-xs bg-slate-50 text-slate-500 border-0">
@@ -862,24 +898,24 @@ export default function LandingPage() {
                           </div>
 
                           {/* Name & Description */}
-                          <h3 className="text-lg font-bold mb-2 group-hover:text-purple-700 transition-colors">
+                          <h3 className="text-lg font-bold mb-2 text-slate-800 group-hover:text-teal-700 transition-colors">
                             {service.name}
                           </h3>
-                          <p className="text-sm text-muted-foreground leading-relaxed mb-4 line-clamp-2">
+                          <p className="text-sm text-slate-500 leading-relaxed mb-4 line-clamp-2">
                             {service.description}
                           </p>
 
                           {/* Price & CTA */}
                           <div className="flex items-center justify-between pt-4 border-t border-slate-100">
                             <div>
-                              <span className="text-[11px] text-muted-foreground/60">السعر</span>
-                              <div className="text-xl font-bold bg-gradient-to-l from-rose-500 to-purple-600 bg-clip-text text-transparent">
+                              <span className="text-[11px] text-slate-400">السعر</span>
+                              <div className="text-xl font-bold text-teal-600">
                                 {service.price.toLocaleString('ar-YE')} ر.ي
                               </div>
                             </div>
                             <Button
                               size="sm"
-                              className="bg-gradient-to-l from-rose-500 to-purple-600 text-white hover:opacity-90 shadow-md hover:shadow-lg transition-all duration-300 rounded-lg border-0"
+                              className="bg-gradient-to-l from-teal-500 to-emerald-600 text-white hover:opacity-90 shadow-md hover:shadow-lg transition-all duration-300 rounded-lg border-0"
                               onClick={() => openAuth('register', 'beneficiary')}
                             >
                               اطلب الآن
@@ -900,28 +936,27 @@ export default function LandingPage() {
       {/* ═══════════════════════════════════════ */}
       {/* ─── HOW IT WORKS ─── */}
       {/* ═══════════════════════════════════════ */}
-      <section id="how-it-works" className="py-20 md:py-28 bg-gradient-to-b from-slate-50 to-white relative overflow-hidden">
-        <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-l from-transparent via-purple-200 to-transparent" />
+      <section id="how-it-works" className="py-20 md:py-28 bg-white relative overflow-hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <FadeIn>
             <div className="text-center mb-16">
-              <Badge variant="secondary" className="mb-4 px-4 py-1.5 text-sm bg-rose-50 text-rose-700 border-rose-100 rounded-full">
+              <Badge variant="secondary" className="mb-4 px-4 py-1.5 text-sm bg-emerald-50 text-emerald-700 border-emerald-100 rounded-full">
                 <Play className="w-3.5 h-3.5 ml-1.5" />
                 كيف يعمل
               </Badge>
-              <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-4">
-                ثلاث خطوات <span className="bg-gradient-to-l from-rose-500 to-purple-600 bg-clip-text text-transparent">بسيطة</span>
+              <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-4 text-slate-900">
+                ثلاث خطوات <span className="bg-gradient-to-l from-teal-600 to-emerald-500 bg-clip-text text-transparent">بسيطة</span>
               </h2>
-              <p className="text-muted-foreground text-lg">احصل على الرعاية الصحية المنزلية بسهولة وسرعة</p>
+              <p className="text-slate-500 text-lg">احصل على الرعاية الصحية المنزلية بسهولة وسرعة</p>
             </div>
           </FadeIn>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 md:gap-12 relative">
-            {/* Connection Line (Desktop) */}
-            <div className="hidden md:block absolute top-[52px] left-[16%] right-[16%] h-[2px]">
-              <div className="w-full h-full bg-gradient-to-l from-rose-300 via-purple-300 to-violet-300 rounded-full" />
+            {/* Dotted Connection Line (Desktop) */}
+            <div className="hidden md:block absolute top-[52px] left-[16%] right-[16%]">
+              <div className="w-full border-t-2 border-dashed border-teal-200" />
               <motion.div
-                className="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-purple-500 rounded-full shadow-lg shadow-purple-500/40"
+                className="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-teal-500 rounded-full shadow-lg shadow-teal-500/30"
                 animate={{ left: ['0%', '100%'] }}
                 transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut', repeatDelay: 1 }}
               />
@@ -933,41 +968,33 @@ export default function LandingPage() {
                 title: 'سجّل حسابك',
                 desc: 'أنشئ حسابك كمستفيد أو ممرض بخطوات بسيطة وسريعة',
                 icon: UserPlus,
-                color: 'from-rose-500 to-pink-600',
-                bgColor: 'bg-rose-50',
-                iconColor: 'text-rose-600',
               },
               {
                 step: '٢',
-                title: 'اطلب الخدمة',
+                title: 'اختر الخدمة',
                 desc: 'اختر الخدمة الصحية المناسبة وحدد العنوان وطريقة الدفع',
                 icon: MapPin,
-                color: 'from-violet-500 to-purple-600',
-                bgColor: 'bg-violet-50',
-                iconColor: 'text-violet-600',
               },
               {
                 step: '٣',
                 title: 'استقبل الرعاية',
                 desc: 'يصلك ممرض مؤهل لتنفيذ الخدمة في منزلك بأعلى جودة',
                 icon: Heart,
-                color: 'from-purple-500 to-indigo-600',
-                bgColor: 'bg-purple-50',
-                iconColor: 'text-purple-600',
               },
             ].map((item, i) => (
               <FadeIn key={item.step} delay={0.2 + i * 0.15}>
                 <div className="text-center relative">
+                  {/* Step number circle with gradient */}
                   <div className="relative inline-block mb-6">
-                    <div className={`w-[88px] h-[88px] rounded-2xl bg-gradient-to-br ${item.color} flex items-center justify-center shadow-xl rotate-3 hover:rotate-0 transition-transform duration-500 group`}>
+                    <div className="w-[88px] h-[88px] rounded-2xl bg-gradient-to-br from-teal-500 to-emerald-600 flex items-center justify-center shadow-xl shadow-teal-500/20 group hover:shadow-2xl hover:shadow-teal-500/30 transition-shadow duration-300">
                       <span className="text-white text-3xl font-bold">{item.step}</span>
                     </div>
-                    <div className={`absolute -bottom-2 -left-2 w-9 h-9 rounded-lg ${item.bgColor} flex items-center justify-center shadow-md`}>
-                      <item.icon className={`w-4 h-4 ${item.iconColor}`} />
+                    <div className="absolute -bottom-2 -left-2 w-9 h-9 rounded-lg bg-teal-50 border border-teal-100 flex items-center justify-center shadow-sm">
+                      <item.icon className="w-4 h-4 text-teal-600" />
                     </div>
                   </div>
-                  <h3 className="text-xl font-bold mb-3">{item.title}</h3>
-                  <p className="text-muted-foreground leading-relaxed max-w-xs mx-auto">{item.desc}</p>
+                  <h3 className="text-xl font-bold mb-3 text-slate-800">{item.title}</h3>
+                  <p className="text-slate-500 leading-relaxed max-w-xs mx-auto">{item.desc}</p>
                 </div>
               </FadeIn>
             ))}
@@ -976,125 +1003,66 @@ export default function LandingPage() {
       </section>
 
       {/* ═══════════════════════════════════════ */}
-      {/* ─── STATS SECTION ─── */}
+      {/* ─── WHY CHOOSE US ─── */}
       {/* ═══════════════════════════════════════ */}
-      <section className="py-20 md:py-28 bg-gradient-to-br from-slate-950 via-purple-900/90 to-slate-950 text-white relative overflow-hidden">
-        <div className="absolute inset-0">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_50%,rgba(244,63,94,0.08),transparent_50%)]" />
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_50%,rgba(139,92,246,0.08),transparent_50%)]" />
-          <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.015)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.015)_1px,transparent_1px)] bg-[size:48px_48px]" />
-        </div>
-
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
-          <FadeIn>
-            <div className="text-center mb-14">
-              <Badge variant="secondary" className="mb-4 px-4 py-1.5 text-sm bg-white/10 text-white/80 border-white/10 rounded-full backdrop-blur-sm">
-                <Award className="w-3.5 h-3.5 ml-1.5" />
-                إنجازاتنا
-              </Badge>
-              <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-4">أرقام نفتخر بها</h2>
-              <p className="text-white/50 text-lg">ثقة المستفيدين هي الدليل على جودة خدماتنا</p>
-            </div>
-          </FadeIn>
-
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
-            {[
-              { target: 500, suffix: '+', label: 'ممرض معتمد', icon: Stethoscope, color: 'from-violet-500/10 to-purple-500/10' },
-              { target: 1000, suffix: '+', label: 'مستفيد نشط', icon: Users, color: 'from-rose-500/10 to-pink-500/10' },
-              { target: 5000, suffix: '+', label: 'خدمة منفذة', icon: Activity, color: 'from-emerald-500/10 to-teal-500/10' },
-              { target: 98, suffix: '%', label: 'نسبة الرضا', icon: Award, color: 'from-amber-500/10 to-orange-500/10' },
-            ].map((stat, i) => (
-              <FadeIn key={stat.label} delay={0.1 + i * 0.1}>
-                <div className={`text-center p-6 md:p-8 rounded-2xl bg-gradient-to-br ${stat.color} backdrop-blur-sm border border-white/[0.06] hover:border-white/[0.12] transition-all duration-300 hover:bg-white/[0.04]`}>
-                  <stat.icon className="w-8 h-8 mx-auto mb-3 text-purple-300" />
-                  <div className="text-3xl md:text-4xl font-bold mb-2">
-                    <AnimatedCounter target={stat.target} suffix={stat.suffix} />
-                  </div>
-                  <div className="text-sm text-white/50">{stat.label}</div>
-                </div>
-              </FadeIn>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ═══════════════════════════════════════ */}
-      {/* ─── TRUST SECTION ─── */}
-      {/* ═══════════════════════════════════════ */}
-      <section className="py-20 md:py-28 bg-white">
+      <section className="py-20 md:py-28 bg-slate-50/50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <FadeIn>
             <div className="text-center mb-14">
-              <Badge variant="secondary" className="mb-4 px-4 py-1.5 text-sm bg-emerald-50 text-emerald-700 border-emerald-100 rounded-full">
+              <Badge variant="secondary" className="mb-4 px-4 py-1.5 text-sm bg-teal-50 text-teal-700 border-teal-100 rounded-full">
                 <Shield className="w-3.5 h-3.5 ml-1.5" />
                 لماذا عافيتك
               </Badge>
-              <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-4">
-                ثقة <span className="bg-gradient-to-l from-rose-500 to-purple-600 bg-clip-text text-transparent">الجميع</span>
+              <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-4 text-slate-900">
+                ثقة <span className="bg-gradient-to-l from-teal-600 to-emerald-500 bg-clip-text text-transparent">الجميع</span>
               </h2>
-              <p className="text-muted-foreground text-lg max-w-2xl mx-auto">نلتزم بأعلى معايير الجودة والسلامة لتقديم أفضل تجربة رعاية صحية منزلية</p>
+              <p className="text-slate-500 text-lg max-w-2xl mx-auto">نلتزم بأعلى معايير الجودة والسلامة لتقديم أفضل تجربة رعاية صحية منزلية</p>
             </div>
           </FadeIn>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {[
               {
                 icon: Shield,
                 title: 'ممرضون معتمدون',
                 desc: 'جميع ممرضينا يحملون تراخيص مزاولة معتمدة وخبرات عملية موثقة',
-                gradient: 'from-emerald-500 to-teal-600',
-                bg: 'bg-emerald-50',
-                iconColor: 'text-emerald-600',
+                bg: 'bg-teal-50',
+                iconColor: 'text-teal-600',
+                border: 'border-teal-100',
               },
               {
                 icon: Clock,
-                title: 'استجابة سريعة',
-                desc: 'نضمن وصول الممرض إليك في أسرع وقت ممكن بعد تأكيد الطلب',
-                gradient: 'from-amber-500 to-orange-600',
+                title: 'دعم ٢٤/٧',
+                desc: 'فريق الدعم متاح على مدار الساعة للإجابة عن استفساراتكم',
+                bg: 'bg-emerald-50',
+                iconColor: 'text-emerald-600',
+                border: 'border-emerald-100',
+              },
+              {
+                icon: Activity,
+                title: 'حجز سهل',
+                desc: 'احجز خدمتك بنقرات بسيطة واختر الوقت المناسب لك',
                 bg: 'bg-amber-50',
                 iconColor: 'text-amber-600',
-              },
-              {
-                icon: Star,
-                title: 'جودة مضمونة',
-                desc: 'إشراف إداري دقيق ومتابعة مستمرة لضمان رضاكم عن الخدمة',
-                gradient: 'from-violet-500 to-purple-600',
-                bg: 'bg-violet-50',
-                iconColor: 'text-violet-600',
-              },
-              {
-                icon: Heart,
-                title: 'رعاية إنسانية',
-                desc: 'نؤمن بأن الرعاية الصحية تبدأ بالتعاطف والاهتمام بكل تفاصيل تجربتكم',
-                gradient: 'from-rose-500 to-pink-600',
-                bg: 'bg-rose-50',
-                iconColor: 'text-rose-600',
-              },
-              {
-                icon: Phone,
-                title: 'دعم متواصل',
-                desc: 'فريق الدعم الفني متاح على مدار الساعة للإجابة عن استفساراتكم',
-                gradient: 'from-sky-500 to-cyan-600',
-                bg: 'bg-sky-50',
-                iconColor: 'text-sky-600',
+                border: 'border-amber-100',
               },
               {
                 icon: Award,
-                title: 'أسعار تنافسية',
-                desc: 'نقدم خدمات صحية عالية الجودة بأسعار مناسبة وشفافة بدون رسوم خفية',
-                gradient: 'from-fuchsia-500 to-purple-600',
-                bg: 'bg-fuchsia-50',
-                iconColor: 'text-fuchsia-600',
+                title: 'دفع آمن',
+                desc: 'طرق دفع متعددة وآمنة بدون رسوم خفية أو تكاليف إضافية',
+                bg: 'bg-sky-50',
+                iconColor: 'text-sky-600',
+                border: 'border-sky-100',
               },
             ].map((item, i) => (
-              <FadeIn key={item.title} delay={0.05 + i * 0.07}>
-                <Card className="group hover:shadow-2xl hover:shadow-purple-500/[0.04] transition-all duration-500 border-slate-100 hover:border-purple-200/50 h-full hover:-translate-y-1">
+              <FadeIn key={item.title} delay={0.05 + i * 0.1}>
+                <Card className={`group hover:shadow-xl transition-all duration-500 border ${item.border} h-full hover:-translate-y-1 ${item.bg}/30 bg-white`}>
                   <CardContent className="p-6">
                     <div className={`inline-flex items-center justify-center w-12 h-12 rounded-xl ${item.bg} mb-4 group-hover:scale-110 transition-transform duration-300`}>
                       <item.icon className={`w-6 h-6 ${item.iconColor}`} />
                     </div>
-                    <h3 className="text-lg font-bold mb-2 group-hover:text-purple-700 transition-colors">{item.title}</h3>
-                    <p className="text-sm text-muted-foreground leading-relaxed">{item.desc}</p>
+                    <h3 className="text-lg font-bold mb-2 text-slate-800 group-hover:text-teal-700 transition-colors">{item.title}</h3>
+                    <p className="text-sm text-slate-500 leading-relaxed">{item.desc}</p>
                   </CardContent>
                 </Card>
               </FadeIn>
@@ -1104,10 +1072,46 @@ export default function LandingPage() {
       </section>
 
       {/* ═══════════════════════════════════════ */}
+      {/* ─── STATS SECTION ─── */}
+      {/* ═══════════════════════════════════════ */}
+      <section className="py-20 md:py-28 bg-white relative overflow-hidden">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
+          <FadeIn>
+            <div className="text-center mb-14">
+              <Badge variant="secondary" className="mb-4 px-4 py-1.5 text-sm bg-amber-50 text-amber-700 border-amber-100 rounded-full">
+                <Award className="w-3.5 h-3.5 ml-1.5" />
+                إنجازاتنا
+              </Badge>
+              <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-4 text-slate-900">أرقام نفتخر بها</h2>
+              <p className="text-slate-500 text-lg">ثقة المستفيدين هي الدليل على جودة خدماتنا</p>
+            </div>
+          </FadeIn>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
+            {[
+              { target: 500, suffix: '+', label: 'ممرض معتمد', icon: Stethoscope, bg: 'bg-teal-50', iconColor: 'text-teal-500' },
+              { target: 1000, suffix: '+', label: 'مستفيد نشط', icon: Users, bg: 'bg-emerald-50', iconColor: 'text-emerald-500' },
+              { target: 5000, suffix: '+', label: 'خدمة منفذة', icon: Activity, bg: 'bg-amber-50', iconColor: 'text-amber-500' },
+              { target: 98, suffix: '%', label: 'نسبة الرضا', icon: Award, bg: 'bg-sky-50', iconColor: 'text-sky-500' },
+            ].map((stat, i) => (
+              <FadeIn key={stat.label} delay={0.1 + i * 0.1}>
+                <div className={`text-center p-6 md:p-8 rounded-2xl ${stat.bg} border border-white hover:shadow-lg transition-all duration-300`}>
+                  <stat.icon className={`w-8 h-8 mx-auto mb-3 ${stat.iconColor}`} />
+                  <div className="text-3xl md:text-4xl font-bold mb-2 text-slate-900">
+                    <AnimatedCounter target={stat.target} suffix={stat.suffix} />
+                  </div>
+                  <div className="text-sm text-slate-500">{stat.label}</div>
+                </div>
+              </FadeIn>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ═══════════════════════════════════════ */}
       {/* ─── TESTIMONIALS SECTION ─── */}
       {/* ═══════════════════════════════════════ */}
-      <section className="py-20 md:py-28 bg-gradient-to-b from-slate-50 to-white relative">
-        <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-l from-transparent via-purple-200 to-transparent" />
+      <section className="py-20 md:py-28 bg-slate-50/50 relative">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <FadeIn>
             <div className="text-center mb-14">
@@ -1115,10 +1119,10 @@ export default function LandingPage() {
                 <MessageCircle className="w-3.5 h-3.5 ml-1.5" />
                 آراء المستفيدين
               </Badge>
-              <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-4">
-                ماذا يقولون <span className="bg-gradient-to-l from-rose-500 to-purple-600 bg-clip-text text-transparent">عنا</span>
+              <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-4 text-slate-900">
+                ماذا يقولون <span className="bg-gradient-to-l from-teal-600 to-emerald-500 bg-clip-text text-transparent">عنا</span>
               </h2>
-              <p className="text-muted-foreground text-lg">تجارب حقيقية من مستفيدين يثقون بخدماتنا</p>
+              <p className="text-slate-500 text-lg">تجارب حقيقية من مستفيدين يثقون بخدماتنا</p>
             </div>
           </FadeIn>
 
@@ -1129,27 +1133,27 @@ export default function LandingPage() {
                 role: 'مستفيد',
                 text: 'خدمة ممتازة وسريعة! وصل الممرض خلال ساعة واحدة وكان محترفاً جداً في التعامل مع والدي المسن. أنصح الجميع بالتجربة.',
                 rating: 5,
-                color: 'from-rose-500 to-pink-600',
+                gradient: 'from-teal-500 to-emerald-600',
               },
               {
                 name: 'فاطمة علي',
                 role: 'مستفيدة',
                 text: 'تجربة رائعة من البداية للنهاية. التطبيق سهل الاستخدام والخدمة عالية الجودة. سأستخدمها مرة أخرى بالتأكيد.',
                 rating: 5,
-                color: 'from-violet-500 to-purple-600',
+                gradient: 'from-emerald-500 to-teal-600',
               },
               {
                 name: 'خالد عبدالله',
                 role: 'ممرض',
                 text: 'كنت أبحث عن منصة موثوقة للعمل كممرض مستقل. عافيتك وفرت لي فرص عمل ممتازة وتسهيلات كبيرة في إدارة المواعيد.',
                 rating: 5,
-                color: 'from-emerald-500 to-teal-600',
+                gradient: 'from-amber-400 to-orange-500',
               },
             ].map((item, i) => (
               <FadeIn key={item.name} delay={0.1 + i * 0.1}>
-                <Card className="group hover:shadow-2xl hover:shadow-purple-500/[0.04] transition-all duration-500 border-slate-100 hover:border-purple-200/50 h-full relative overflow-hidden hover:-translate-y-1">
-                  {/* Top gradient bar */}
-                  <div className={`h-1 bg-gradient-to-l ${item.color}`} />
+                <Card className="group hover:shadow-xl hover:shadow-teal-500/[0.04] transition-all duration-500 border-slate-200 hover:border-teal-200/50 h-full relative overflow-hidden hover:-translate-y-1 bg-white">
+                  {/* Top accent bar */}
+                  <div className={`h-1 bg-gradient-to-l ${item.gradient}`} />
                   <CardContent className="p-6 pt-5">
                     {/* Stars */}
                     <div className="flex gap-1 mb-4">
@@ -1157,14 +1161,14 @@ export default function LandingPage() {
                         <Star key={si} className="w-4 h-4 fill-amber-400 text-amber-400" />
                       ))}
                     </div>
-                    <p className="text-muted-foreground leading-relaxed mb-6 text-sm">{item.text}</p>
+                    <p className="text-slate-600 leading-relaxed mb-6 text-sm">{item.text}</p>
                     <div className="flex items-center gap-3 pt-4 border-t border-slate-100">
-                      <div className={`w-10 h-10 rounded-full bg-gradient-to-br ${item.color} flex items-center justify-center text-white font-bold text-sm shadow-md`}>
+                      <div className={`w-10 h-10 rounded-full bg-gradient-to-br ${item.gradient} flex items-center justify-center text-white font-bold text-sm shadow-md`}>
                         {item.name.charAt(0)}
                       </div>
                       <div>
-                        <div className="font-semibold text-sm">{item.name}</div>
-                        <div className="text-xs text-muted-foreground">{item.role}</div>
+                        <div className="font-semibold text-sm text-slate-800">{item.name}</div>
+                        <div className="text-xs text-slate-400">{item.role}</div>
                       </div>
                     </div>
                   </CardContent>
@@ -1176,107 +1180,144 @@ export default function LandingPage() {
       </section>
 
       {/* ═══════════════════════════════════════ */}
-      {/* ─── CONTACT / CTA SECTION ─── */}
+      {/* ─── CTA SECTION ─── */}
       {/* ═══════════════════════════════════════ */}
-      <section id="contact" className="py-20 md:py-28 bg-gradient-to-br from-slate-950 via-purple-900/90 to-slate-950 text-white relative overflow-hidden">
-        <div className="absolute inset-0">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(244,63,94,0.08),transparent_60%)]" />
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_30%,rgba(139,92,246,0.08),transparent_50%)]" />
-        </div>
+      <section className="py-20 md:py-28 relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-bl from-teal-600 via-emerald-600 to-teal-700" />
+        {/* Decorative circles */}
+        <div className="absolute top-0 left-0 w-96 h-96 bg-white/5 rounded-full -translate-x-1/2 -translate-y-1/2" />
+        <div className="absolute bottom-0 right-0 w-80 h-80 bg-white/5 rounded-full translate-x-1/3 translate-y-1/3" />
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20 items-center">
-            {/* CTA Text */}
-            <FadeIn>
-              <div>
-                <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-white/[0.08] backdrop-blur-md mb-8 border border-white/[0.08]">
-                  <Heart className="w-10 h-10 text-rose-400" />
-                </div>
-                <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-6 leading-tight">
-                  ابدأ رحلتك
-                  <br />
-                  <span className="bg-gradient-to-l from-rose-400 to-purple-400 bg-clip-text text-transparent">الصحية اليوم</span>
-                </h2>
-                <p className="text-white/50 text-lg mb-10 leading-relaxed max-w-lg">
-                  سواء كنت مستفيداً يبحث عن رعاية أو ممرضاً يبحث عن فرص عمل، عافيتك هي المنصة المثالية لك
-                </p>
-                <div className="flex flex-col sm:flex-row gap-4">
-                  <Button
-                    size="lg"
-                    className="bg-gradient-to-l from-rose-500 to-pink-600 text-white hover:opacity-90 text-base px-8 h-13 shadow-2xl shadow-rose-500/20 rounded-xl border-0"
-                    onClick={() => openAuth('register', 'beneficiary')}
-                  >
-                    <Heart className="w-5 h-5 ml-2" />
-                    تسجيل مستفيد
-                  </Button>
-                  <Button
-                    size="lg"
-                    className="bg-gradient-to-l from-violet-500 to-purple-600 text-white hover:opacity-90 text-base px-8 h-13 shadow-2xl shadow-violet-500/20 rounded-xl border-0"
-                    onClick={() => openAuth('register', 'nurse')}
-                  >
-                    <Stethoscope className="w-5 h-5 ml-2" />
-                    تسجيل ممرض
-                  </Button>
-                </div>
+          <FadeIn>
+            <div className="text-center">
+              <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-white/10 backdrop-blur-md mb-8 border border-white/10">
+                <Heart className="w-10 h-10 text-white" />
               </div>
-            </FadeIn>
+              <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-6 leading-tight text-white">
+                مستعد للبدء؟
+              </h2>
+              <p className="text-white/70 text-lg mb-10 leading-relaxed max-w-2xl mx-auto">
+                سواء كنت مستفيداً يبحث عن رعاية أو ممرضاً يبحث عن فرص عمل، عافيتك هي المنصة المثالية لك
+              </p>
+              <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                <Button
+                  size="lg"
+                  className="bg-white text-teal-700 hover:bg-white/90 text-base px-8 h-14 shadow-xl group rounded-xl font-semibold"
+                  onClick={() => openAuth('register', 'beneficiary')}
+                >
+                  <Heart className="w-5 h-5 ml-2 group-hover:scale-110 transition-transform" />
+                  تسجيل مستفيد
+                </Button>
+                <Button
+                  size="lg"
+                  variant="outline"
+                  className="border-white/30 text-white hover:bg-white/10 text-base px-8 h-14 rounded-xl backdrop-blur-sm"
+                  onClick={() => openAuth('register', 'nurse')}
+                >
+                  <Stethoscope className="w-5 h-5 ml-2" />
+                  تسجيل ممرض
+                </Button>
+              </div>
+            </div>
+          </FadeIn>
+        </div>
+      </section>
 
-            {/* Contact Info */}
-            <FadeIn delay={0.2}>
-              <div className="bg-white/[0.05] backdrop-blur-xl rounded-2xl border border-white/[0.08] p-8 space-y-6">
-                <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
-                  <Mail className="w-5 h-5 text-purple-400" />
-                  تواصل معنا
-                </h3>
-                <div className="space-y-5">
-                  {[
-                    {
-                      icon: Phone,
-                      label: 'الهاتف',
-                      value: '+967 777 123 456',
-                      desc: 'متاح 24/7',
-                      color: 'text-emerald-400',
-                      bg: 'bg-emerald-500/10',
-                    },
-                    {
-                      icon: Mail,
-                      label: 'البريد الإلكتروني',
-                      value: 'info@afiyatak.com',
-                      desc: 'رد خلال 24 ساعة',
-                      color: 'text-sky-400',
-                      bg: 'bg-sky-500/10',
-                    },
-                    {
-                      icon: MapPin,
-                      label: 'العنوان',
-                      value: 'صنعاء، اليمن',
-                      desc: 'المكتب الرئيسي',
-                      color: 'text-rose-400',
-                      bg: 'bg-rose-500/10',
-                    },
-                  ].map((item) => (
-                    <div key={item.label} className="flex items-start gap-4 group">
-                      <div className={`flex-shrink-0 w-11 h-11 rounded-xl ${item.bg} flex items-center justify-center group-hover:scale-110 transition-transform`}>
-                        <item.icon className={`w-5 h-5 ${item.color}`} />
+      {/* ═══════════════════════════════════════ */}
+      {/* ─── CONTACT SECTION ─── */}
+      {/* ═══════════════════════════════════════ */}
+      <section id="contact" className="py-20 md:py-28 bg-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <FadeIn>
+            <div className="bg-slate-50 rounded-3xl border border-slate-100 p-8 md:p-12">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+                {/* Text */}
+                <div>
+                  <Badge variant="secondary" className="mb-4 px-4 py-1.5 text-sm bg-teal-50 text-teal-700 border-teal-100 rounded-full">
+                    <Mail className="w-3.5 h-3.5 ml-1.5" />
+                    تواصل معنا
+                  </Badge>
+                  <h2 className="text-3xl sm:text-4xl font-bold mb-4 text-slate-900">
+                    نسعد بتواصلكم
+                  </h2>
+                  <p className="text-slate-500 text-lg mb-8 leading-relaxed">
+                    فريقنا جاهز للإجابة عن جميع استفساراتكم ومساعدتكم في أي وقت
+                  </p>
+
+                  <div className="space-y-5">
+                    {[
+                      {
+                        icon: Phone,
+                        label: 'الهاتف',
+                        value: '+967 777 123 456',
+                        desc: 'متاح 24/7',
+                        bg: 'bg-teal-50',
+                        iconColor: 'text-teal-600',
+                      },
+                      {
+                        icon: Mail,
+                        label: 'البريد الإلكتروني',
+                        value: 'info@afiyatak.com',
+                        desc: 'رد خلال 24 ساعة',
+                        bg: 'bg-emerald-50',
+                        iconColor: 'text-emerald-600',
+                      },
+                      {
+                        icon: MapPin,
+                        label: 'العنوان',
+                        value: 'صنعاء، اليمن',
+                        desc: 'المكتب الرئيسي',
+                        bg: 'bg-amber-50',
+                        iconColor: 'text-amber-600',
+                      },
+                    ].map((item) => (
+                      <div key={item.label} className="flex items-start gap-4 group">
+                        <div className={`flex-shrink-0 w-11 h-11 rounded-xl ${item.bg} flex items-center justify-center group-hover:scale-110 transition-transform`}>
+                          <item.icon className={`w-5 h-5 ${item.iconColor}`} />
+                        </div>
+                        <div>
+                          <div className="text-sm text-slate-400 mb-0.5">{item.label}</div>
+                          <div className="font-semibold text-slate-800">{item.value}</div>
+                          <div className="text-xs text-slate-400 mt-0.5">{item.desc}</div>
+                        </div>
                       </div>
-                      <div>
-                        <div className="text-sm text-white/40 mb-0.5">{item.label}</div>
-                        <div className="font-semibold text-white/90">{item.value}</div>
-                        <div className="text-xs text-white/30 mt-0.5">{item.desc}</div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Illustration */}
+                <div className="flex justify-center">
+                  <div className="relative">
+                    <div className="absolute inset-0 bg-gradient-to-br from-teal-100 to-emerald-100 rounded-3xl blur-2xl scale-110" />
+                    <div className="relative bg-white rounded-3xl border border-teal-100 p-8 shadow-xl shadow-teal-500/5">
+                      <div className="text-center">
+                        <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-teal-500 to-emerald-600 flex items-center justify-center mx-auto mb-6 shadow-lg shadow-teal-500/20">
+                          <MessageCircle className="w-10 h-10 text-white" />
+                        </div>
+                        <h3 className="text-xl font-bold text-slate-800 mb-2">هل تحتاج مساعدة؟</h3>
+                        <p className="text-slate-500 text-sm mb-6">لا تتردد في التواصل معنا</p>
+                        <Button
+                          className="bg-gradient-to-l from-teal-500 to-emerald-600 text-white hover:opacity-90 rounded-xl border-0 shadow-lg shadow-teal-500/20"
+                          onClick={() => openAuth('register', 'beneficiary')}
+                        >
+                          ابدأ الآن
+                          <ArrowLeft className="w-4 h-4 mr-1" />
+                        </Button>
                       </div>
                     </div>
-                  ))}
+                  </div>
                 </div>
               </div>
-            </FadeIn>
-          </div>
+            </div>
+          </FadeIn>
         </div>
       </section>
 
       {/* ═══════════════════════════════════════ */}
       {/* ─── FOOTER ─── */}
       {/* ═══════════════════════════════════════ */}
-      <footer className="bg-slate-950 text-white pt-16 pb-8">
+      <footer className="bg-slate-900 text-white pt-16 pb-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 mb-12">
             {/* Brand */}
@@ -1285,10 +1326,10 @@ export default function LandingPage() {
                 <Image src="/logo.png" alt="عافيتك" width={36} height={36} className="rounded-lg" />
                 <span className="text-xl font-bold">عافيتك</span>
               </div>
-              <p className="text-white/40 leading-relaxed text-sm mb-6">
+              <p className="text-slate-400 leading-relaxed text-sm mb-6">
                 منصة متكاملة لربط المستفيدين بممرضين مؤهلين لتقديم خدمات صحية منزلية بأعلى معايير الجودة والسلامة
               </p>
-              <div className="flex items-center gap-3 text-white/30">
+              <div className="flex items-center gap-3 text-slate-500">
                 <Phone className="w-4 h-4" />
                 <span className="text-sm">+967 777 123 456</span>
               </div>
@@ -1302,7 +1343,7 @@ export default function LandingPage() {
                   <li key={link.id}>
                     <button
                       onClick={() => scrollTo(link.id)}
-                      className="text-sm text-white/35 hover:text-rose-400 transition-colors duration-200"
+                      className="text-sm text-slate-500 hover:text-teal-400 transition-colors duration-200"
                     >
                       {link.label}
                     </button>
@@ -1325,7 +1366,7 @@ export default function LandingPage() {
                   <li key={item.label}>
                     <button
                       onClick={item.action}
-                      className="text-sm text-white/35 hover:text-rose-400 transition-colors duration-200"
+                      className="text-sm text-slate-500 hover:text-teal-400 transition-colors duration-200"
                     >
                       {item.label}
                     </button>
@@ -1338,16 +1379,16 @@ export default function LandingPage() {
             <div>
               <h4 className="font-bold mb-4 text-white/80 text-sm">تواصل معنا</h4>
               <ul className="space-y-3">
-                <li className="flex items-center gap-2 text-sm text-white/35">
-                  <Phone className="w-3.5 h-3.5 text-white/20" />
+                <li className="flex items-center gap-2 text-sm text-slate-500">
+                  <Phone className="w-3.5 h-3.5 text-slate-600" />
                   +967 777 123 456
                 </li>
-                <li className="flex items-center gap-2 text-sm text-white/35">
-                  <Mail className="w-3.5 h-3.5 text-white/20" />
+                <li className="flex items-center gap-2 text-sm text-slate-500">
+                  <Mail className="w-3.5 h-3.5 text-slate-600" />
                   info@afiyatak.com
                 </li>
-                <li className="flex items-center gap-2 text-sm text-white/35">
-                  <MapPin className="w-3.5 h-3.5 text-white/20" />
+                <li className="flex items-center gap-2 text-sm text-slate-500">
+                  <MapPin className="w-3.5 h-3.5 text-slate-600" />
                   صنعاء، اليمن
                 </li>
               </ul>
@@ -1355,11 +1396,11 @@ export default function LandingPage() {
           </div>
 
           {/* Bottom */}
-          <div className="border-t border-white/[0.06] pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
-            <p className="text-sm text-white/25">
+          <div className="border-t border-slate-800 pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
+            <p className="text-sm text-slate-600">
               &copy; {new Date().getFullYear()} عافيتك - جميع الحقوق محفوظة
             </p>
-            <p className="text-sm text-white/15">
+            <p className="text-sm text-slate-700">
               رعاية صحية منزلية بأعلى المعايير
             </p>
           </div>
@@ -1376,7 +1417,7 @@ export default function LandingPage() {
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.8 }}
             onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-            className="fixed bottom-6 left-6 z-40 w-12 h-12 rounded-full bg-gradient-to-br from-rose-500 to-purple-600 text-white shadow-xl shadow-purple-500/20 flex items-center justify-center hover:shadow-2xl hover:shadow-purple-500/30 transition-all duration-300 hover:scale-110"
+            className="fixed bottom-6 left-6 z-40 w-12 h-12 rounded-full bg-gradient-to-br from-teal-500 to-emerald-600 text-white shadow-xl shadow-teal-500/20 flex items-center justify-center hover:shadow-2xl hover:shadow-teal-500/30 transition-all duration-300 hover:scale-110"
             aria-label="العودة للأعلى"
           >
             <ChevronUp className="w-5 h-5" />
@@ -1396,7 +1437,7 @@ export default function LandingPage() {
           <DialogDescription className="sr-only">اختر نوع الحساب وسجّل الدخول أو أنشئ حساباً جديداً</DialogDescription>
 
           {/* Header with close */}
-          <div className="relative bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-6 pb-8">
+          <div className="relative bg-gradient-to-br from-teal-600 via-emerald-600 to-teal-700 p-6 pb-8">
             {/* Close button */}
             <button
               onClick={() => { setAuthOpen(false); setRegisterSuccess(false) }}
@@ -1408,7 +1449,7 @@ export default function LandingPage() {
             <div className="text-center">
               <Image src="/logo.png" alt="عافيتك" width={56} height={56} className="rounded-xl mx-auto mb-3 shadow-lg" />
               <h2 className="text-2xl font-bold text-white">عافيتك</h2>
-              <p className="text-white/40 text-sm mt-1">رعاية صحية في منزلك</p>
+              <p className="text-white/60 text-sm mt-1">رعاية صحية في منزلك</p>
             </div>
           </div>
 
@@ -1432,7 +1473,7 @@ export default function LandingPage() {
                 {authTab === tab.key && (
                   <motion.div
                     layoutId="authTabIndicator"
-                    className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-l from-rose-500 to-purple-600"
+                    className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-l from-teal-500 to-emerald-500"
                     transition={{ type: 'spring', duration: 0.5, bounce: 0.2 }}
                   />
                 )}
@@ -1587,7 +1628,7 @@ export default function LandingPage() {
                       <div className="text-center">
                         <button
                           onClick={() => setAuthTab('register')}
-                          className="text-sm text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1"
+                          className="text-sm text-slate-500 hover:text-teal-600 transition-colors inline-flex items-center gap-1"
                         >
                           <UserPlus className="w-3.5 h-3.5" />
                           ليس لديك حساب؟ إنشاء حساب جديد
@@ -1620,8 +1661,8 @@ export default function LandingPage() {
                       >
                         <CheckCircle className="w-10 h-10 text-white" />
                       </motion.div>
-                      <h3 className="text-2xl font-bold mb-2">تم التسجيل بنجاح!</h3>
-                      <p className="text-muted-foreground mb-6 leading-relaxed">
+                      <h3 className="text-2xl font-bold mb-2 text-slate-900">تم التسجيل بنجاح!</h3>
+                      <p className="text-slate-500 mb-6 leading-relaxed">
                         {registerRole === 'nurse'
                           ? 'سيتم مراجعة حسابك من قبل الإدارة. سيتم إشعارك عند الموافقة.'
                           : 'يمكنك الآن تسجيل الدخول وطلب الخدمات الصحية.'}
@@ -1737,7 +1778,7 @@ export default function LandingPage() {
                             {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'تسجيل الحساب'}
                           </Button>
                           <div className="text-center">
-                            <button onClick={() => setAuthTab('login')} className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+                            <button onClick={() => setAuthTab('login')} className="text-sm text-slate-500 hover:text-teal-600 transition-colors">
                               لديك حساب؟ تسجيل الدخول
                             </button>
                           </div>
@@ -1791,7 +1832,7 @@ export default function LandingPage() {
                             {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'تسجيل الحساب'}
                           </Button>
                           <div className="text-center">
-                            <button onClick={() => setAuthTab('login')} className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+                            <button onClick={() => setAuthTab('login')} className="text-sm text-slate-500 hover:text-teal-600 transition-colors">
                               لديك حساب؟ تسجيل الدخول
                             </button>
                           </div>
@@ -1815,7 +1856,7 @@ export default function LandingPage() {
                 >
                   <div className="text-center mb-5">
                     <h3 className="text-lg font-bold">خدماتنا</h3>
-                    <p className="text-sm text-muted-foreground">اكتشف خدماتنا الصحية المنزلية</p>
+                    <p className="text-sm text-slate-500">اكتشف خدماتنا الصحية المنزلية</p>
                   </div>
 
                   {/* Category Filter in Modal */}
@@ -1826,7 +1867,7 @@ export default function LandingPage() {
                         onClick={() => setModalActiveCategory(cat)}
                         className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-300 ${
                           modalActiveCategory === cat
-                            ? 'bg-gradient-to-l from-rose-500 to-purple-600 text-white shadow-md'
+                            ? 'bg-gradient-to-l from-teal-500 to-emerald-600 text-white shadow-md'
                             : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
                         }`}
                       >
@@ -1837,35 +1878,35 @@ export default function LandingPage() {
 
                   {servicesLoading ? (
                     <div className="flex items-center justify-center py-10">
-                      <Loader2 className="w-8 h-8 animate-spin text-purple-500" />
+                      <Loader2 className="w-8 h-8 animate-spin text-teal-500" />
                     </div>
                   ) : modalFilteredServices.length === 0 ? (
                     <div className="text-center py-10">
                       <Stethoscope className="w-10 h-10 mx-auto mb-3 text-slate-200" />
-                      <p className="text-sm text-muted-foreground">لا توجد خدمات متاحة حالياً</p>
+                      <p className="text-sm text-slate-500">لا توجد خدمات متاحة حالياً</p>
                     </div>
                   ) : (
                     <div className="space-y-3 max-h-[400px] overflow-y-auto pl-1" style={{ scrollbarWidth: 'thin' }}>
                       {modalFilteredServices.map((service) => {
                         const Icon = categoryIcons[service.category] || Stethoscope
-                        const color = categoryColors[service.category] || 'from-slate-500 to-slate-600'
+                        const color = categoryColors[service.category] || 'from-teal-500 to-emerald-600'
                         return (
                           <div
                             key={service.id}
-                            className="flex items-center gap-3 p-3 rounded-xl border border-slate-100 hover:border-purple-200/50 hover:shadow-md transition-all duration-300"
+                            className="flex items-center gap-3 p-3 rounded-xl border border-slate-100 hover:border-teal-200/50 hover:shadow-md transition-all duration-300"
                           >
                             <div className={`flex-shrink-0 w-10 h-10 rounded-lg bg-gradient-to-br ${color} flex items-center justify-center shadow-sm`}>
                               <Icon className="w-5 h-5 text-white" />
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className="font-semibold text-sm truncate">{service.name}</div>
-                              <div className="text-xs text-muted-foreground truncate">{service.description}</div>
+                              <div className="text-xs text-slate-500 truncate">{service.description}</div>
                             </div>
                             <div className="flex-shrink-0 text-left">
-                              <div className="text-sm font-bold bg-gradient-to-l from-rose-500 to-purple-600 bg-clip-text text-transparent">
+                              <div className="text-sm font-bold text-teal-600">
                                 {service.price.toLocaleString('ar-YE')} ر.ي
                               </div>
-                              <div className="text-[10px] text-muted-foreground/50">{service.category}</div>
+                              <div className="text-[10px] text-slate-400">{service.category}</div>
                             </div>
                           </div>
                         )
@@ -1875,7 +1916,7 @@ export default function LandingPage() {
 
                   <div className="mt-5 text-center">
                     <Button
-                      className="bg-gradient-to-l from-rose-500 to-purple-600 text-white hover:opacity-90 rounded-xl border-0 shadow-lg"
+                      className="bg-gradient-to-l from-teal-500 to-emerald-600 text-white hover:opacity-90 rounded-xl border-0 shadow-lg"
                       onClick={() => { setAuthOpen(false); scrollTo('services') }}
                     >
                       عرض جميع الخدمات
