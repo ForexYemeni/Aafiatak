@@ -5,8 +5,8 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Heart, ClipboardList, CreditCard, LogOut, Loader2, Plus, XCircle,
   ShoppingBag, User, Menu, X, Bell, MapPin, Phone, Home, HelpCircle,
-  Star, Filter, RefreshCw, Calendar, Gift, Tag, AlertTriangle,
-  Copy, Check, Award, Zap, Share2, MessageCircle, Moon, Sun
+  Filter, RefreshCw, Calendar, Tag, AlertTriangle,
+  Copy, Check, Award, Zap, Share2, MessageCircle
 } from 'lucide-react'
 import { useAppStore, formatPrice, getStatusLabel, getStatusColor } from '@/lib/store'
 import { Button } from '@/components/ui/button'
@@ -70,8 +70,38 @@ const faqItems = [
   },
 ]
 
+// Status left border color mapping
+const statusBorderColor: Record<string, string> = {
+  pending: 'border-r-4 border-r-amber-400',
+  approved: 'border-r-4 border-r-emerald-400',
+  in_progress: 'border-r-4 border-r-blue-400',
+  completed: 'border-r-4 border-r-violet-400',
+  cancelled: 'border-r-4 border-r-gray-400',
+  assigned: 'border-r-4 border-r-purple-400',
+  rejected: 'border-r-4 border-r-red-400',
+}
+
+// Status badge gradient mapping
+const statusGradientBadge: Record<string, string> = {
+  pending: 'bg-gradient-to-r from-amber-500 to-orange-500 text-white',
+  approved: 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white',
+  in_progress: 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white',
+  completed: 'bg-gradient-to-r from-violet-500 to-purple-500 text-white',
+  cancelled: 'bg-gradient-to-r from-gray-400 to-gray-500 text-white',
+  assigned: 'bg-gradient-to-r from-purple-500 to-fuchsia-500 text-white',
+  rejected: 'bg-gradient-to-r from-red-500 to-rose-500 text-white',
+}
+
+// Notification left border color
+const notifBorderColor: Record<string, string> = {
+  status_change: 'border-r-4 border-r-amber-400',
+  assignment: 'border-r-4 border-r-violet-400',
+  admin_message: 'border-r-4 border-r-blue-400',
+  general: 'border-r-4 border-r-gray-300',
+}
+
 export default function BeneficiaryDashboard() {
-  const { user, setView, logout, darkMode, toggleDarkMode } = useAppStore()
+  const { user, setView, logout } = useAppStore()
   const { toast } = useToast()
   const [activeTab, setActiveTab] = useState<Tab>('services')
   const [services, setServices] = useState<any[]>([])
@@ -526,6 +556,10 @@ export default function BeneficiaryDashboard() {
   // Payment history from completed requests
   const paymentHistory = requests.filter(r => r.status === 'completed')
 
+  // Loyalty level calculation
+  const loyaltyLevel = loyaltyBalance >= 1000 ? 'ذهبي' : loyaltyBalance >= 500 ? 'فضي' : 'برونزي'
+  const loyaltyProgress = Math.min((loyaltyBalance / 1000) * 100, 100)
+
   const tabs: { key: Tab; label: string; icon: any; badge?: number }[] = [
     { key: 'services', label: 'الخدمات', icon: ShoppingBag },
     { key: 'requests', label: 'طلباتي', icon: ClipboardList, badge: pendingRequests },
@@ -552,18 +586,26 @@ export default function BeneficiaryDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 dark:from-gray-900 to-rose-50 dark:to-gray-900/30 dark:from-gray-950 dark:to-gray-900 flex" dir="rtl">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-violet-50/20 to-fuchsia-50/10 flex relative overflow-hidden" dir="rtl">
+      {/* ===== Floating Orbs Background ===== */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden">
+        <div className="absolute -top-40 -right-40 w-96 h-96 bg-violet-200/30 rounded-full blur-3xl animate-pulse" />
+        <div className="absolute top-1/3 -left-20 w-72 h-72 bg-fuchsia-200/20 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '2s' }} />
+        <div className="absolute bottom-20 right-1/4 w-80 h-80 bg-purple-200/20 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '4s' }} />
+      </div>
+
       {/* ===== Desktop Sidebar ===== */}
-      <aside className="w-72 bg-white dark:bg-gray-900 border-l dark:border-gray-800 shadow-sm hidden lg:flex flex-col fixed right-0 top-0 bottom-0 z-40">
+      <aside className="w-72 bg-white/70 backdrop-blur-xl border-l border-white/20 shadow-xl hidden lg:flex flex-col fixed right-0 top-0 bottom-0 z-40">
         {/* Logo Header */}
-        <div className="p-6 border-b bg-gradient-to-l from-rose-500 to-pink-600">
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center overflow-hidden">
+        <div className="p-6 bg-gradient-to-l from-violet-600 via-purple-600 to-fuchsia-600 relative overflow-hidden">
+          <div className="absolute inset-0 bg-white/5 backdrop-blur-sm" />
+          <div className="relative flex items-center gap-3">
+            <div className="w-11 h-11 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center overflow-hidden shadow-lg">
               <Image src="/logo.png" alt="عافيتك" width={44} height={44} className="rounded-lg" />
             </div>
             <div>
               <h2 className="text-xl font-bold text-white">عافيتك</h2>
-              <p className="text-rose-100 text-xs mt-0.5">حساب المستفيد</p>
+              <p className="text-violet-100 text-xs mt-0.5">حساب المستفيد</p>
             </div>
           </div>
         </div>
@@ -571,30 +613,32 @@ export default function BeneficiaryDashboard() {
         {/* Navigation */}
         <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
           {tabs.map(tab => (
-            <button
+            <motion.button
               key={tab.key}
               onClick={() => handleTabChange(tab.key)}
+              whileHover={{ scale: 1.01 }}
+              whileTap={{ scale: 0.98 }}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
                 activeTab === tab.key
-                  ? 'bg-gradient-to-l from-rose-50 dark:from-rose-950/30 to-pink-50 dark:to-pink-950/30 text-rose-700 dark:text-rose-300 shadow-sm border border-rose-100 dark:border-rose-900'
-                  : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-800'
+                  ? 'bg-gradient-to-l from-violet-500/10 via-purple-500/10 to-fuchsia-500/10 text-violet-700 shadow-md shadow-violet-500/10 border border-violet-200/50'
+                  : 'text-gray-600 hover:bg-white/60 hover:text-gray-800'
               }`}
             >
-              <tab.icon className={`w-5 h-5 ${activeTab === tab.key ? 'text-rose-600' : ''}`} />
+              <tab.icon className={`w-5 h-5 ${activeTab === tab.key ? 'text-violet-600' : ''}`} />
               <span className="flex-1 text-right">{tab.label}</span>
               {tab.badge && tab.badge > 0 && (
-                <span className="bg-rose-500 text-white text-xs min-w-[20px] h-5 px-1.5 rounded-full flex items-center justify-center">
+                <span className="bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white text-xs min-w-[20px] h-5 px-1.5 rounded-full flex items-center justify-center shadow-sm shadow-violet-500/30">
                   {tab.badge}
                 </span>
               )}
-            </button>
+            </motion.button>
           ))}
         </nav>
 
         {/* User Info & Logout */}
-        <div className="p-4 border-t bg-gray-50/50 dark:bg-gray-800/50">
-          <div className="flex items-center gap-3 mb-3 p-2 rounded-xl">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-rose-400 to-pink-500 flex items-center justify-center shadow-sm">
+        <div className="p-4 border-t border-gray-100/50">
+          <div className="flex items-center gap-3 mb-3 p-2 rounded-xl bg-gradient-to-l from-violet-50/50 to-fuchsia-50/50">
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center shadow-lg shadow-violet-500/25">
               <span className="text-white font-bold text-sm">{beneficiaryUser?.name?.charAt(0) || '?'}</span>
             </div>
             <div className="flex-1 min-w-0">
@@ -604,15 +648,7 @@ export default function BeneficiaryDashboard() {
           </div>
           <Button
             variant="ghost"
-            className="w-full justify-start rounded-xl mb-1"
-            onClick={toggleDarkMode}
-          >
-            {darkMode ? <Sun className="w-4 h-4 ml-2 text-amber-500" /> : <Moon className="w-4 h-4 ml-2" />}
-            {darkMode ? 'الوضع الفاتح' : 'الوضع الداكن'}
-          </Button>
-          <Button
-            variant="ghost"
-            className="w-full justify-start text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30 dark:bg-red-950/30 rounded-xl"
+            className="w-full justify-start text-red-600 hover:text-red-700 hover:bg-red-50 rounded-xl"
             onClick={handleLogout}
           >
             <LogOut className="w-4 h-4 ml-2" />
@@ -635,9 +671,9 @@ export default function BeneficiaryDashboard() {
       </AnimatePresence>
 
       {/* ===== Mobile Sidebar ===== */}
-      <div className={`lg:hidden fixed right-0 top-0 bottom-0 w-80 bg-white dark:bg-gray-900 z-50 transform transition-transform duration-300 ease-in-out ${mobileMenuOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+      <div className={`lg:hidden fixed right-0 top-0 bottom-0 w-80 bg-white/90 backdrop-blur-xl z-50 transform transition-transform duration-300 ease-in-out shadow-2xl ${mobileMenuOpen ? 'translate-x-0' : 'translate-x-full'}`}>
         {/* Mobile Header */}
-        <div className="p-4 border-b bg-gradient-to-l from-rose-500 to-pink-600 flex items-center justify-between">
+        <div className="p-4 bg-gradient-to-l from-violet-600 via-purple-600 to-fuchsia-600 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Image src="/logo.png" alt="عافيتك" width={28} height={28} className="rounded-lg" />
             <h2 className="text-lg font-bold text-white">عافيتك</h2>
@@ -655,14 +691,14 @@ export default function BeneficiaryDashboard() {
               onClick={() => handleTabChange(tab.key)}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
                 activeTab === tab.key
-                  ? 'bg-gradient-to-l from-rose-50 dark:from-rose-950/30 to-pink-50 dark:to-pink-950/30 text-rose-700 dark:text-rose-300 border border-rose-100 dark:border-rose-900'
-                  : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
+                  ? 'bg-gradient-to-l from-violet-500/10 via-purple-500/10 to-fuchsia-500/10 text-violet-700 border border-violet-200/50'
+                  : 'text-gray-600 hover:bg-white/60'
               }`}
             >
-              <tab.icon className={`w-5 h-5 ${activeTab === tab.key ? 'text-rose-600' : ''}`} />
+              <tab.icon className={`w-5 h-5 ${activeTab === tab.key ? 'text-violet-600' : ''}`} />
               <span className="flex-1 text-right">{tab.label}</span>
               {tab.badge && tab.badge > 0 && (
-                <span className="bg-rose-500 text-white text-xs min-w-[20px] h-5 px-1.5 rounded-full flex items-center justify-center">
+                <span className="bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white text-xs min-w-[20px] h-5 px-1.5 rounded-full flex items-center justify-center">
                   {tab.badge}
                 </span>
               )}
@@ -671,9 +707,9 @@ export default function BeneficiaryDashboard() {
         </nav>
 
         {/* Mobile User Info & Logout */}
-        <div className="absolute bottom-0 left-0 right-0 p-4 border-t bg-gray-50/80 dark:bg-gray-800/80">
+        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-100/50 bg-white/80 backdrop-blur-sm">
           <div className="flex items-center gap-3 mb-3">
-            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-rose-400 to-pink-500 flex items-center justify-center">
+            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center shadow-md shadow-violet-500/25">
               <span className="text-white font-bold text-xs">{beneficiaryUser?.name?.charAt(0)}</span>
             </div>
             <div className="flex-1 min-w-0">
@@ -681,11 +717,7 @@ export default function BeneficiaryDashboard() {
               <p className="text-muted-foreground text-xs">مستفيد</p>
             </div>
           </div>
-          <Button variant="ghost" className="w-full justify-start mb-1" onClick={toggleDarkMode}>
-            {darkMode ? <Sun className="w-4 h-4 ml-2 text-amber-500" /> : <Moon className="w-4 h-4 ml-2" />}
-            {darkMode ? 'الوضع الفاتح' : 'الوضع الداكن'}
-          </Button>
-          <Button variant="ghost" className="w-full justify-start text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 dark:bg-red-950/30" onClick={handleLogout}>
+          <Button variant="ghost" className="w-full justify-start text-red-600 hover:bg-red-50" onClick={handleLogout}>
             <LogOut className="w-4 h-4 ml-2" />
             تسجيل الخروج
           </Button>
@@ -693,22 +725,19 @@ export default function BeneficiaryDashboard() {
       </div>
 
       {/* ===== Mobile Top Header ===== */}
-      <div className="lg:hidden fixed top-0 left-0 right-0 bg-white dark:bg-gray-900 border-b dark:border-gray-800 z-40 px-4 py-3 flex items-center justify-between shadow-sm">
+      <div className="lg:hidden fixed top-0 left-0 right-0 bg-white/80 backdrop-blur-xl border-b border-white/20 z-40 px-4 py-3 flex items-center justify-between shadow-sm">
         <div className="flex items-center gap-2">
           <Image src="/logo.png" alt="عافيتك" width={24} height={24} className="rounded" />
-          <span className="font-bold text-rose-700 dark:text-rose-300">عافيتك</span>
+          <span className="font-bold bg-gradient-to-l from-violet-600 to-fuchsia-600 bg-clip-text text-transparent">عافيتك</span>
         </div>
         <div className="flex items-center gap-1">
           <Button variant="ghost" size="icon" className="relative h-9 w-9" onClick={() => handleTabChange('notifications')}>
             <Bell className="w-4 h-4" />
             {unreadNotifications > 0 && (
-              <span className="absolute -top-0.5 -left-0.5 bg-rose-500 text-white text-[10px] min-w-[16px] h-4 px-1 rounded-full flex items-center justify-center">
+              <span className="absolute -top-0.5 -left-0.5 bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white text-[10px] min-w-[16px] h-4 px-1 rounded-full flex items-center justify-center">
                 {unreadNotifications}
               </span>
             )}
-          </Button>
-          <Button variant="ghost" size="icon" className="h-9 w-9" onClick={toggleDarkMode}>
-            {darkMode ? <Sun className="w-4 h-4 text-amber-500" /> : <Moon className="w-4 h-4" />}
           </Button>
           <Button variant="ghost" size="icon" className="h-9 w-9" onClick={handleLogout}>
             <LogOut className="w-4 h-4 text-red-500" />
@@ -720,7 +749,7 @@ export default function BeneficiaryDashboard() {
       </div>
 
       {/* ===== Main Content ===== */}
-      <main className="flex-1 lg:mr-72 overflow-y-auto">
+      <main className="flex-1 lg:mr-72 overflow-y-auto relative z-10">
         <div className="p-4 md:p-8 max-w-6xl mx-auto pt-20 lg:pt-8 pb-24 lg:pb-8">
           <AnimatePresence mode="wait">
             {loading ? (
@@ -731,7 +760,7 @@ export default function BeneficiaryDashboard() {
                 exit={{ opacity: 0 }}
                 className="flex flex-col items-center justify-center py-20"
               >
-                <Loader2 className="w-10 h-10 animate-spin text-rose-600 mb-4" />
+                <Loader2 className="w-10 h-10 animate-spin text-violet-600 mb-4" />
                 <p className="text-muted-foreground text-sm">جارٍ تحميل البيانات...</p>
               </motion.div>
             ) : (
@@ -748,22 +777,26 @@ export default function BeneficiaryDashboard() {
                     {/* Stats Cards */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
                       {[
-                        { icon: ShoppingBag, value: services.length, label: 'خدمة متاحة', gradient: 'from-rose-50 dark:from-rose-950/30 to-pink-50 dark:to-pink-950/30', iconColor: 'text-rose-600', valueColor: 'text-rose-700' },
-                        { icon: ClipboardList, value: requests.length, label: 'إجمالي الطلبات', gradient: 'from-violet-50 dark:from-violet-950/30 to-purple-50 dark:to-purple-950/30', iconColor: 'text-violet-600', valueColor: 'text-violet-700' },
-                        { icon: Bell, value: pendingRequests, label: 'قيد الانتظار', gradient: 'from-amber-50 dark:from-amber-950/30 to-orange-50 dark:to-orange-950/30', iconColor: 'text-amber-600', valueColor: 'text-amber-700' },
-                        { icon: Heart, value: completedRequests, label: 'مكتملة', gradient: 'from-emerald-50 dark:from-emerald-950/30 to-teal-50 dark:to-teal-950/30', iconColor: 'text-emerald-600', valueColor: 'text-emerald-700 dark:text-emerald-300' },
+                        { icon: ShoppingBag, value: services.length, label: 'خدمة متاحة', gradient: 'from-violet-500 to-purple-500', glow: 'shadow-violet-500/25', iconBg: 'bg-violet-100' },
+                        { icon: ClipboardList, value: requests.length, label: 'إجمالي الطلبات', gradient: 'from-fuchsia-500 to-pink-500', glow: 'shadow-fuchsia-500/25', iconBg: 'bg-fuchsia-100' },
+                        { icon: Bell, value: pendingRequests, label: 'قيد الانتظار', gradient: 'from-amber-500 to-orange-500', glow: 'shadow-amber-500/25', iconBg: 'bg-amber-100' },
+                        { icon: Heart, value: completedRequests, label: 'مكتملة', gradient: 'from-emerald-500 to-teal-500', glow: 'shadow-emerald-500/25', iconBg: 'bg-emerald-100' },
                       ].map((stat, i) => (
                         <motion.div
                           key={stat.label}
                           initial={{ opacity: 0, scale: 0.9 }}
                           animate={{ opacity: 1, scale: 1 }}
                           transition={{ delay: i * 0.08 }}
+                          whileHover={{ y: -4, transition: { duration: 0.2 } }}
                         >
-                          <Card className={`border-0 shadow-sm bg-gradient-to-br ${stat.gradient}`}>
+                          <Card className="border-0 bg-white/80 backdrop-blur-sm shadow-lg hover:shadow-xl transition-all duration-300">
                             <CardContent className="p-4 text-center">
-                              <stat.icon className={`w-6 h-6 ${stat.iconColor} mx-auto mb-1.5`} />
-                              <p className={`text-2xl font-bold ${stat.valueColor}`}>{stat.value.toLocaleString('ar-YE')}</p>
+                              <div className={`w-10 h-10 rounded-xl ${stat.iconBg} flex items-center justify-center mx-auto mb-2`}>
+                                <stat.icon className="w-5 h-5 text-gray-700" />
+                              </div>
+                              <p className="text-2xl font-bold bg-gradient-to-l from-gray-800 to-gray-600 bg-clip-text text-transparent">{stat.value.toLocaleString('ar-YE')}</p>
                               <p className="text-xs text-muted-foreground mt-0.5">{stat.label}</p>
+                              <div className={`mt-2 h-1 rounded-full bg-gradient-to-l ${stat.gradient} shadow-sm ${stat.glow}`} />
                             </CardContent>
                           </Card>
                         </motion.div>
@@ -773,10 +806,10 @@ export default function BeneficiaryDashboard() {
                     {/* Header */}
                     <div className="flex items-center justify-between flex-wrap gap-3">
                       <div>
-                        <h1 className="text-2xl font-bold">الخدمات المتاحة</h1>
+                        <h1 className="text-2xl font-bold bg-gradient-to-l from-violet-700 to-fuchsia-600 bg-clip-text text-transparent">الخدمات المتاحة</h1>
                         <p className="text-muted-foreground text-sm mt-1">اختر الخدمة التي تناسبك واطلبها بسهولة</p>
                       </div>
-                      <Button variant="outline" size="sm" onClick={fetchData} className="gap-1.5">
+                      <Button variant="outline" size="sm" onClick={fetchData} className="gap-1.5 rounded-xl hover:scale-[1.02] active:scale-[0.98] transition-transform">
                         <RefreshCw className="w-3.5 h-3.5" />
                         تحديث
                       </Button>
@@ -787,10 +820,10 @@ export default function BeneficiaryDashboard() {
                       <div className="flex gap-2 flex-wrap">
                         <button
                           onClick={() => setSelectedCategory('all')}
-                          className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
+                          className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] ${
                             selectedCategory === 'all'
-                              ? 'bg-gradient-to-l from-rose-500 to-pink-600 text-white shadow-md shadow-rose-200'
-                              : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:border-rose-200 dark:hover:border-rose-700 hover:text-rose-600 dark:hover:text-rose-400'
+                              ? 'bg-gradient-to-l from-violet-500 to-fuchsia-500 text-white shadow-md shadow-violet-500/25'
+                              : 'bg-white/80 backdrop-blur-sm text-gray-600 border border-gray-200 hover:border-violet-300 hover:text-violet-600'
                           }`}
                         >
                           الكل
@@ -799,10 +832,10 @@ export default function BeneficiaryDashboard() {
                           <button
                             key={cat}
                             onClick={() => setSelectedCategory(cat)}
-                            className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
+                            className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] ${
                               selectedCategory === cat
-                                ? 'bg-gradient-to-l from-rose-500 to-pink-600 text-white shadow-md shadow-rose-200'
-                                : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:border-rose-200 dark:hover:border-rose-700 hover:text-rose-600 dark:hover:text-rose-400'
+                                ? 'bg-gradient-to-l from-violet-500 to-fuchsia-500 text-white shadow-md shadow-violet-500/25'
+                                : 'bg-white/80 backdrop-blur-sm text-gray-600 border border-gray-200 hover:border-violet-300 hover:text-violet-600'
                             }`}
                           >
                             {cat}
@@ -820,24 +853,24 @@ export default function BeneficiaryDashboard() {
                         animate="visible"
                       >
                         {filteredServices.map(service => (
-                          <motion.div key={service.id} variants={itemVariants} whileHover={{ y: -4 }} transition={{ duration: 0.2 }}>
-                            <Card className="border-0 shadow-sm hover:shadow-lg transition-all duration-300 h-full flex flex-col bg-white dark:bg-card">
+                          <motion.div key={service.id} variants={itemVariants} whileHover={{ y: -6 }} transition={{ duration: 0.2 }}>
+                            <Card className="border-0 bg-white/80 backdrop-blur-sm shadow-lg hover:shadow-xl transition-all duration-300 h-full flex flex-col">
                               <CardContent className="p-5 flex flex-col flex-1">
                                 <div className="flex items-start justify-between mb-3">
                                   <h3 className="font-semibold text-lg leading-tight">{service.name}</h3>
-                                  <Badge variant="outline" className="text-xs shrink-0 mr-2 border-rose-200 dark:border-rose-800 text-rose-600 bg-rose-50/50 dark:bg-rose-950/20">
+                                  <Badge className="text-xs shrink-0 mr-2 bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white border-0 shadow-sm shadow-violet-500/20">
                                     {service.category}
                                   </Badge>
                                 </div>
                                 <p className="text-sm text-muted-foreground mb-4 flex-1 leading-relaxed">{service.description}</p>
-                                <div className="flex items-center justify-between pt-2 border-t border-gray-100 dark:border-gray-800">
+                                <div className="flex items-center justify-between pt-3 border-t border-gray-100">
                                   <span className="text-lg font-bold text-emerald-600">{formatPrice(service.price)}</span>
                                   <Button
                                     size="sm"
-                                    className="bg-gradient-to-r from-rose-500 to-pink-600 text-white hover:shadow-md hover:shadow-rose-200 transition-all duration-200"
+                                    className="bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white hover:scale-[1.02] active:scale-[0.98] hover:shadow-lg hover:shadow-violet-500/25 transition-all duration-200"
                                     onClick={() => {
                                       setSelectedService(service)
-                                      setRequestForm({ paymentMethod: '', notes: '', address: '' })
+                                      setRequestForm({ paymentMethod: '', notes: '', address: '', couponCode: '' })
                                       setRequestDialog(true)
                                     }}
                                   >
@@ -856,8 +889,8 @@ export default function BeneficiaryDashboard() {
                         animate={{ opacity: 1, y: 0 }}
                         className="text-center py-20"
                       >
-                        <div className="w-20 h-20 bg-rose-50 dark:bg-rose-950/30 rounded-full flex items-center justify-center mx-auto mb-4">
-                          <ShoppingBag className="w-10 h-10 text-rose-300" />
+                        <div className="w-20 h-20 bg-violet-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                          <ShoppingBag className="w-10 h-10 text-violet-300" />
                         </div>
                         <p className="text-muted-foreground text-lg font-medium">لا توجد خدمات متاحة حالياً</p>
                         <p className="text-muted-foreground text-sm mt-1">يرجى التحقق لاحقاً</p>
@@ -872,10 +905,10 @@ export default function BeneficiaryDashboard() {
                     {/* Header */}
                     <div className="flex items-center justify-between flex-wrap gap-3">
                       <div>
-                        <h1 className="text-2xl font-bold">طلباتي</h1>
+                        <h1 className="text-2xl font-bold bg-gradient-to-l from-violet-700 to-fuchsia-600 bg-clip-text text-transparent">طلباتي</h1>
                         <p className="text-muted-foreground text-sm mt-1">متابعة حالة طلبات الخدمات</p>
                       </div>
-                      <Button variant="outline" size="sm" onClick={fetchData} className="gap-1.5">
+                      <Button variant="outline" size="sm" onClick={fetchData} className="gap-1.5 rounded-xl hover:scale-[1.02] active:scale-[0.98] transition-transform">
                         <RefreshCw className="w-3.5 h-3.5" />
                         تحديث
                       </Button>
@@ -887,10 +920,10 @@ export default function BeneficiaryDashboard() {
                         <button
                           key={filter.key}
                           onClick={() => setStatusFilter(filter.key)}
-                          className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
+                          className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] ${
                             statusFilter === filter.key
-                              ? 'bg-gradient-to-l from-rose-500 to-pink-600 text-white shadow-md shadow-rose-200'
-                              : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:border-rose-200 dark:hover:border-rose-700 hover:text-rose-600 dark:hover:text-rose-400'
+                              ? 'bg-gradient-to-l from-violet-500 to-fuchsia-500 text-white shadow-md shadow-violet-500/25'
+                              : 'bg-white/80 backdrop-blur-sm text-gray-600 border border-gray-200 hover:border-violet-300 hover:text-violet-600'
                           }`}
                         >
                           {filter.label}
@@ -908,13 +941,13 @@ export default function BeneficiaryDashboard() {
                         animate={{ opacity: 1, y: 0 }}
                         className="text-center py-20"
                       >
-                        <div className="w-20 h-20 bg-rose-50 dark:bg-rose-950/30 rounded-full flex items-center justify-center mx-auto mb-4">
-                          <ClipboardList className="w-10 h-10 text-rose-300" />
+                        <div className="w-20 h-20 bg-violet-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                          <ClipboardList className="w-10 h-10 text-violet-300" />
                         </div>
                         <p className="text-muted-foreground text-lg font-medium">لم تقم بأي طلبات بعد</p>
                         <p className="text-muted-foreground text-sm mt-1 mb-6">تصفح الخدمات المتاحة واطلب ما يناسبك</p>
                         <Button
-                          className="bg-gradient-to-r from-rose-500 to-pink-600 text-white hover:shadow-md hover:shadow-rose-200"
+                          className="bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white hover:scale-[1.02] active:scale-[0.98] hover:shadow-lg hover:shadow-violet-500/25 transition-all duration-200"
                           onClick={() => setActiveTab('services')}
                         >
                           <ShoppingBag className="w-4 h-4 ml-2" />
@@ -927,8 +960,8 @@ export default function BeneficiaryDashboard() {
                         animate={{ opacity: 1, y: 0 }}
                         className="text-center py-16"
                       >
-                        <div className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-3">
-                          <Filter className="w-8 h-8 text-gray-300 dark:text-gray-600" />
+                        <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-3">
+                          <Filter className="w-8 h-8 text-gray-300" />
                         </div>
                         <p className="text-muted-foreground font-medium">لا توجد طلبات بهذه الحالة</p>
                       </motion.div>
@@ -940,19 +973,19 @@ export default function BeneficiaryDashboard() {
                         animate="visible"
                       >
                         {filteredRequests.map(req => (
-                          <motion.div key={req.id} variants={itemVariants}>
-                            <Card className="border-0 shadow-sm hover:shadow-md transition-all duration-300 bg-white dark:bg-card">
+                          <motion.div key={req.id} variants={itemVariants} whileHover={{ y: -2 }} transition={{ duration: 0.2 }}>
+                            <Card className={`border-0 bg-white/80 backdrop-blur-sm shadow-lg hover:shadow-xl transition-all duration-300 ${statusBorderColor[req.status] || ''}`}>
                               <CardContent className="p-5">
                                 <div className="flex items-start justify-between flex-wrap gap-4">
                                   <div className="flex-1 min-w-0">
                                     {/* Service Name & Status */}
                                     <div className="flex items-center gap-3 mb-4">
-                                      <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-rose-50 dark:from-rose-950/30 to-pink-50 dark:to-pink-950/30 flex items-center justify-center shrink-0">
-                                        <ClipboardList className="w-5 h-5 text-rose-600" />
+                                      <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-violet-100 to-fuchsia-100 flex items-center justify-center shrink-0">
+                                        <ClipboardList className="w-5 h-5 text-violet-600" />
                                       </div>
                                       <div className="min-w-0">
                                         <h3 className="font-semibold text-base truncate">{req.service?.name || 'خدمة محذوفة'}</h3>
-                                        <Badge className={`${getStatusColor(req.status)} text-xs mt-1`}>
+                                        <Badge className={`${statusGradientBadge[req.status] || getStatusColor(req.status)} text-xs mt-1 shadow-sm`}>
                                           {getStatusLabel(req.status)}
                                         </Badge>
                                       </div>
@@ -976,7 +1009,7 @@ export default function BeneficiaryDashboard() {
                                       )}
                                       {req.address && (
                                         <div className="flex items-center gap-2 text-muted-foreground">
-                                          <MapPin className="w-3.5 h-3.5 text-rose-400" />
+                                          <MapPin className="w-3.5 h-3.5 text-violet-400" />
                                           <span className="font-medium text-foreground ml-1">العنوان:</span>
                                           {req.address}
                                         </div>
@@ -994,7 +1027,7 @@ export default function BeneficiaryDashboard() {
 
                                     {/* Notes */}
                                     {req.notes && (
-                                      <div className="mt-3 bg-blue-50/50 rounded-lg p-3 text-sm">
+                                      <div className="mt-3 bg-blue-50/80 rounded-xl p-3 text-sm">
                                         <span className="font-medium text-blue-800">ملاحظاتك: </span>
                                         <span className="text-blue-700">{req.notes}</span>
                                       </div>
@@ -1002,21 +1035,21 @@ export default function BeneficiaryDashboard() {
 
                                     {/* Admin Notes */}
                                     {req.adminNotes && (
-                                      <div className="mt-3 bg-amber-50 dark:bg-amber-950/30 rounded-lg p-3 text-sm">
-                                        <span className="font-medium text-amber-800 dark:text-amber-200">ملاحظات الإدارة: </span>
-                                        <span className="text-amber-700 dark:text-amber-300">{req.adminNotes}</span>
+                                      <div className="mt-3 bg-amber-50/80 rounded-xl p-3 text-sm">
+                                        <span className="font-medium text-amber-800">ملاحظات الإدارة: </span>
+                                        <span className="text-amber-700">{req.adminNotes}</span>
                                       </div>
                                     )}
 
                                     {/* Assigned Nurse */}
                                     {req.assignment?.nurse && (
-                                      <div className="mt-3 bg-violet-50 dark:bg-violet-950/30 rounded-lg p-3 text-sm flex items-center gap-2">
-                                        <div className="w-7 h-7 rounded-full bg-violet-100 flex items-center justify-center shrink-0">
-                                          <User className="w-3.5 h-3.5 text-violet-600" />
+                                      <div className="mt-3 bg-violet-50/80 rounded-xl p-3 text-sm flex items-center gap-2">
+                                        <div className="w-7 h-7 rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center shrink-0 shadow-sm shadow-violet-500/25">
+                                          <User className="w-3.5 h-3.5 text-white" />
                                         </div>
                                         <div>
-                                          <span className="font-medium text-violet-800 dark:text-violet-200">الممرض/ة المعيّن/ة: </span>
-                                          <span className="text-violet-700 dark:text-violet-300">
+                                          <span className="font-medium text-violet-800">الممرض/ة المعيّن/ة: </span>
+                                          <span className="text-violet-700">
                                             {req.assignment.nurse.firstName} {req.assignment.nurse.lastName}
                                           </span>
                                         </div>
@@ -1029,8 +1062,7 @@ export default function BeneficiaryDashboard() {
                                     {req.status === 'pending' && (
                                       <Button
                                         size="sm"
-                                        variant="outline"
-                                        className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30 dark:bg-red-950/30 border-red-200"
+                                        className="bg-gradient-to-r from-red-500 to-rose-500 text-white hover:scale-[1.02] active:scale-[0.98] hover:shadow-lg hover:shadow-red-500/25 transition-all duration-200"
                                         onClick={() => handleCancelRequest(req.id)}
                                       >
                                         <XCircle className="w-4 h-4 ml-1" />
@@ -1040,7 +1072,7 @@ export default function BeneficiaryDashboard() {
                                     {req.status === 'completed' && (
                                       <Button
                                         size="sm"
-                                        className="bg-gradient-to-r from-rose-500 to-pink-600 text-white hover:shadow-md hover:shadow-rose-200"
+                                        className="bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white hover:scale-[1.02] active:scale-[0.98] hover:shadow-lg hover:shadow-violet-500/25 transition-all duration-200"
                                         onClick={() => handleReorder(req)}
                                       >
                                         <RefreshCw className="w-4 h-4 ml-1" />
@@ -1050,8 +1082,7 @@ export default function BeneficiaryDashboard() {
                                     {(req.status === 'approved' || req.status === 'in_progress') && req.assignment?.nurse && (
                                       <Button
                                         size="sm"
-                                        variant="outline"
-                                        className="text-violet-600 hover:text-violet-700 dark:hover:text-violet-300 dark:text-violet-300 hover:bg-violet-50 dark:hover:bg-violet-950/30 border-violet-200 dark:border-violet-800"
+                                        className="bg-gradient-to-r from-violet-500 to-purple-500 text-white hover:scale-[1.02] active:scale-[0.98] hover:shadow-lg hover:shadow-violet-500/25 transition-all duration-200"
                                         onClick={() => setActiveChatRequestId(req.id)}
                                       >
                                         <MessageCircle className="w-4 h-4 ml-1" />
@@ -1073,34 +1104,34 @@ export default function BeneficiaryDashboard() {
                 {activeTab === 'payments' && (
                   <div className="space-y-6">
                     <div>
-                      <h1 className="text-2xl font-bold">المدفوعات</h1>
+                      <h1 className="text-2xl font-bold bg-gradient-to-l from-violet-700 to-fuchsia-600 bg-clip-text text-transparent">المدفوعات</h1>
                       <p className="text-muted-foreground text-sm mt-1">طرق الدفع المتاحة وسجل المدفوعات</p>
                     </div>
 
                     {/* Payment Methods Section */}
                     <div>
                       <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
-                        <CreditCard className="w-5 h-5 text-rose-600" />
+                        <CreditCard className="w-5 h-5 text-violet-600" />
                         طرق الدفع المتاحة
                       </h2>
                       {payments.length === 0 ? (
-                        <div className="text-center py-10 bg-white dark:bg-card rounded-xl shadow-sm">
-                          <CreditCard className="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-2" />
+                        <div className="text-center py-10 bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg">
+                          <CreditCard className="w-10 h-10 text-gray-300 mx-auto mb-2" />
                           <p className="text-muted-foreground text-sm">لا توجد طرق دفع متاحة حالياً</p>
                         </div>
                       ) : (
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                           {payments.map(payment => (
-                            <motion.div key={payment.id} whileHover={{ y: -2 }} transition={{ duration: 0.2 }}>
-                              <Card className="border-0 shadow-sm hover:shadow-md transition-all duration-300 bg-white dark:bg-card">
+                            <motion.div key={payment.id} whileHover={{ y: -4 }} transition={{ duration: 0.2 }}>
+                              <Card className="border-0 bg-white/80 backdrop-blur-sm shadow-lg hover:shadow-xl transition-all duration-300">
                                 <CardContent className="p-5">
                                   <div className="flex items-center gap-3 mb-3">
-                                    <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 flex items-center justify-center">
+                                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-100 to-teal-100 flex items-center justify-center">
                                       <CreditCard className="w-5 h-5 text-emerald-600" />
                                     </div>
                                     <h3 className="font-semibold">{payment.name}</h3>
                                   </div>
-                                  <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3 text-sm">
+                                  <div className="bg-gray-50/80 rounded-xl p-3 text-sm">
                                     <p className="text-muted-foreground leading-relaxed">{payment.accountInfo}</p>
                                   </div>
                                 </CardContent>
@@ -1120,18 +1151,18 @@ export default function BeneficiaryDashboard() {
                         سجل المدفوعات
                       </h2>
                       {paymentHistory.length === 0 ? (
-                        <div className="text-center py-10 bg-white dark:bg-card rounded-xl shadow-sm">
-                          <ClipboardList className="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-2" />
+                        <div className="text-center py-10 bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg">
+                          <ClipboardList className="w-10 h-10 text-gray-300 mx-auto mb-2" />
                           <p className="text-muted-foreground text-sm">لا توجد مدفوعات مكتملة بعد</p>
                           <p className="text-muted-foreground text-xs mt-1">ستظهر هنا المدفوعات للخدمات المكتملة</p>
                         </div>
                       ) : (
                         <div className="grid gap-3">
                           {paymentHistory.map(req => (
-                            <Card key={req.id} className="border-0 shadow-sm bg-white dark:bg-card dark:bg-card">
+                            <Card key={req.id} className="border-0 bg-white/80 backdrop-blur-sm shadow-lg hover:shadow-xl transition-all duration-300 border-r-4 border-r-emerald-400">
                               <CardContent className="p-4 flex items-center justify-between flex-wrap gap-3">
                                 <div className="flex items-center gap-3">
-                                  <div className="w-9 h-9 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 flex items-center justify-center">
+                                  <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-emerald-100 to-teal-100 flex items-center justify-center">
                                     <CreditCard className="w-4 h-4 text-emerald-600" />
                                   </div>
                                   <div>
@@ -1155,21 +1186,21 @@ export default function BeneficiaryDashboard() {
                 {activeTab === 'profile' && (
                   <div className="space-y-6">
                     <div>
-                      <h1 className="text-2xl font-bold">الملف الشخصي</h1>
+                      <h1 className="text-2xl font-bold bg-gradient-to-l from-violet-700 to-fuchsia-600 bg-clip-text text-transparent">الملف الشخصي</h1>
                       <p className="text-muted-foreground text-sm mt-1">معلومات حسابك الشخصية</p>
                     </div>
 
-                    <Card className="border-0 shadow-sm bg-white dark:bg-card dark:bg-card">
+                    <Card className="border-0 bg-white/80 backdrop-blur-sm shadow-xl">
                       <CardContent className="p-6">
                         {/* Avatar & Name Header */}
                         <div className="flex items-center gap-4 mb-6">
-                          <div className="w-16 h-16 rounded-full bg-gradient-to-br from-rose-400 to-pink-500 flex items-center justify-center shadow-md shadow-rose-200">
+                          <div className="w-16 h-16 rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center shadow-lg shadow-violet-500/25">
                             <span className="text-2xl font-bold text-white">{beneficiaryUser?.name?.charAt(0) || '?'}</span>
                           </div>
                           <div>
                             <h3 className="text-xl font-bold">{beneficiaryUser?.name}</h3>
                             <div className="flex items-center gap-2 mt-1">
-                              <Badge className="bg-rose-100 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800">مستفيد</Badge>
+                              <Badge className="bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white border-0 shadow-sm shadow-violet-500/20">مستفيد</Badge>
                             </div>
                           </div>
                         </div>
@@ -1180,7 +1211,7 @@ export default function BeneficiaryDashboard() {
                         <div className="space-y-5">
                           <div className="space-y-2">
                             <Label htmlFor="profile-name" className="text-sm font-medium flex items-center gap-2">
-                              <User className="w-4 h-4 text-rose-500" />
+                              <User className="w-4 h-4 text-violet-500" />
                               الاسم الكامل
                             </Label>
                             <Input
@@ -1188,13 +1219,13 @@ export default function BeneficiaryDashboard() {
                               value={profileForm.name}
                               onChange={e => setProfileForm(f => ({ ...f, name: e.target.value }))}
                               placeholder="أدخل اسمك الكامل"
-                              className="rounded-xl"
+                              className="rounded-xl border-violet-200 focus:border-violet-400 focus:ring-violet-400/20"
                             />
                           </div>
 
                           <div className="space-y-2">
                             <Label htmlFor="profile-phone" className="text-sm font-medium flex items-center gap-2">
-                              <Phone className="w-4 h-4 text-rose-500" />
+                              <Phone className="w-4 h-4 text-violet-500" />
                               رقم الهاتف
                             </Label>
                             <Input
@@ -1202,14 +1233,14 @@ export default function BeneficiaryDashboard() {
                               value={profileForm.phone}
                               onChange={e => setProfileForm(f => ({ ...f, phone: e.target.value }))}
                               placeholder="رقم الهاتف"
-                              className="rounded-xl"
+                              className="rounded-xl border-violet-200 focus:border-violet-400 focus:ring-violet-400/20"
                               dir="ltr"
                             />
                           </div>
 
                           <div className="space-y-2">
                             <Label htmlFor="profile-location" className="text-sm font-medium flex items-center gap-2">
-                              <MapPin className="w-4 h-4 text-rose-500" />
+                              <MapPin className="w-4 h-4 text-violet-500" />
                               الموقع
                             </Label>
                             <Input
@@ -1217,14 +1248,14 @@ export default function BeneficiaryDashboard() {
                               value={profileForm.location}
                               onChange={e => setProfileForm(f => ({ ...f, location: e.target.value }))}
                               placeholder="المدينة / المنطقة"
-                              className="rounded-xl"
+                              className="rounded-xl border-violet-200 focus:border-violet-400 focus:ring-violet-400/20"
                             />
                           </div>
 
                           {/* Registration Date (Read-only) */}
-                          <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4">
+                          <div className="bg-gradient-to-l from-violet-50/80 to-fuchsia-50/80 rounded-xl p-4 border border-violet-100/50">
                             <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                              <Calendar className="w-4 h-4" />
+                              <Calendar className="w-4 h-4 text-violet-500" />
                               <span>تاريخ التسجيل:</span>
                               <span className="font-medium text-foreground">
                                 {(user as any)?.createdAt
@@ -1239,7 +1270,7 @@ export default function BeneficiaryDashboard() {
                           </div>
 
                           <Button
-                            className="w-full bg-gradient-to-r from-rose-500 to-pink-600 text-white hover:shadow-md hover:shadow-rose-200 rounded-xl h-11"
+                            className="w-full bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white hover:scale-[1.02] active:scale-[0.98] hover:shadow-lg hover:shadow-violet-500/25 rounded-xl h-11 transition-all duration-200"
                             onClick={handleSaveProfile}
                             disabled={profileSaving}
                           >
@@ -1263,7 +1294,7 @@ export default function BeneficiaryDashboard() {
                   <div className="space-y-6">
                     <div className="flex items-center justify-between flex-wrap gap-3">
                       <div>
-                        <h1 className="text-2xl font-bold">الإشعارات</h1>
+                        <h1 className="text-2xl font-bold bg-gradient-to-l from-violet-700 to-fuchsia-600 bg-clip-text text-transparent">الإشعارات</h1>
                         <p className="text-muted-foreground text-sm mt-1">تحديثات الطلبات والرسائل</p>
                       </div>
                       {unreadNotifications > 0 && (
@@ -1271,7 +1302,7 @@ export default function BeneficiaryDashboard() {
                           variant="outline"
                           size="sm"
                           onClick={markAllNotificationsRead}
-                          className="gap-1.5"
+                          className="gap-1.5 rounded-xl hover:scale-[1.02] active:scale-[0.98] transition-transform"
                         >
                           <Bell className="w-3.5 h-3.5" />
                           تحديد الكل كمقروء
@@ -1285,8 +1316,8 @@ export default function BeneficiaryDashboard() {
                         animate={{ opacity: 1, y: 0 }}
                         className="text-center py-20"
                       >
-                        <div className="w-20 h-20 bg-rose-50 dark:bg-rose-950/30 rounded-full flex items-center justify-center mx-auto mb-4">
-                          <Bell className="w-10 h-10 text-rose-300" />
+                        <div className="w-20 h-20 bg-violet-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                          <Bell className="w-10 h-10 text-violet-300" />
                         </div>
                         <p className="text-muted-foreground text-lg font-medium">لا توجد إشعارات</p>
                         <p className="text-muted-foreground text-sm mt-1">ستظهر هنا تحديثات طلباتك ورسائل الإدارة</p>
@@ -1301,30 +1332,32 @@ export default function BeneficiaryDashboard() {
                         {notifications.map(notif => (
                           <motion.div key={notif.id} variants={itemVariants}>
                             <Card
-                              className={`border-0 shadow-sm transition-all duration-200 cursor-pointer ${
-                                notif.read ? 'bg-white dark:bg-card' : 'bg-rose-50 dark:bg-rose-950/30/40 border-r-4 border-r-rose-400'
+                              className={`border-0 shadow-lg transition-all duration-200 cursor-pointer backdrop-blur-sm ${
+                                notif.read
+                                  ? 'bg-white/60'
+                                  : `bg-white/80 ${notifBorderColor[notif.type] || ''}`
                               }`}
                               onClick={() => markNotificationRead(notif.id)}
                             >
                               <CardContent className="p-4 flex items-start gap-3">
                                 <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
-                                  notif.type === 'status_change' ? 'bg-amber-100' :
-                                  notif.type === 'assignment' ? 'bg-violet-100' :
-                                  notif.type === 'admin_message' ? 'bg-blue-100 dark:bg-blue-950/40' :
+                                  notif.type === 'status_change' ? 'bg-gradient-to-br from-amber-100 to-orange-100' :
+                                  notif.type === 'assignment' ? 'bg-gradient-to-br from-violet-100 to-fuchsia-100' :
+                                  notif.type === 'admin_message' ? 'bg-gradient-to-br from-blue-100 to-cyan-100' :
                                   'bg-gray-100'
                                 }`}>
                                   {notif.type === 'status_change' && <RefreshCw className="w-4 h-4 text-amber-600" />}
                                   {notif.type === 'assignment' && <User className="w-4 h-4 text-violet-600" />}
                                   {notif.type === 'admin_message' && <ClipboardList className="w-4 h-4 text-blue-600" />}
-                                  {notif.type === 'general' && <Bell className="w-4 h-4 text-gray-600 dark:text-gray-400" />}
+                                  {notif.type === 'general' && <Bell className="w-4 h-4 text-gray-600" />}
                                 </div>
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-2 mb-1">
-                                    <h4 className={`text-sm font-semibold ${notif.read ? 'text-gray-700 dark:text-gray-300' : 'text-gray-900 dark:text-gray-100'}`}>
+                                    <h4 className={`text-sm font-semibold ${notif.read ? 'text-gray-500' : 'text-gray-900'}`}>
                                       {notif.title}
                                     </h4>
                                     {!notif.read && (
-                                      <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0" />
+                                      <span className="w-2.5 h-2.5 rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-500 shrink-0 shadow-sm shadow-violet-500/30" />
                                     )}
                                   </div>
                                   <p className="text-xs text-muted-foreground leading-relaxed">{notif.message}</p>
@@ -1354,32 +1387,80 @@ export default function BeneficiaryDashboard() {
                   <div className="space-y-6">
                     <div className="flex items-center justify-between">
                       <div>
-                        <h1 className="text-2xl font-bold">برنامج النقاط</h1>
+                        <h1 className="text-2xl font-bold bg-gradient-to-l from-violet-700 to-fuchsia-600 bg-clip-text text-transparent">برنامج النقاط</h1>
                         <p className="text-muted-foreground text-sm mt-1">اجمع نقاط واحصل على خصومات</p>
                       </div>
-                      <Button variant="outline" size="sm" onClick={fetchData} className="gap-1.5">
+                      <Button variant="outline" size="sm" onClick={fetchData} className="gap-1.5 rounded-xl hover:scale-[1.02] active:scale-[0.98] transition-transform">
                         <RefreshCw className="w-3.5 h-3.5" />
                         تحديث
                       </Button>
                     </div>
 
-                    {/* Points Balance Card */}
-                    <Card className="border-0 shadow-sm bg-gradient-to-br from-amber-50 dark:from-amber-950/30 to-yellow-50 dark:to-yellow-950/30">
-                      <CardContent className="p-6 text-center">
-                        <Award className="w-12 h-12 text-amber-500 mx-auto mb-3" />
-                        <p className="text-4xl font-bold text-amber-700 dark:text-amber-300">{loyaltyBalance.toLocaleString('ar-YE')}</p>
-                        <p className="text-sm text-amber-600 mt-1">نقطة متاحة</p>
-                        <Separator className="my-4" />
-                        <div className="bg-white/60 dark:bg-gray-800/60 rounded-xl p-3 text-sm">
-                          <p className="text-amber-800 dark:text-amber-200 font-medium">💎 كل 100 نقطة = خصم على خدمة مجانية</p>
-                          <p className="text-amber-700 dark:text-amber-300 text-xs mt-1">تحصل على 10 نقاط لكل طلب خدمة</p>
+                    {/* Points Balance Card with circular display */}
+                    <Card className="border-0 bg-white/80 backdrop-blur-sm shadow-xl">
+                      <CardContent className="p-8 text-center">
+                        <div className="relative w-40 h-40 mx-auto mb-6">
+                          {/* Gradient ring */}
+                          <svg className="w-full h-full -rotate-90" viewBox="0 0 160 160">
+                            <circle cx="80" cy="80" r="70" fill="none" stroke="#f3f4f6" strokeWidth="12" />
+                            <circle
+                              cx="80" cy="80" r="70" fill="none"
+                              stroke="url(#loyaltyGradient)"
+                              strokeWidth="12"
+                              strokeLinecap="round"
+                              strokeDasharray={`${(loyaltyProgress / 100) * 440} 440`}
+                              className="transition-all duration-1000"
+                            />
+                            <defs>
+                              <linearGradient id="loyaltyGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                                <stop offset="0%" stopColor="#8b5cf6" />
+                                <stop offset="50%" stopColor="#a855f7" />
+                                <stop offset="100%" stopColor="#d946ef" />
+                              </linearGradient>
+                            </defs>
+                          </svg>
+                          <div className="absolute inset-0 flex flex-col items-center justify-center">
+                            <Award className="w-8 h-8 text-violet-500 mb-1" />
+                            <p className="text-3xl font-bold bg-gradient-to-l from-violet-700 to-fuchsia-600 bg-clip-text text-transparent">{loyaltyBalance.toLocaleString('ar-YE')}</p>
+                            <p className="text-xs text-muted-foreground">نقطة</p>
+                          </div>
+                        </div>
+
+                        {/* Level Badge */}
+                        <Badge className={`text-sm px-4 py-1 border-0 shadow-sm ${
+                          loyaltyLevel === 'ذهبي'
+                            ? 'bg-gradient-to-r from-amber-500 to-yellow-500 text-white shadow-amber-500/25'
+                            : loyaltyLevel === 'فضي'
+                            ? 'bg-gradient-to-r from-gray-400 to-gray-500 text-white shadow-gray-400/25'
+                            : 'bg-gradient-to-r from-orange-400 to-amber-500 text-white shadow-orange-400/25'
+                        }`}>
+                          {loyaltyLevel === 'ذهبي' ? '⭐' : loyaltyLevel === 'فضي' ? '🥈' : '🥉'} مستوى {loyaltyLevel}
+                        </Badge>
+
+                        {/* Progress Bar */}
+                        <div className="mt-4 w-full max-w-xs mx-auto">
+                          <div className="flex justify-between text-xs text-muted-foreground mb-1">
+                            <span>التقدم للمستوى التالي</span>
+                            <span>{Math.round(loyaltyProgress)}%</span>
+                          </div>
+                          <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-gradient-to-l from-violet-500 to-fuchsia-500 rounded-full transition-all duration-1000 shadow-sm shadow-violet-500/25"
+                              style={{ width: `${loyaltyProgress}%` }}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="mt-6 bg-gradient-to-l from-violet-50/80 to-fuchsia-50/80 rounded-xl p-4 text-sm border border-violet-100/50">
+                          <p className="text-violet-800 font-medium">💎 كل 100 نقطة = خصم على خدمة مجانية</p>
+                          <p className="text-violet-600 text-xs mt-1">تحصل على 10 نقاط لكل طلب خدمة</p>
                         </div>
                       </CardContent>
                     </Card>
 
                     {/* Redeem Section */}
                     {loyaltyBalance >= 100 && (
-                      <Card className="border-0 shadow-sm">
+                      <Card className="border-0 bg-white/80 backdrop-blur-sm shadow-xl">
                         <CardContent className="p-6">
                           <h3 className="font-semibold text-lg mb-4 flex items-center gap-2">
                             <Zap className="w-5 h-5 text-amber-500" />
@@ -1393,10 +1474,10 @@ export default function BeneficiaryDashboard() {
                               value={redeemAmount}
                               onChange={e => setRedeemAmount(e.target.value)}
                               placeholder="عدد النقاط"
-                              className="flex-1"
+                              className="flex-1 rounded-xl border-violet-200 focus:border-violet-400 focus:ring-violet-400/20"
                             />
                             <Button
-                              className="bg-gradient-to-r from-amber-500 to-yellow-600 text-white"
+                              className="bg-gradient-to-r from-amber-500 to-yellow-500 text-white hover:scale-[1.02] active:scale-[0.98] hover:shadow-lg hover:shadow-amber-500/25 transition-all duration-200"
                               onClick={handleRedeemPoints}
                               disabled={redeeming}
                             >
@@ -1409,15 +1490,15 @@ export default function BeneficiaryDashboard() {
                     )}
 
                     {/* Points History */}
-                    <Card className="border-0 shadow-sm">
+                    <Card className="border-0 bg-white/80 backdrop-blur-sm shadow-xl">
                       <CardContent className="p-6">
                         <h3 className="font-semibold text-lg mb-4">سجل النقاط</h3>
                         {loyaltyHistory.length > 0 ? (
                           <div className="space-y-3 max-h-96 overflow-y-auto">
                             {loyaltyHistory.map((item: any) => (
-                              <div key={item.id} className="flex items-center justify-between p-p-3 bg-gray-50 dark:bg-gray-800/50 rounded bg-gray-50 dark:bg-gray-800/50 rounded-xl">
+                              <div key={item.id} className="flex items-center justify-between p-3 bg-gradient-to-l from-gray-50/80 to-gray-50/40 rounded-xl">
                                 <div className="flex items-center gap-3">
-                                  <div className={`w-8 h-8 rounded-full flex items-center justify-center ${item.type === 'earn' ? 'bg-emerald-100' : 'bg-red-100 dark:bg-red-950/40'}`}>
+                                  <div className={`w-8 h-8 rounded-full flex items-center justify-center ${item.type === 'earn' ? 'bg-emerald-100' : 'bg-red-100'}`}>
                                     {item.type === 'earn' ? <Plus className="w-4 h-4 text-emerald-600" /> : <XCircle className="w-4 h-4 text-red-600" />}
                                   </div>
                                   <div>
@@ -1445,35 +1526,46 @@ export default function BeneficiaryDashboard() {
                 {activeTab === 'referral' && (
                   <div className="space-y-6">
                     <div>
-                      <h1 className="text-2xl font-bold">برنامج الإحالة</h1>
+                      <h1 className="text-2xl font-bold bg-gradient-to-l from-violet-700 to-fuchsia-600 bg-clip-text text-transparent">برنامج الإحالة</h1>
                       <p className="text-muted-foreground text-sm mt-1">ادعُ أصدقاءك واحصل على نقاط مكافأة</p>
                     </div>
 
                     {/* Referral Code Card */}
-                    <Card className="border-0 shadow-sm bg-gradient-to-br from-violet-50 dark:from-violet-950/30 to-purple-50 dark:to-purple-950/30">
-                      <CardContent className="p-6 text-center">
-                        <Share2 className="w-12 h-12 text-violet-500 mx-auto mb-3" />
-                        <h3 className="font-semibold text-lg mb-2">كود الإحالة الخاص بك</h3>
+                    <Card className="border-0 bg-white/80 backdrop-blur-sm shadow-xl">
+                      <CardContent className="p-8 text-center">
+                        <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center mx-auto mb-4 shadow-lg shadow-violet-500/25">
+                          <Share2 className="w-8 h-8 text-white" />
+                        </div>
+                        <h3 className="font-semibold text-lg mb-4">كود الإحالة الخاص بك</h3>
                         {referralCode ? (
                           <>
-                            <div className="bg-white dark:bg-card rounded-xl p-4 inline-block border-2 border-dashed border-violet-300 dark:border-violet-800 mb-4">
-                              <p className="font-mono text-2xl font-bold text-violet-700 dark:text-violet-300 tracking-wider">{referralCode}</p>
+                            <div className="bg-gradient-to-l from-violet-50 to-fuchsia-50 rounded-2xl p-6 inline-block border-2 border-transparent bg-clip-padding relative">
+                              <div className="absolute inset-0 rounded-2xl bg-gradient-to-l from-violet-400 to-fuchsia-400 p-[2px]">
+                                <div className="w-full h-full bg-gradient-to-l from-violet-50 to-fuchsia-50 rounded-2xl" />
+                              </div>
+                              <div className="relative">
+                                <p className="font-mono text-3xl font-bold bg-gradient-to-l from-violet-700 to-fuchsia-600 bg-clip-text text-transparent tracking-wider">{referralCode}</p>
+                              </div>
                             </div>
-                            <div className="flex justify-center gap-3">
-                              <Button
-                                variant="outline"
-                                className="gap-2 border-violet-200 dark:border-violet-800 text-violet-700 dark:text-violet-300 hover:bg-violet-50 dark:hover:bg-violet-950/30"
+                            <div className="flex justify-center gap-3 mt-6">
+                              <motion.button
                                 onClick={handleCopyReferral}
+                                className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-medium text-sm transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] ${
+                                  copiedReferral
+                                    ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-500/25'
+                                    : 'bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white shadow-lg shadow-violet-500/25'
+                                }`}
+                                whileTap={{ scale: 0.95 }}
                               >
                                 {copiedReferral ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                                 {copiedReferral ? 'تم النسخ!' : 'نسخ الكود'}
-                              </Button>
+                              </motion.button>
                             </div>
                           </>
                         ) : (
                           <div className="flex justify-center mt-2">
                             <Button
-                              className="bg-gradient-to-r from-violet-500 to-purple-600 text-white"
+                              className="bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white hover:scale-[1.02] active:scale-[0.98] hover:shadow-lg hover:shadow-violet-500/25 transition-all duration-200"
                               onClick={fetchData}
                             >
                               إنشاء كود إحالة
@@ -1484,29 +1576,29 @@ export default function BeneficiaryDashboard() {
                     </Card>
 
                     {/* Referral Stats */}
-                    <Card className="border-0 shadow-sm">
+                    <Card className="border-0 bg-white/80 backdrop-blur-sm shadow-xl">
                       <CardContent className="p-6">
                         <h3 className="font-semibold text-lg mb-4">إحصائيات الإحالة</h3>
                         <div className="grid grid-cols-2 gap-4">
-                          <div className="bg-violet-50 dark:bg-violet-950/30 rounded-xl p-4 text-center">
-                            <p className="text-2xl font-bold text-violet-700 dark:text-violet-300">{referralUses}</p>
+                          <div className="bg-gradient-to-br from-violet-50 to-fuchsia-50 rounded-xl p-4 text-center border border-violet-100/50">
+                            <p className="text-2xl font-bold text-violet-700">{referralUses}</p>
                             <p className="text-xs text-muted-foreground">أشخاص استخدموا كودك</p>
                           </div>
-                          <div className="bg-emerald-50 dark:bg-emerald-950/30 rounded-xl p-4 text-center">
-                            <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-300">{referralUses * 50}</p>
+                          <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-xl p-4 text-center border border-emerald-100/50">
+                            <p className="text-2xl font-bold text-emerald-700">{referralUses * 50}</p>
                             <p className="text-xs text-muted-foreground">نقاط مكافأة مكتسبة</p>
                           </div>
                         </div>
-                        <div className="mt-4 bg-amber-50 dark:bg-amber-950/30 rounded-xl p-3 text-sm">
-                          <p className="text-amber-800 dark:text-amber-200 font-medium">🎁 شارك كودك مع أصدقائك!</p>
-                          <p className="text-amber-700 dark:text-amber-300 text-xs mt-1">تحصل على 50 نقطة لكل شخص يستخدم كودك، ويحصل هو على 25 نقطة مكافأة</p>
+                        <div className="mt-4 bg-gradient-to-l from-amber-50 to-yellow-50 rounded-xl p-3 text-sm border border-amber-100/50">
+                          <p className="text-amber-800 font-medium">🎁 شارك كودك مع أصدقائك!</p>
+                          <p className="text-amber-700 text-xs mt-1">تحصل على 50 نقطة لكل شخص يستخدم كودك، ويحصل هو على 25 نقطة مكافأة</p>
                         </div>
                       </CardContent>
                     </Card>
 
                     {/* Apply Referral Code */}
                     {!referralCode && (
-                      <Card className="border-0 shadow-sm">
+                      <Card className="border-0 bg-white/80 backdrop-blur-sm shadow-xl">
                         <CardContent className="p-6">
                           <h3 className="font-semibold text-lg mb-4">لديك كود إحالة؟</h3>
                           <div className="flex items-center gap-3">
@@ -1514,10 +1606,10 @@ export default function BeneficiaryDashboard() {
                               value={referralInput}
                               onChange={e => setReferralInput(e.target.value.toUpperCase())}
                               placeholder="أدخل كود الإحالة"
-                              className="flex-1 font-mono"
+                              className="flex-1 font-mono rounded-xl border-violet-200 focus:border-violet-400 focus:ring-violet-400/20"
                             />
                             <Button
-                              className="bg-gradient-to-r from-violet-500 to-purple-600 text-white"
+                              className="bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white hover:scale-[1.02] active:scale-[0.98] hover:shadow-lg hover:shadow-violet-500/25 transition-all duration-200"
                               onClick={handleApplyReferral}
                               disabled={referralApplying}
                             >
@@ -1534,14 +1626,14 @@ export default function BeneficiaryDashboard() {
                 {activeTab === 'help' && (
                   <div className="space-y-6">
                     <div>
-                      <h1 className="text-2xl font-bold">المساعدة والدعم</h1>
+                      <h1 className="text-2xl font-bold bg-gradient-to-l from-violet-700 to-fuchsia-600 bg-clip-text text-transparent">المساعدة والدعم</h1>
                       <p className="text-muted-foreground text-sm mt-1">الأسئلة الشائعة ومعلومات التواصل</p>
                     </div>
 
                     {/* FAQ Section */}
                     <div>
                       <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                        <HelpCircle className="w-5 h-5 text-rose-600" />
+                        <HelpCircle className="w-5 h-5 text-violet-600" />
                         الأسئلة الشائعة
                       </h2>
                       <div className="grid gap-3">
@@ -1552,11 +1644,11 @@ export default function BeneficiaryDashboard() {
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: i * 0.06 }}
                           >
-                            <Card className="border-0 shadow-sm bg-white dark:bg-card hover:shadow-md transition-shadow duration-200">
+                            <Card className="border-0 bg-white/80 backdrop-blur-sm shadow-lg hover:shadow-xl transition-shadow duration-200">
                               <CardContent className="p-5">
                                 <h3 className="font-bold mb-2 flex items-center gap-2 text-sm">
-                                  <div className="w-6 h-6 rounded-full bg-rose-100 flex items-center justify-center shrink-0">
-                                    <span className="text-rose-600 text-xs font-bold">{(i + 1).toLocaleString('ar-YE')}</span>
+                                  <div className="w-6 h-6 rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-500 flex items-center justify-center shrink-0 shadow-sm shadow-violet-500/25">
+                                    <span className="text-white text-xs font-bold">{(i + 1).toLocaleString('ar-YE')}</span>
                                   </div>
                                   {item.q}
                                 </h3>
@@ -1573,13 +1665,13 @@ export default function BeneficiaryDashboard() {
                     {/* Contact Info */}
                     <div>
                       <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                        <Phone className="w-5 h-5 text-rose-600" />
+                        <Phone className="w-5 h-5 text-violet-600" />
                         معلومات التواصل
                       </h2>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <Card className="border-0 shadow-sm bg-white dark:bg-card dark:bg-card">
+                        <Card className="border-0 bg-white/80 backdrop-blur-sm shadow-lg hover:shadow-xl transition-all duration-300">
                           <CardContent className="p-5 flex items-center gap-4">
-                            <div className="w-11 h-11 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 flex items-center justify-center shrink-0">
+                            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-emerald-100 to-teal-100 flex items-center justify-center shrink-0">
                               <Phone className="w-5 h-5 text-emerald-600" />
                             </div>
                             <div>
@@ -1588,9 +1680,9 @@ export default function BeneficiaryDashboard() {
                             </div>
                           </CardContent>
                         </Card>
-                        <Card className="border-0 shadow-sm bg-white dark:bg-card dark:bg-card">
+                        <Card className="border-0 bg-white/80 backdrop-blur-sm shadow-lg hover:shadow-xl transition-all duration-300">
                           <CardContent className="p-5 flex items-center gap-4">
-                            <div className="w-11 h-11 rounded-xl bg-blue-50 dark:bg-blue-950/30 flex items-center justify-center shrink-0">
+                            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-blue-100 to-cyan-100 flex items-center justify-center shrink-0">
                               <Home className="w-5 h-5 text-blue-600" />
                             </div>
                             <div>
@@ -1603,11 +1695,11 @@ export default function BeneficiaryDashboard() {
                     </div>
 
                     {/* App Info */}
-                    <Card className="border-0 shadow-sm bg-gradient-to-br from-rose-50 dark:from-rose-950/30 to-pink-50 dark:to-pink-950/30">
+                    <Card className="border-0 bg-gradient-to-br from-violet-50/80 to-fuchsia-50/80 backdrop-blur-sm shadow-lg">
                       <CardContent className="p-5 text-center">
                         <div className="flex items-center justify-center gap-2 mb-2">
                           <Image src="/logo.png" alt="عافيتك" width={24} height={24} className="rounded" />
-                          <span className="font-bold text-rose-700 dark:text-rose-300">عافيتك</span>
+                          <span className="font-bold bg-gradient-to-l from-violet-700 to-fuchsia-600 bg-clip-text text-transparent">عافيتك</span>
                         </div>
                         <p className="text-sm text-muted-foreground">منصة التمريض المنزلي الأولى في اليمن</p>
                         <p className="text-xs text-muted-foreground mt-1">الإصدار 1.0.0</p>
@@ -1623,10 +1715,12 @@ export default function BeneficiaryDashboard() {
 
       {/* ===== Request Service Dialog ===== */}
       <Dialog open={requestDialog} onOpenChange={setRequestDialog}>
-        <DialogContent className="max-w-md" dir="rtl">
+        <DialogContent className="max-w-md bg-white/90 backdrop-blur-xl border-0 shadow-2xl" dir="rtl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <ShoppingBag className="w-5 h-5 text-rose-600" />
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center shadow-sm shadow-violet-500/25">
+                <ShoppingBag className="w-4 h-4 text-white" />
+              </div>
               طلب خدمة
             </DialogTitle>
           </DialogHeader>
@@ -1634,7 +1728,7 @@ export default function BeneficiaryDashboard() {
             {selectedService && (
               <>
                 {/* Service Summary */}
-                <div className="bg-gradient-to-l from-rose-50 dark:from-rose-950/30 to-pink-50 dark:to-pink-950/30 rounded-xl p-4 border border-rose-100 dark:border-rose-900">
+                <div className="bg-gradient-to-l from-violet-50 to-fuchsia-50 rounded-xl p-4 border border-violet-100/50">
                   <h3 className="font-semibold text-base">{selectedService.name}</h3>
                   {selectedService.description && (
                     <p className="text-sm text-muted-foreground mt-1 leading-relaxed">{selectedService.description}</p>
@@ -1651,8 +1745,8 @@ export default function BeneficiaryDashboard() {
                   </div>
                   {validCoupon && (
                     <div className="mt-1 flex items-center gap-1.5 text-sm">
-                      <Tag className="w-3.5 h-3.5 text-rose-500" />
-                      <span className="text-rose-600 font-medium">خصم {validCoupon.discountPercent}% مطبّق</span>
+                      <Tag className="w-3.5 h-3.5 text-fuchsia-500" />
+                      <span className="text-fuchsia-600 font-medium">خصم {validCoupon.discountPercent}% مطبّق</span>
                     </div>
                   )}
                 </div>
@@ -1660,7 +1754,7 @@ export default function BeneficiaryDashboard() {
                 {/* Coupon Code Input */}
                 <div className="space-y-2">
                   <Label className="flex items-center gap-1.5">
-                    <Tag className="w-3.5 h-3.5 text-rose-500" />
+                    <Tag className="w-3.5 h-3.5 text-violet-500" />
                     كود الخصم
                   </Label>
                   <div className="flex items-center gap-2">
@@ -1671,12 +1765,12 @@ export default function BeneficiaryDashboard() {
                         if (validCoupon) { setValidCoupon(null); setCouponError('') }
                       }}
                       placeholder="أدخل كود الخصم"
-                      className="flex-1 font-mono rounded-xl"
+                      className="flex-1 font-mono rounded-xl border-violet-200 focus:border-violet-400 focus:ring-violet-400/20"
                     />
                     <Button
                       variant="outline"
                       size="sm"
-                      className="shrink-0 rounded-xl"
+                      className="shrink-0 rounded-xl hover:scale-[1.02] active:scale-[0.98] transition-transform"
                       onClick={handleValidateCoupon}
                       disabled={couponValidating || !requestForm.couponCode.trim()}
                     >
@@ -1690,28 +1784,28 @@ export default function BeneficiaryDashboard() {
                 {/* Address Input */}
                 <div className="space-y-2">
                   <Label className="flex items-center gap-1.5">
-                    <MapPin className="w-3.5 h-3.5 text-rose-500" />
+                    <MapPin className="w-3.5 h-3.5 text-violet-500" />
                     العنوان <span className="text-red-500">*</span>
                   </Label>
                   <Input
                     value={requestForm.address}
                     onChange={e => setRequestForm(f => ({ ...f, address: e.target.value }))}
                     placeholder="عنوانك بالتفصيل (المدينة، الحي، الشارع)"
-                    className="rounded-xl"
+                    className="rounded-xl border-violet-200 focus:border-violet-400 focus:ring-violet-400/20"
                   />
                 </div>
 
                 {/* Payment Method Select */}
                 <div className="space-y-2">
                   <Label className="flex items-center gap-1.5">
-                    <CreditCard className="w-3.5 h-3.5 text-rose-500" />
+                    <CreditCard className="w-3.5 h-3.5 text-violet-500" />
                     طريقة الدفع
                   </Label>
                   <Select
                     value={requestForm.paymentMethod}
                     onValueChange={v => setRequestForm(f => ({ ...f, paymentMethod: v }))}
                   >
-                    <SelectTrigger className="rounded-xl">
+                    <SelectTrigger className="rounded-xl border-violet-200 focus:border-violet-400 focus:ring-violet-400/20">
                       <SelectValue placeholder="اختر طريقة الدفع" />
                     </SelectTrigger>
                     <SelectContent>
@@ -1728,14 +1822,14 @@ export default function BeneficiaryDashboard() {
                 {/* Notes Textarea */}
                 <div className="space-y-2">
                   <Label className="flex items-center gap-1.5">
-                    <ClipboardList className="w-3.5 h-3.5 text-rose-500" />
+                    <ClipboardList className="w-3.5 h-3.5 text-violet-500" />
                     ملاحظات
                   </Label>
                   <Textarea
                     value={requestForm.notes}
                     onChange={e => setRequestForm(f => ({ ...f, notes: e.target.value }))}
                     placeholder="أي ملاحظات إضافية أو تفاصيل خاصة بالخدمة..."
-                    className="rounded-xl min-h-[80px] resize-none"
+                    className="rounded-xl min-h-[80px] resize-none border-violet-200 focus:border-violet-400 focus:ring-violet-400/20"
                   />
                 </div>
               </>
@@ -1745,12 +1839,12 @@ export default function BeneficiaryDashboard() {
             <Button
               variant="outline"
               onClick={() => setRequestDialog(false)}
-              className="rounded-xl"
+              className="rounded-xl hover:scale-[1.02] active:scale-[0.98] transition-transform"
             >
               إلغاء
             </Button>
             <Button
-              className="bg-gradient-to-r from-rose-500 to-pink-600 text-white hover:shadow-md hover:shadow-rose-200 rounded-xl"
+              className="bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white hover:scale-[1.02] active:scale-[0.98] hover:shadow-lg hover:shadow-violet-500/25 rounded-xl transition-all duration-200"
               onClick={handleRequestService}
               disabled={submitting}
             >
@@ -1772,15 +1866,17 @@ export default function BeneficiaryDashboard() {
 
       {/* ===== Emergency Request Dialog ===== */}
       <Dialog open={emergencyDialog} onOpenChange={setEmergencyDialog}>
-        <DialogContent className="max-w-md" dir="rtl">
+        <DialogContent className="max-w-md bg-white/90 backdrop-blur-xl border-0 shadow-2xl" dir="rtl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-red-600">
-              <AlertTriangle className="w-5 h-5" />
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-red-500 to-rose-500 flex items-center justify-center shadow-sm shadow-red-500/25">
+                <AlertTriangle className="w-4 h-4 text-white" />
+              </div>
               طلب طوارئ
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
-            <div className="bg-red-50 dark:bg-red-950/30 rounded-xl p-3 text-sm border border-red-100">
+            <div className="bg-red-50 rounded-xl p-3 text-sm border border-red-100">
               <p className="text-red-700 font-medium">سيتم إرسال طلبك كحالة طوارئ وسيتم التواصل معك في أقرب وقت ممكن.</p>
             </div>
             <div className="space-y-2">
@@ -1789,7 +1885,7 @@ export default function BeneficiaryDashboard() {
                 value={emergencyForm.serviceType}
                 onValueChange={v => setEmergencyForm(f => ({ ...f, serviceType: v }))}
               >
-                <SelectTrigger className="rounded-xl">
+                <SelectTrigger className="rounded-xl border-red-200 focus:border-red-400 focus:ring-red-400/20">
                   <SelectValue placeholder="اختر نوع الخدمة" />
                 </SelectTrigger>
                 <SelectContent>
@@ -1807,7 +1903,7 @@ export default function BeneficiaryDashboard() {
                 value={emergencyForm.address}
                 onChange={e => setEmergencyForm(f => ({ ...f, address: e.target.value }))}
                 placeholder="عنوانك بالتفصيل"
-                className="rounded-xl"
+                className="rounded-xl border-red-200 focus:border-red-400 focus:ring-red-400/20"
               />
             </div>
             <div className="space-y-2">
@@ -1816,14 +1912,14 @@ export default function BeneficiaryDashboard() {
                 value={emergencyForm.notes}
                 onChange={e => setEmergencyForm(f => ({ ...f, notes: e.target.value }))}
                 placeholder="صف الحالة باختصار..."
-                className="rounded-xl min-h-[80px] resize-none"
+                className="rounded-xl min-h-[80px] resize-none border-red-200 focus:border-red-400 focus:ring-red-400/20"
               />
             </div>
           </div>
           <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setEmergencyDialog(false)} className="rounded-xl">إلغاء</Button>
+            <Button variant="outline" onClick={() => setEmergencyDialog(false)} className="rounded-xl hover:scale-[1.02] active:scale-[0.98] transition-transform">إلغاء</Button>
             <Button
-              className="bg-gradient-to-r from-red-500 to-red-600 text-white hover:shadow-md rounded-xl"
+              className="bg-gradient-to-r from-red-500 to-rose-500 text-white hover:scale-[1.02] active:scale-[0.98] hover:shadow-lg hover:shadow-red-500/25 rounded-xl transition-all duration-200"
               onClick={handleEmergencyRequest}
               disabled={emergencySubmitting}
             >
@@ -1837,12 +1933,22 @@ export default function BeneficiaryDashboard() {
         </DialogContent>
       </Dialog>
 
-      {/* ===== Emergency Button ===== */}
+      {/* ===== Emergency Floating Button ===== */}
       <motion.button
         onClick={() => setEmergencyDialog(true)}
-        className="fixed bottom-6 right-6 z-50 flex items-center gap-2 px-5 py-3 rounded-full bg-gradient-to-r from-red-500 to-red-600 text-white shadow-lg hover:shadow-xl transition-shadow"
+        className="fixed bottom-6 left-6 z-50 flex items-center gap-2 px-5 py-3 rounded-full bg-gradient-to-r from-red-500 to-rose-500 text-white shadow-lg shadow-red-500/30 hover:shadow-xl hover:shadow-red-500/40 transition-shadow"
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}
+        animate={{
+          boxShadow: [
+            '0 10px 25px -3px rgba(239, 68, 68, 0.3)',
+            '0 10px 35px -3px rgba(239, 68, 68, 0.5)',
+            '0 10px 25px -3px rgba(239, 68, 68, 0.3)',
+          ],
+        }}
+        transition={{
+          boxShadow: { duration: 2, repeat: Infinity, ease: 'easeInOut' },
+        }}
         aria-label="طلب طوارئ"
       >
         <AlertTriangle className="w-5 h-5" />

@@ -6,9 +6,9 @@ import {
   LayoutDashboard, Wrench, Users, ClipboardList, CreditCard,
   LogOut, Plus, Pencil, Trash2, CheckCircle, XCircle, UserPlus,
   Loader2, Shield, Heart, Menu, X, UserCog, ChevronLeft,
-  FileText, Activity, Search, Filter, BarChart3, Moon, Sun,
+  FileText, Activity, Search, Filter, BarChart3,
   Calendar, TrendingUp, Download, CheckSquare, Square, ExternalLink,
-  Tag, Gift, Percent
+  Tag, Gift, Percent, Sparkles
 } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 import { useAppStore, formatPrice, getStatusLabel, getStatusColor } from '@/lib/store'
@@ -43,8 +43,13 @@ interface DashboardStats {
 
 const PIE_COLORS = ['#f59e0b', '#10b981', '#ef4444', '#3b82f6', '#8b5cf6', '#6b7280']
 
+const cardVariants = {
+  hidden: { opacity: 0, y: 20 },
+  visible: { opacity: 1, y: 0 },
+}
+
 export default function AdminDashboard() {
-  const { user, setUser, setView, logout, darkMode, toggleDarkMode } = useAppStore()
+  const { user, setUser, setView, logout } = useAppStore()
   const { toast } = useToast()
   const [activeTab, setActiveTab] = useState<Tab>('dashboard')
   const [stats, setStats] = useState<DashboardStats | null>(null)
@@ -608,17 +613,25 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex" dir="rtl">
+    <div className="min-h-screen bg-gradient-to-bl from-slate-50 via-amber-50/20 to-orange-50/10 flex relative overflow-hidden" dir="rtl">
+      {/* Floating Orbs Background */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
+        <div className="absolute -top-40 -right-40 w-96 h-96 bg-amber-200/30 rounded-full blur-3xl animate-pulse" />
+        <div className="absolute top-1/3 -left-20 w-80 h-80 bg-orange-200/20 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '2s' }} />
+        <div className="absolute -bottom-32 right-1/3 w-72 h-72 bg-rose-200/20 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '4s' }} />
+        <div className="absolute top-2/3 left-1/4 w-64 h-64 bg-amber-100/20 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '3s' }} />
+      </div>
+
       {/* Desktop Sidebar */}
-      <aside className="w-72 bg-white dark:bg-gray-900 border-l dark:border-gray-800 shadow-sm hidden lg:flex flex-col fixed right-0 top-0 bottom-0 z-40">
-        <div className="p-6 border-b bg-gradient-to-l from-emerald-600 to-emerald-700">
+      <aside className="w-72 bg-white/70 backdrop-blur-xl border-l border-amber-100/50 shadow-xl shadow-amber-900/5 hidden lg:flex flex-col fixed right-0 top-0 bottom-0 z-40">
+        <div className="p-6 bg-gradient-to-l from-amber-500 via-orange-500 to-rose-500">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center overflow-hidden">
+            <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center overflow-hidden">
               <Image src="/logo.png" alt="عافيتك" width={40} height={40} className="rounded-lg" />
             </div>
             <div>
               <h2 className="text-xl font-bold text-white">عافيتك</h2>
-              <p className="text-emerald-100 text-xs">لوحة تحكم الإدارة</p>
+              <p className="text-amber-100 text-xs">لوحة تحكم الإدارة</p>
             </div>
           </div>
         </div>
@@ -628,10 +641,10 @@ export default function AdminDashboard() {
             <button
               key={tab.key}
               onClick={() => handleTabChange(tab.key)}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 ${
                 activeTab === tab.key
-                  ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 shadow-sm'
-                  : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
+                  ? 'bg-gradient-to-l from-amber-500 via-orange-500 to-rose-500 text-white shadow-lg shadow-amber-500/25'
+                  : 'text-gray-600 hover:bg-amber-50/80 hover:text-amber-700'
               }`}
             >
               <tab.icon className="w-5 h-5" />
@@ -643,21 +656,21 @@ export default function AdminDashboard() {
           ))}
         </nav>
 
-        <div className="p-4 border-t bg-gray-50/50 dark:bg-gray-800/50">
-          <div className="flex items-center gap-3 mb-3 p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 dark:bg-gray-800 cursor-pointer transition-colors" onClick={() => {
+        <div className="p-4 border-t border-amber-100/50 bg-white/40 backdrop-blur-sm">
+          <div className="flex items-center gap-3 mb-3 p-2 rounded-xl hover:bg-amber-50/80 cursor-pointer transition-all duration-200" onClick={() => {
             setEditName((user as any)?.name || '')
             setEditNameDialog(true)
           }}>
-            <div className="w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-950/40 flex items-center justify-center">
-              <Shield className="w-5 h-5 text-emerald-600" />
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-md shadow-amber-500/25">
+              <Shield className="w-5 h-5 text-white" />
             </div>
             <div className="flex-1 min-w-0">
               <p className="font-medium text-sm truncate">{(user as any)?.name || 'المدير'}</p>
-              <p className="text-muted-foreground text-xs">مدير النظام</p>
+              <p className="text-gray-400 text-xs">مدير النظام</p>
             </div>
-            <Pencil className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500" />
+            <Pencil className="w-3.5 h-3.5 text-gray-400" />
           </div>
-          <Button variant="ghost" className="w-full justify-start text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30 dark:bg-red-950/30 rounded-xl" onClick={handleLogout}>
+          <Button variant="ghost" className="w-full justify-start text-red-500 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all duration-200" onClick={handleLogout}>
             <LogOut className="w-4 h-4 ml-2" />
             تسجيل الخروج
           </Button>
@@ -666,12 +679,12 @@ export default function AdminDashboard() {
 
       {/* Mobile Menu Overlay */}
       {mobileMenuOpen && (
-        <div className="lg:hidden fixed inset-0 bg-black/50 z-50" onClick={() => setMobileMenuOpen(false)} />
+        <div className="lg:hidden fixed inset-0 bg-black/40 backdrop-blur-sm z-50" onClick={() => setMobileMenuOpen(false)} />
       )}
 
       {/* Mobile Sidebar */}
-      <div className={`lg:hidden fixed right-0 top-0 bottom-0 w-72 bg-white dark:bg-gray-900 z-50 transform transition-transform duration-300 ${mobileMenuOpen ? 'translate-x-0' : 'translate-x-full'}`}>
-        <div className="p-4 border-b bg-gradient-to-l from-emerald-600 to-emerald-700 flex items-center justify-between">
+      <div className={`lg:hidden fixed right-0 top-0 bottom-0 w-72 bg-white/90 backdrop-blur-xl z-50 transform transition-transform duration-300 shadow-2xl ${mobileMenuOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+        <div className="p-4 bg-gradient-to-l from-amber-500 via-orange-500 to-rose-500 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Image src="/logo.png" alt="عافيتك" width={28} height={28} className="rounded-lg" />
             <h2 className="text-lg font-bold text-white">عافيتك</h2>
@@ -685,10 +698,10 @@ export default function AdminDashboard() {
             <button
               key={tab.key}
               onClick={() => handleTabChange(tab.key)}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors ${
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 ${
                 activeTab === tab.key
-                  ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300'
-                  : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
+                  ? 'bg-gradient-to-l from-amber-500 via-orange-500 to-rose-500 text-white shadow-lg shadow-amber-500/25'
+                  : 'text-gray-600 hover:bg-amber-50/80'
               }`}
             >
               <tab.icon className="w-5 h-5" />
@@ -696,21 +709,21 @@ export default function AdminDashboard() {
             </button>
           ))}
         </nav>
-        <div className="absolute bottom-0 left-0 right-0 p-4 border-t">
+        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-amber-100/50 bg-white/60 backdrop-blur-sm">
           <div className="flex items-center gap-3 mb-3 p-2" onClick={() => {
             setEditName((user as any)?.name || '')
             setEditNameDialog(true)
             setMobileMenuOpen(false)
           }}>
-            <div className="w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-950/40 flex items-center justify-center">
-              <Shield className="w-4 h-4 text-emerald-600" />
+            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center">
+              <Shield className="w-4 h-4 text-white" />
             </div>
             <div>
               <p className="font-medium text-sm">{(user as any)?.name || 'المدير'}</p>
-              <p className="text-muted-foreground text-xs">مدير النظام</p>
+              <p className="text-gray-400 text-xs">مدير النظام</p>
             </div>
           </div>
-          <Button variant="ghost" className="w-full justify-start text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 dark:bg-red-950/30" onClick={handleLogout}>
+          <Button variant="ghost" className="w-full justify-start text-red-500 hover:bg-red-50" onClick={handleLogout}>
             <LogOut className="w-4 h-4 ml-2" />
             تسجيل الخروج
           </Button>
@@ -718,17 +731,17 @@ export default function AdminDashboard() {
       </div>
 
       {/* Mobile Header */}
-      <div className="lg:hidden fixed top-0 left-0 right-0 bg-white dark:bg-gray-900 border-b dark:border-gray-800 z-40 px-4 py-3 flex items-center justify-between shadow-sm">
+      <div className="lg:hidden fixed top-0 left-0 right-0 bg-white/80 backdrop-blur-xl border-b border-amber-100/50 z-40 px-4 py-3 flex items-center justify-between shadow-sm">
         <div className="flex items-center gap-2">
           <Image src="/logo.png" alt="عافيتك" width={24} height={24} className="rounded" />
-          <span className="font-bold text-emerald-700 dark:text-emerald-300">عافيتك</span>
+          <span className="font-bold bg-gradient-to-l from-amber-600 via-orange-600 to-rose-600 bg-clip-text text-transparent">عافيتك</span>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="sm" onClick={() => {
             setEditName((user as any)?.name || '')
             setEditNameDialog(true)
           }}>
-            <Shield className="w-4 h-4 text-emerald-600" />
+            <Shield className="w-4 h-4 text-amber-600" />
           </Button>
           <Button variant="ghost" size="sm" onClick={handleLogout}>
             <LogOut className="w-4 h-4 text-red-500" />
@@ -740,12 +753,17 @@ export default function AdminDashboard() {
       </div>
 
       {/* Main Content */}
-      <main className="flex-1 lg:mr-72 overflow-y-auto">
+      <main className="flex-1 lg:mr-72 overflow-y-auto relative z-10">
         <div className="p-4 md:p-8 max-w-7xl mx-auto pt-20 lg:pt-8 pb-24 lg:pb-8">
           <AnimatePresence mode="wait">
             {loading ? (
               <div className="flex items-center justify-center py-20">
-                <Loader2 className="w-8 h-8 animate-spin text-emerald-600" />
+                <div className="relative">
+                  <Loader2 className="w-10 h-10 animate-spin text-amber-500" />
+                  <div className="absolute inset-0 w-10 h-10 animate-ping opacity-20">
+                    <Loader2 className="w-10 h-10 text-orange-500" />
+                  </div>
+                </div>
               </div>
             ) : (
               <motion.div
@@ -753,141 +771,176 @@ export default function AdminDashboard() {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
-                transition={{ duration: 0.2 }}
+                transition={{ duration: 0.3 }}
               >
                 {/* ===== Dashboard Tab ===== */}
                 {activeTab === 'dashboard' && stats && (
                   <div className="space-y-6">
                     <div>
-                      <h1 className="text-2xl font-bold">لوحة التحكم</h1>
-                      <p className="text-muted-foreground text-sm mt-1">نظرة عامة على النظام</p>
+                      <h1 className="text-2xl font-bold bg-gradient-to-l from-amber-600 via-orange-600 to-rose-600 bg-clip-text text-transparent">لوحة التحكم</h1>
+                      <p className="text-gray-500 text-sm mt-1">نظرة عامة على النظام</p>
                     </div>
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                       {[
-                        { label: 'إجمالي الممرضين', value: stats.totalNurses, color: 'text-emerald-600', bg: 'bg-emerald-50 dark:bg-emerald-950/30', icon: Users },
-                        { label: 'ممرضين معتمدين', value: stats.approvedNurses, color: 'text-teal-600', bg: 'bg-teal-50 dark:bg-teal-950/30', icon: CheckCircle },
-                        { label: 'بانتظار الموافقة', value: stats.pendingNurses, color: 'text-yellow-600', bg: 'bg-yellow-50 dark:bg-yellow-950/30', icon: Loader2 },
-                        { label: 'المستفيدون', value: stats.totalBeneficiaries, color: 'text-cyan-600', bg: 'bg-cyan-50 dark:bg-cyan-950/30', icon: Heart },
-                        { label: 'الخدمات', value: stats.totalServices, color: 'text-purple-600', bg: 'bg-purple-50 dark:bg-purple-950/30', icon: Wrench },
-                        { label: 'خدمات نشطة', value: stats.activeServices, color: 'text-green-600', bg: 'bg-green-50 dark:bg-green-950/30', icon: CheckCircle },
-                        { label: 'طلبات بانتظار المراجعة', value: stats.pendingRequests, color: 'text-orange-600', bg: 'bg-orange-50 dark:bg-orange-950/30', icon: ClipboardList },
-                        { label: 'طلبات مكتملة', value: stats.completedRequests, color: 'text-blue-600', bg: 'bg-blue-50 dark:bg-blue-950/30', icon: CheckCircle },
+                        { label: 'إجمالي الممرضين', value: stats.totalNurses, gradient: 'from-amber-400 to-orange-500', shadow: 'shadow-amber-500/20', icon: Users },
+                        { label: 'ممرضين معتمدين', value: stats.approvedNurses, gradient: 'from-emerald-400 to-teal-500', shadow: 'shadow-emerald-500/20', icon: CheckCircle },
+                        { label: 'بانتظار الموافقة', value: stats.pendingNurses, gradient: 'from-yellow-400 to-amber-500', shadow: 'shadow-yellow-500/20', icon: Loader2 },
+                        { label: 'المستفيدون', value: stats.totalBeneficiaries, gradient: 'from-cyan-400 to-blue-500', shadow: 'shadow-cyan-500/20', icon: Heart },
+                        { label: 'الخدمات', value: stats.totalServices, gradient: 'from-purple-400 to-fuchsia-500', shadow: 'shadow-purple-500/20', icon: Wrench },
+                        { label: 'خدمات نشطة', value: stats.activeServices, gradient: 'from-green-400 to-emerald-500', shadow: 'shadow-green-500/20', icon: CheckCircle },
+                        { label: 'طلبات بانتظار المراجعة', value: stats.pendingRequests, gradient: 'from-orange-400 to-red-500', shadow: 'shadow-orange-500/20', icon: ClipboardList },
+                        { label: 'طلبات مكتملة', value: stats.completedRequests, gradient: 'from-blue-400 to-indigo-500', shadow: 'shadow-blue-500/20', icon: CheckCircle },
                       ].map((item, i) => (
-                        <Card key={i} className="border-0 shadow-sm hover:shadow-md transition-shadow">
-                          <CardContent className="p-4">
-                            <div className="flex items-center gap-3 mb-2">
-                              <div className={`w-8 h-8 rounded-lg ${item.bg} flex items-center justify-center`}>
-                                <item.icon className={`w-4 h-4 ${item.color}`} />
+                        <motion.div
+                          key={i}
+                          variants={cardVariants}
+                          initial="hidden"
+                          animate="visible"
+                          transition={{ delay: i * 0.05, duration: 0.4 }}
+                        >
+                          <Card className={`border-0 shadow-lg ${item.shadow} hover:-translate-y-1 hover:shadow-xl transition-all duration-300 overflow-hidden`}>
+                            <CardContent className="p-4">
+                              <div className="flex items-center gap-3 mb-3">
+                                <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${item.gradient} flex items-center justify-center shadow-md`}>
+                                  <item.icon className="w-5 h-5 text-white" />
+                                </div>
+                                <p className="text-xs text-gray-500 leading-tight">{item.label}</p>
                               </div>
-                              <p className="text-xs text-muted-foreground">{item.label}</p>
-                            </div>
-                            <p className={`text-2xl font-bold ${item.color}`}>{item.value}</p>
-                          </CardContent>
-                        </Card>
+                              <p className={`text-2xl font-bold bg-gradient-to-l ${item.gradient} bg-clip-text text-transparent`}>{item.value}</p>
+                            </CardContent>
+                          </Card>
+                        </motion.div>
                       ))}
                     </div>
 
                     {/* Revenue Card */}
-                    <Card className="border-0 shadow-sm bg-gradient-to-l from-emerald-500 to-emerald-700 text-white">
-                      <CardContent className="p-6">
-                        <p className="text-emerald-100 text-sm mb-1">إجمالي الإيرادات</p>
-                        <p className="text-3xl font-bold">{formatPrice(stats.totalRevenue)}</p>
-                      </CardContent>
-                    </Card>
+                    <motion.div variants={cardVariants} initial="hidden" animate="visible" transition={{ delay: 0.4, duration: 0.4 }}>
+                      <Card className="border-0 shadow-xl shadow-amber-500/25 bg-gradient-to-l from-amber-500 via-orange-500 to-rose-500 text-white overflow-hidden relative">
+                        <div className="absolute top-0 left-0 w-32 h-32 bg-white/10 rounded-full -translate-x-1/2 -translate-y-1/2" />
+                        <div className="absolute bottom-0 right-0 w-24 h-24 bg-white/10 rounded-full translate-x-1/3 translate-y-1/3" />
+                        <CardContent className="p-6 relative z-10">
+                          <div className="flex items-center gap-3 mb-1">
+                            <Sparkles className="w-5 h-5 text-amber-200" />
+                            <p className="text-amber-100 text-sm">إجمالي الإيرادات</p>
+                          </div>
+                          <p className="text-3xl font-bold">{formatPrice(stats.totalRevenue)}</p>
+                        </CardContent>
+                      </Card>
+                    </motion.div>
 
                     {/* Charts Row */}
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                       {/* Revenue Bar Chart */}
-                      <Card className="border-0 shadow-sm">
-                        <CardHeader className="pb-2">
-                          <CardTitle className="text-lg">الإيرادات الشهرية</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="h-64">
-                            <ResponsiveContainer width="100%" height="100%">
-                              <BarChart data={revenueChartData}>
-                                <CartesianGrid strokeDasharray="3 3" />
-                                <XAxis dataKey="name" fontSize={12} />
-                                <YAxis fontSize={12} />
-                                <Tooltip formatter={(value: number) => formatPrice(value)} />
-                                <Bar dataKey="revenue" fill="#10b981" radius={[6, 6, 0, 0]} />
-                              </BarChart>
-                            </ResponsiveContainer>
-                          </div>
-                        </CardContent>
-                      </Card>
+                      <motion.div variants={cardVariants} initial="hidden" animate="visible" transition={{ delay: 0.5, duration: 0.4 }}>
+                        <Card className="border-0 shadow-lg shadow-amber-500/10 overflow-hidden">
+                          <CardHeader className="pb-2">
+                            <CardTitle className="text-lg">الإيرادات الشهرية</CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="h-64">
+                              <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={revenueChartData}>
+                                  <CartesianGrid strokeDasharray="3 3" stroke="#f3f0eb" />
+                                  <XAxis dataKey="name" fontSize={12} />
+                                  <YAxis fontSize={12} />
+                                  <Tooltip formatter={(value: number) => formatPrice(value)} />
+                                  <defs>
+                                    <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
+                                      <stop offset="0%" stopColor="#f59e0b" />
+                                      <stop offset="100%" stopColor="#f43f5e" />
+                                    </linearGradient>
+                                  </defs>
+                                  <Bar dataKey="revenue" fill="url(#barGradient)" radius={[8, 8, 0, 0]} />
+                                </BarChart>
+                              </ResponsiveContainer>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </motion.div>
 
                       {/* Requests by Status Pie Chart */}
-                      <Card className="border-0 shadow-sm">
-                        <CardHeader className="pb-2">
-                          <CardTitle className="text-lg">الطلبات حسب الحالة</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="h-64 flex items-center justify-center">
-                            {requestsByStatusData.length > 0 ? (
-                              <ResponsiveContainer width="100%" height="100%">
-                                <PieChart>
-                                  <Pie
-                                    data={requestsByStatusData}
-                                    cx="50%"
-                                    cy="50%"
-                                    innerRadius={50}
-                                    outerRadius={90}
-                                    paddingAngle={3}
-                                    dataKey="value"
-                                    label={({ name, value }) => `${name}: ${value}`}
-                                  >
-                                    {requestsByStatusData.map((entry, index) => (
-                                      <Cell key={`cell-${index}`} fill={entry.color} />
-                                    ))}
-                                  </Pie>
-                                  <Tooltip />
-                                </PieChart>
-                              </ResponsiveContainer>
-                            ) : (
-                              <p className="text-muted-foreground text-sm">لا توجد بيانات طلبات بعد</p>
-                            )}
-                          </div>
-                        </CardContent>
-                      </Card>
+                      <motion.div variants={cardVariants} initial="hidden" animate="visible" transition={{ delay: 0.6, duration: 0.4 }}>
+                        <Card className="border-0 shadow-lg shadow-amber-500/10 overflow-hidden">
+                          <CardHeader className="pb-2">
+                            <CardTitle className="text-lg">الطلبات حسب الحالة</CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="h-64 flex items-center justify-center">
+                              {requestsByStatusData.length > 0 ? (
+                                <ResponsiveContainer width="100%" height="100%">
+                                  <PieChart>
+                                    <defs>
+                                      {requestsByStatusData.map((entry, index) => (
+                                        <linearGradient key={`grad-${index}`} id={`pieGrad${index}`} x1="0" y1="0" x2="1" y2="1">
+                                          <stop offset="0%" stopColor={entry.color} stopOpacity={1} />
+                                          <stop offset="100%" stopColor={entry.color} stopOpacity={0.7} />
+                                        </linearGradient>
+                                      ))}
+                                    </defs>
+                                    <Pie
+                                      data={requestsByStatusData}
+                                      cx="50%"
+                                      cy="50%"
+                                      innerRadius={50}
+                                      outerRadius={90}
+                                      paddingAngle={3}
+                                      dataKey="value"
+                                      label={({ name, value }) => `${name}: ${value}`}
+                                    >
+                                      {requestsByStatusData.map((entry, index) => (
+                                        <Cell key={`cell-${index}`} fill={`url(#pieGrad${index})`} />
+                                      ))}
+                                    </Pie>
+                                    <Tooltip />
+                                  </PieChart>
+                                </ResponsiveContainer>
+                              ) : (
+                                <p className="text-gray-400 text-sm">لا توجد بيانات طلبات بعد</p>
+                              )}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </motion.div>
                     </div>
 
                     {/* Recent Activity Feed */}
-                    <Card className="border-0 shadow-sm">
-                      <CardHeader className="pb-2">
-                        <div className="flex items-center justify-between">
-                          <CardTitle className="text-lg">النشاط الأخير</CardTitle>
-                          <Button variant="ghost" size="sm" className="text-emerald-600" onClick={() => setActiveTab('activity')}>
-                            عرض الكل
-                            <ChevronLeft className="w-4 h-4 mr-1" />
-                          </Button>
-                        </div>
-                      </CardHeader>
-                      <CardContent>
-                        {activityLogs.length > 0 ? (
-                          <div className="space-y-3 max-h-64 overflow-y-auto">
-                            {activityLogs.slice(0, 5).map((log: any) => (
-                              <div key={log.id} className="flex items-start gap-3 p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">
-                                <div className="w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-950/40 flex items-center justify-center flex-shrink-0 mt-0.5">
-                                  <Activity className="w-4 h-4 text-emerald-600" />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-sm">{log.description}</p>
-                                  <p className="text-xs text-muted-foreground mt-0.5">
-                                    {log.createdAt ? new Date(log.createdAt).toLocaleString('ar') : ''}
-                                  </p>
-                                </div>
-                              </div>
-                            ))}
+                    <motion.div variants={cardVariants} initial="hidden" animate="visible" transition={{ delay: 0.7, duration: 0.4 }}>
+                      <Card className="border-0 shadow-lg shadow-amber-500/10 overflow-hidden">
+                        <CardHeader className="pb-2">
+                          <div className="flex items-center justify-between">
+                            <CardTitle className="text-lg">النشاط الأخير</CardTitle>
+                            <Button variant="ghost" size="sm" className="text-amber-600 hover:text-amber-700 hover:bg-amber-50" onClick={() => setActiveTab('activity')}>
+                              عرض الكل
+                              <ChevronLeft className="w-4 h-4 mr-1" />
+                            </Button>
                           </div>
-                        ) : (
-                          <div className="text-center py-8 text-muted-foreground text-sm">
-                            <Activity className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                            <p>لا يوجد نشاط مسجل بعد</p>
-                          </div>
-                        )}
-                      </CardContent>
-                    </Card>
+                        </CardHeader>
+                        <CardContent>
+                          {activityLogs.length > 0 ? (
+                            <div className="space-y-2 max-h-64 overflow-y-auto">
+                              {activityLogs.slice(0, 5).map((log: any, idx: number) => (
+                                <div key={log.id} className={`flex items-start gap-3 p-3 rounded-xl transition-colors duration-200 ${idx % 2 === 0 ? 'bg-amber-50/50' : 'bg-white'}`}>
+                                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center flex-shrink-0 mt-0.5 shadow-sm">
+                                    <Activity className="w-4 h-4 text-white" />
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm">{log.description}</p>
+                                    <p className="text-xs text-gray-400 mt-0.5">
+                                      {log.createdAt ? new Date(log.createdAt).toLocaleString('ar') : ''}
+                                    </p>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="text-center py-8 text-gray-400 text-sm">
+                              <Activity className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                              <p>لا يوجد نشاط مسجل بعد</p>
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    </motion.div>
                   </div>
                 )}
 
@@ -896,11 +949,11 @@ export default function AdminDashboard() {
                   <div className="space-y-6">
                     <div className="flex items-center justify-between">
                       <div>
-                        <h1 className="text-2xl font-bold">إدارة الخدمات</h1>
-                        <p className="text-muted-foreground text-sm mt-1">إضافة وتعديل وحذف الخدمات الصحية</p>
+                        <h1 className="text-2xl font-bold bg-gradient-to-l from-amber-600 via-orange-600 to-rose-600 bg-clip-text text-transparent">إدارة الخدمات</h1>
+                        <p className="text-gray-500 text-sm mt-1">إضافة وتعديل وحذف الخدمات الصحية</p>
                       </div>
                       <Button
-                        className="bg-emerald-600 hover:bg-emerald-700"
+                        className="bg-gradient-to-l from-amber-500 via-orange-500 to-rose-500 hover:scale-[1.02] active:scale-[0.98] text-white shadow-lg shadow-amber-500/25 transition-all duration-200"
                         onClick={() => {
                           setEditingService(null)
                           setServiceForm({ name: '', description: '', price: '', category: 'عام', isActive: true })
@@ -912,47 +965,55 @@ export default function AdminDashboard() {
                       </Button>
                     </div>
                     <div className="grid gap-4">
-                      {services.map(service => (
-                        <Card key={service.id} className="border-0 shadow-sm hover:shadow-md transition-shadow">
-                          <CardContent className="p-5">
-                            <div className="flex items-start justify-between gap-4">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2 mb-2">
-                                  <h3 className="font-semibold text-lg">{service.name}</h3>
-                                  <Badge variant={service.isActive ? 'default' : 'secondary'} className={service.isActive ? 'bg-emerald-100 dark:bg-emerald-950/40 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300' : ''}>
-                                    {service.isActive ? 'نشط' : 'غير نشط'}
-                                  </Badge>
+                      {services.map((service, i) => (
+                        <motion.div
+                          key={service.id}
+                          variants={cardVariants}
+                          initial="hidden"
+                          animate="visible"
+                          transition={{ delay: i * 0.05, duration: 0.3 }}
+                        >
+                          <Card className="border-0 shadow-md shadow-amber-500/5 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-amber-500/10 transition-all duration-300 overflow-hidden">
+                            <CardContent className="p-5">
+                              <div className="flex items-start justify-between gap-4">
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <h3 className="font-semibold text-lg">{service.name}</h3>
+                                    <Badge variant={service.isActive ? 'default' : 'secondary'} className={service.isActive ? 'bg-gradient-to-l from-emerald-400 to-teal-500 text-white shadow-sm' : ''}>
+                                      {service.isActive ? 'نشط' : 'غير نشط'}
+                                    </Badge>
+                                  </div>
+                                  <p className="text-sm text-gray-500 mb-2">{service.description}</p>
+                                  <div className="flex items-center gap-4 text-sm">
+                                    <span className="font-bold bg-gradient-to-l from-amber-500 to-orange-600 bg-clip-text text-transparent text-lg">{formatPrice(service.price)}</span>
+                                    <Badge variant="outline" className="border-amber-200 text-amber-700">{service.category}</Badge>
+                                  </div>
                                 </div>
-                                <p className="text-sm text-muted-foreground mb-2">{service.description}</p>
-                                <div className="flex items-center gap-4 text-sm">
-                                  <span className="font-bold text-emerald-600 text-lg">{formatPrice(service.price)}</span>
-                                  <Badge variant="outline">{service.category}</Badge>
+                                <div className="flex items-center gap-2">
+                                  <Button variant="outline" size="sm" className="border-amber-200 hover:bg-amber-50 hover:border-amber-300" onClick={() => {
+                                    setEditingService(service)
+                                    setServiceForm({
+                                      name: service.name,
+                                      description: service.description,
+                                      price: service.price.toString(),
+                                      category: service.category,
+                                      isActive: service.isActive,
+                                    })
+                                    setServiceDialog(true)
+                                  }}>
+                                    <Pencil className="w-4 h-4" />
+                                  </Button>
+                                  <Button variant="outline" size="sm" className="text-red-500 hover:text-red-600 hover:bg-red-50 border-red-200" onClick={() => handleDeleteService(service.id)}>
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
                                 </div>
                               </div>
-                              <div className="flex items-center gap-2">
-                                <Button variant="outline" size="sm" onClick={() => {
-                                  setEditingService(service)
-                                  setServiceForm({
-                                    name: service.name,
-                                    description: service.description,
-                                    price: service.price.toString(),
-                                    category: service.category,
-                                    isActive: service.isActive,
-                                  })
-                                  setServiceDialog(true)
-                                }}>
-                                  <Pencil className="w-4 h-4" />
-                                </Button>
-                                <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700" onClick={() => handleDeleteService(service.id)}>
-                                  <Trash2 className="w-4 h-4" />
-                                </Button>
-                              </div>
-                            </div>
-                          </CardContent>
-                        </Card>
+                            </CardContent>
+                          </Card>
+                        </motion.div>
                       ))}
                       {services.length === 0 && (
-                        <div className="text-center py-16 text-muted-foreground">
+                        <div className="text-center py-16 text-gray-400">
                           <Wrench className="w-12 h-12 mx-auto mb-3 opacity-30" />
                           <p>لا توجد خدمات بعد. أضف أول خدمة!</p>
                         </div>
@@ -965,22 +1026,22 @@ export default function AdminDashboard() {
                 {activeTab === 'nurses' && (
                   <div className="space-y-6">
                     <div>
-                      <h1 className="text-2xl font-bold">إدارة الممرضين</h1>
-                      <p className="text-muted-foreground text-sm mt-1">مراجعة واعتماد تسجيلات الممرضين</p>
+                      <h1 className="text-2xl font-bold bg-gradient-to-l from-amber-600 via-orange-600 to-rose-600 bg-clip-text text-transparent">إدارة الممرضين</h1>
+                      <p className="text-gray-500 text-sm mt-1">مراجعة واعتماد تسجيلات الممرضين</p>
                     </div>
                     {/* Search & Filter */}
                     <div className="flex flex-col sm:flex-row gap-3">
                       <div className="relative flex-1">
-                        <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                        <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                         <Input
                           value={nurseSearch}
                           onChange={e => setNurseSearch(e.target.value)}
                           placeholder="بحث بالاسم أو الهاتف أو الرقم الوطني..."
-                          className="pr-10"
+                          className="pr-10 bg-white/70 backdrop-blur-sm border-amber-100 focus:border-amber-300"
                         />
                       </div>
                       <Select value={nurseFilter} onValueChange={setNurseFilter}>
-                        <SelectTrigger className="w-full sm:w-44">
+                        <SelectTrigger className="w-full sm:w-44 bg-white/70 backdrop-blur-sm border-amber-100">
                           <SelectValue placeholder="الحالة" />
                         </SelectTrigger>
                         <SelectContent>
@@ -992,69 +1053,77 @@ export default function AdminDashboard() {
                       </Select>
                     </div>
                     <div className="grid gap-4">
-                      {filteredNurses.map(nurse => (
-                        <Card key={nurse.id} className="border-0 shadow-sm hover:shadow-md transition-shadow">
-                          <CardContent className="p-5">
-                            <div className="flex items-start justify-between gap-4">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2 mb-3">
-                                  <div className="w-10 h-10 rounded-full bg-teal-50 dark:bg-teal-950/30 flex items-center justify-center">
-                                    <Users className="w-5 h-5 text-teal-600" />
-                                  </div>
-                                  <div>
-                                    <h3 className="font-semibold">{nurse.firstName} {nurse.secondName} {nurse.thirdName} {nurse.lastName}</h3>
-                                    <Badge className={getStatusColor(nurse.status)}>
-                                      {getStatusLabel(nurse.status)}
-                                    </Badge>
-                                  </div>
-                                </div>
-                                <div className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-2 text-sm">
-                                  <div><span className="text-muted-foreground">الهاتف:</span> <span className="font-medium">{nurse.phone}</span></div>
-                                  <div><span className="text-muted-foreground">الموقع:</span> <span className="font-medium">{nurse.location}</span></div>
-                                  <div><span className="text-muted-foreground">الرقم الوطني:</span> <span className="font-medium">{nurse.nationalId}</span></div>
-                                  <div><span className="text-muted-foreground">رقم المزاولة:</span> <span className="font-medium">{nurse.licenseNumber}</span></div>
-                                  <div><span className="text-muted-foreground">انتهاء المزاولة:</span> <span className="font-medium">{nurse.licenseExpiryDate}</span></div>
-                                </div>
-                                {/* Verification Documents */}
-                                {(nurse.documentUrls || nurse.documents) && (
-                                  <div className="mt-3 pt-3 border-t">
-                                    <p className="text-sm font-medium mb-2">المستندات:</p>
-                                    <div className="flex flex-wrap gap-2">
-                                      {(nurse.documentUrls || nurse.documents || []).map((url: string, idx: number) => (
-                                        <a key={idx} href={url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-xs text-emerald-600 hover:text-emerald-800 dark:hover:text-emerald-200 bg-emerald-50 dark:bg-emerald-950/30 px-2 py-1 rounded-md">
-                                          <FileText className="w-3 h-3" />
-                                          مستند {idx + 1}
-                                          <ExternalLink className="w-3 h-3" />
-                                        </a>
-                                      ))}
+                      {filteredNurses.map((nurse, i) => (
+                        <motion.div
+                          key={nurse.id}
+                          variants={cardVariants}
+                          initial="hidden"
+                          animate="visible"
+                          transition={{ delay: i * 0.05, duration: 0.3 }}
+                        >
+                          <Card className="border-0 shadow-md shadow-amber-500/5 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-amber-500/10 transition-all duration-300 overflow-hidden">
+                            <CardContent className="p-5">
+                              <div className="flex items-start justify-between gap-4">
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2 mb-3">
+                                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-teal-400 to-emerald-500 flex items-center justify-center shadow-md shadow-teal-500/20">
+                                      <Users className="w-5 h-5 text-white" />
+                                    </div>
+                                    <div>
+                                      <h3 className="font-semibold">{nurse.firstName} {nurse.secondName} {nurse.thirdName} {nurse.lastName}</h3>
+                                      <Badge className={getStatusColor(nurse.status)}>
+                                        {getStatusLabel(nurse.status)}
+                                      </Badge>
                                     </div>
                                   </div>
-                                )}
-                                {/* Admin Notes */}
-                                {nurse.adminNotes && (
-                                  <div className="mt-2 p-2 bg-red-50 dark:bg-red-950/30 rounded-lg text-sm text-red-700">
-                                    <span className="font-medium">ملاحظات الإدارة:</span> {nurse.adminNotes}
+                                  <div className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-2 text-sm">
+                                    <div><span className="text-gray-400">الهاتف:</span> <span className="font-medium">{nurse.phone}</span></div>
+                                    <div><span className="text-gray-400">الموقع:</span> <span className="font-medium">{nurse.location}</span></div>
+                                    <div><span className="text-gray-400">الرقم الوطني:</span> <span className="font-medium">{nurse.nationalId}</span></div>
+                                    <div><span className="text-gray-400">رقم المزاولة:</span> <span className="font-medium">{nurse.licenseNumber}</span></div>
+                                    <div><span className="text-gray-400">انتهاء المزاولة:</span> <span className="font-medium">{nurse.licenseExpiryDate}</span></div>
+                                  </div>
+                                  {/* Verification Documents */}
+                                  {(nurse.documentUrls || nurse.documents) && (
+                                    <div className="mt-3 pt-3 border-t border-amber-100/50">
+                                      <p className="text-sm font-medium mb-2">المستندات:</p>
+                                      <div className="flex flex-wrap gap-2">
+                                        {(nurse.documentUrls || nurse.documents || []).map((url: string, idx: number) => (
+                                          <a key={idx} href={url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-xs text-amber-600 hover:text-amber-800 bg-amber-50 px-2 py-1 rounded-md transition-colors">
+                                            <FileText className="w-3 h-3" />
+                                            مستند {idx + 1}
+                                            <ExternalLink className="w-3 h-3" />
+                                          </a>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                  {/* Admin Notes */}
+                                  {nurse.adminNotes && (
+                                    <div className="mt-2 p-2 bg-red-50 rounded-lg text-sm text-red-700">
+                                      <span className="font-medium">ملاحظات الإدارة:</span> {nurse.adminNotes}
+                                    </div>
+                                  )}
+                                </div>
+                                {nurse.status === 'pending' && (
+                                  <div className="flex items-center gap-2">
+                                    <Button size="sm" className="bg-gradient-to-l from-emerald-400 to-teal-500 hover:scale-[1.02] active:scale-[0.98] text-white shadow-md shadow-emerald-500/25 transition-all duration-200" onClick={() => handleNurseAction(nurse.id, 'approved')}>
+                                      <CheckCircle className="w-4 h-4 ml-1" />
+                                      قبول
+                                    </Button>
+                                    <Button size="sm" variant="outline" className="text-red-500 hover:text-red-600 hover:bg-red-50 border-red-200" onClick={() => handleNurseAction(nurse.id, 'rejected')}>
+                                      <XCircle className="w-4 h-4 ml-1" />
+                                      رفض
+                                    </Button>
                                   </div>
                                 )}
                               </div>
-                              {nurse.status === 'pending' && (
-                                <div className="flex items-center gap-2">
-                                  <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" onClick={() => handleNurseAction(nurse.id, 'approved')}>
-                                    <CheckCircle className="w-4 h-4 ml-1" />
-                                    قبول
-                                  </Button>
-                                  <Button size="sm" variant="outline" className="text-red-600 hover:text-red-700" onClick={() => handleNurseAction(nurse.id, 'rejected')}>
-                                    <XCircle className="w-4 h-4 ml-1" />
-                                    رفض
-                                  </Button>
-                                </div>
-                              )}
-                            </div>
-                          </CardContent>
-                        </Card>
+                            </CardContent>
+                          </Card>
+                        </motion.div>
                       ))}
                       {filteredNurses.length === 0 && (
-                        <div className="text-center py-16 text-muted-foreground">
+                        <div className="text-center py-16 text-gray-400">
                           <Users className="w-12 h-12 mx-auto mb-3 opacity-30" />
                           <p>{nurseSearch || nurseFilter !== 'all' ? 'لا توجد نتائج مطابقة' : 'لا يوجد ممرضون مسجلون بعد'}</p>
                         </div>
@@ -1067,75 +1136,83 @@ export default function AdminDashboard() {
                 {activeTab === 'beneficiaries' && (
                   <div className="space-y-6">
                     <div>
-                      <h1 className="text-2xl font-bold">المستفيدون</h1>
-                      <p className="text-muted-foreground text-sm mt-1">قائمة جميع المستفيدين المسجلين في النظام</p>
+                      <h1 className="text-2xl font-bold bg-gradient-to-l from-amber-600 via-orange-600 to-rose-600 bg-clip-text text-transparent">المستفيدون</h1>
+                      <p className="text-gray-500 text-sm mt-1">قائمة جميع المستفيدين المسجلين في النظام</p>
                     </div>
                     {/* Search */}
                     <div className="relative">
-                      <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                       <Input
                         value={beneficiarySearch}
                         onChange={e => setBeneficiarySearch(e.target.value)}
                         placeholder="بحث بالاسم أو الهاتف أو الموقع..."
-                        className="pr-10"
+                        className="pr-10 bg-white/70 backdrop-blur-sm border-amber-100 focus:border-amber-300"
                       />
                     </div>
                     <div className="grid gap-4">
-                      {filteredBeneficiaries.map((ben: any) => {
+                      {filteredBeneficiaries.map((ben: any, i: number) => {
                         const benRequests = requests.filter((r: any) => r.beneficiaryId === ben.id)
                         const benSpent = totalBeneficiarySpent[ben.id] || 0
                         return (
-                          <Card key={ben.id} className="border-0 shadow-sm hover:shadow-md transition-shadow">
-                            <CardContent className="p-5">
-                              <div className="flex items-start gap-3">
-                                <div className="w-10 h-10 rounded-full bg-cyan-50 dark:bg-cyan-950/30 flex items-center justify-center flex-shrink-0">
-                                  <Heart className="w-5 h-5 text-cyan-600" />
-                                </div>
-                                <div className="flex-1">
-                                  <h3 className="font-semibold">{ben.name}</h3>
-                                  <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm text-muted-foreground mt-1">
-                                    <span>الهاتف: {ben.phone}</span>
-                                    <span>الموقع: {ben.location}</span>
-                                    {ben.createdAt && <span>تاريخ التسجيل: {new Date(ben.createdAt).toLocaleDateString('ar')}</span>}
+                          <motion.div
+                            key={ben.id}
+                            variants={cardVariants}
+                            initial="hidden"
+                            animate="visible"
+                            transition={{ delay: i * 0.05, duration: 0.3 }}
+                          >
+                            <Card className="border-0 shadow-md shadow-amber-500/5 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-amber-500/10 transition-all duration-300 overflow-hidden">
+                              <CardContent className="p-5">
+                                <div className="flex items-start gap-3">
+                                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-cyan-400 to-blue-500 flex items-center justify-center flex-shrink-0 shadow-md shadow-cyan-500/20">
+                                    <Heart className="w-5 h-5 text-white" />
                                   </div>
-                                  <div className="flex items-center gap-4 mt-2">
-                                    <Badge variant="outline" className="text-xs">
-                                      {benRequests.length} طلب
-                                    </Badge>
-                                    {benSpent > 0 && (
-                                      <span className="text-sm font-medium text-emerald-600">
-                                        إجمالي الإنفاق: {formatPrice(benSpent)}
-                                      </span>
+                                  <div className="flex-1">
+                                    <h3 className="font-semibold">{ben.name}</h3>
+                                    <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm text-gray-500 mt-1">
+                                      <span>الهاتف: {ben.phone}</span>
+                                      <span>الموقع: {ben.location}</span>
+                                      {ben.createdAt && <span>تاريخ التسجيل: {new Date(ben.createdAt).toLocaleDateString('ar')}</span>}
+                                    </div>
+                                    <div className="flex items-center gap-4 mt-2">
+                                      <Badge variant="outline" className="text-xs border-amber-200 text-amber-700">
+                                        {benRequests.length} طلب
+                                      </Badge>
+                                      {benSpent > 0 && (
+                                        <span className="text-sm font-medium bg-gradient-to-l from-amber-500 to-orange-600 bg-clip-text text-transparent">
+                                          إجمالي الإنفاق: {formatPrice(benSpent)}
+                                        </span>
+                                      )}
+                                    </div>
+                                    {/* Request History */}
+                                    {benRequests.length > 0 && (
+                                      <div className="mt-3 pt-3 border-t border-amber-100/50">
+                                        <p className="text-sm font-medium mb-2">سجل الطلبات:</p>
+                                        <div className="space-y-1 max-h-32 overflow-y-auto">
+                                          {benRequests.slice(0, 5).map((req: any) => (
+                                            <div key={req.id} className="flex items-center gap-2 text-xs">
+                                              <span className="text-gray-500">{req.service?.name}</span>
+                                              <Badge className={`${getStatusColor(req.status)} text-[10px] px-1.5 py-0`}>
+                                                {getStatusLabel(req.status)}
+                                              </Badge>
+                                              {req.service?.price && <span className="bg-gradient-to-l from-amber-500 to-orange-600 bg-clip-text text-transparent">{formatPrice(req.service.price)}</span>}
+                                            </div>
+                                          ))}
+                                          {benRequests.length > 5 && (
+                                            <p className="text-xs text-gray-400">+{benRequests.length - 5} طلب آخر</p>
+                                          )}
+                                        </div>
+                                      </div>
                                     )}
                                   </div>
-                                  {/* Request History */}
-                                  {benRequests.length > 0 && (
-                                    <div className="mt-3 pt-3 border-t">
-                                      <p className="text-sm font-medium mb-2">سجل الطلبات:</p>
-                                      <div className="space-y-1 max-h-32 overflow-y-auto">
-                                        {benRequests.slice(0, 5).map((req: any) => (
-                                          <div key={req.id} className="flex items-center gap-2 text-xs">
-                                            <span className="text-muted-foreground">{req.service?.name}</span>
-                                            <Badge className={`${getStatusColor(req.status)} text-[10px] px-1.5 py-0`}>
-                                              {getStatusLabel(req.status)}
-                                            </Badge>
-                                            {req.service?.price && <span className="text-emerald-600">{formatPrice(req.service.price)}</span>}
-                                          </div>
-                                        ))}
-                                        {benRequests.length > 5 && (
-                                          <p className="text-xs text-muted-foreground">+{benRequests.length - 5} طلب آخر</p>
-                                        )}
-                                      </div>
-                                    </div>
-                                  )}
                                 </div>
-                              </div>
-                            </CardContent>
-                          </Card>
+                              </CardContent>
+                            </Card>
+                          </motion.div>
                         )
                       })}
                       {filteredBeneficiaries.length === 0 && (
-                        <div className="text-center py-16 text-muted-foreground">
+                        <div className="text-center py-16 text-gray-400">
                           <Heart className="w-12 h-12 mx-auto mb-3 opacity-30" />
                           <p>{beneficiarySearch ? 'لا توجد نتائج مطابقة' : 'لا يوجد مستفيدون مسجلون بعد'}</p>
                         </div>
@@ -1148,23 +1225,23 @@ export default function AdminDashboard() {
                 {activeTab === 'requests' && (
                   <div className="space-y-6">
                     <div>
-                      <h1 className="text-2xl font-bold">إدارة الطلبات</h1>
-                      <p className="text-muted-foreground text-sm mt-1">مراجعة ومعالجة طلبات الخدمات</p>
+                      <h1 className="text-2xl font-bold bg-gradient-to-l from-amber-600 via-orange-600 to-rose-600 bg-clip-text text-transparent">إدارة الطلبات</h1>
+                      <p className="text-gray-500 text-sm mt-1">مراجعة ومعالجة طلبات الخدمات</p>
                     </div>
                     {/* Search & Filters */}
                     <div className="flex flex-col gap-3">
                       <div className="relative">
-                        <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                        <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                         <Input
                           value={requestSearch}
                           onChange={e => setRequestSearch(e.target.value)}
                           placeholder="بحث بالخدمة أو المستفيد أو الملاحظات..."
-                          className="pr-10"
+                          className="pr-10 bg-white/70 backdrop-blur-sm border-amber-100 focus:border-amber-300"
                         />
                       </div>
                       <div className="flex flex-col sm:flex-row gap-3">
                         <Select value={requestStatusFilter} onValueChange={setRequestStatusFilter}>
-                          <SelectTrigger className="w-full sm:w-44">
+                          <SelectTrigger className="w-full sm:w-44 bg-white/70 backdrop-blur-sm border-amber-100">
                             <SelectValue placeholder="حالة الطلب" />
                           </SelectTrigger>
                           <SelectContent>
@@ -1176,7 +1253,7 @@ export default function AdminDashboard() {
                           </SelectContent>
                         </Select>
                         <Select value={requestServiceFilter} onValueChange={setRequestServiceFilter}>
-                          <SelectTrigger className="w-full sm:w-44">
+                          <SelectTrigger className="w-full sm:w-44 bg-white/70 backdrop-blur-sm border-amber-100">
                             <SelectValue placeholder="الخدمة" />
                           </SelectTrigger>
                           <SelectContent>
@@ -1188,7 +1265,7 @@ export default function AdminDashboard() {
                         </Select>
                         {/* Bulk Actions */}
                         {selectedRequestIds.length > 0 && (
-                          <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleBulkApprove}>
+                          <Button className="bg-gradient-to-l from-emerald-400 to-teal-500 hover:scale-[1.02] active:scale-[0.98] text-white shadow-md shadow-emerald-500/25 transition-all duration-200" onClick={handleBulkApprove}>
                             <CheckCircle className="w-4 h-4 ml-1" />
                             قبول المحدد ({selectedRequestIds.length})
                           </Button>
@@ -1196,77 +1273,85 @@ export default function AdminDashboard() {
                       </div>
                     </div>
                     <div className="grid gap-4">
-                      {filteredRequests.map((req: any) => (
-                        <Card key={req.id} className={`border-0 shadow-sm hover:shadow-md transition-shadow ${selectedRequestIds.includes(req.id) ? 'ring-2 ring-emerald-300' : ''}`}>
-                          <CardContent className="p-5">
-                            <div className="flex items-start justify-between gap-4">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2 mb-3">
-                                  {/* Checkbox for bulk select - only pending */}
-                                  {req.status === 'pending' && (
-                                    <button onClick={() => toggleRequestSelection(req.id)} className="flex-shrink-0">
-                                      {selectedRequestIds.includes(req.id)
-                                        ? <CheckSquare className="w-5 h-5 text-emerald-600" />
-                                        : <Square className="w-5 h-5 text-gray-400 dark:text-gray-500" />
-                                      }
-                                    </button>
-                                  )}
-                                  <div className="w-10 h-10 rounded-full bg-purple-50 dark:bg-purple-950/30 flex items-center justify-center">
-                                    <ClipboardList className="w-5 h-5 text-purple-600" />
+                      {filteredRequests.map((req: any, i: number) => (
+                        <motion.div
+                          key={req.id}
+                          variants={cardVariants}
+                          initial="hidden"
+                          animate="visible"
+                          transition={{ delay: i * 0.05, duration: 0.3 }}
+                        >
+                          <Card className={`border-0 shadow-md shadow-amber-500/5 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-amber-500/10 transition-all duration-300 overflow-hidden ${selectedRequestIds.includes(req.id) ? 'ring-2 ring-amber-300 shadow-lg shadow-amber-500/15' : ''}`}>
+                            <CardContent className="p-5">
+                              <div className="flex items-start justify-between gap-4">
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2 mb-3">
+                                    {/* Checkbox for bulk select - only pending */}
+                                    {req.status === 'pending' && (
+                                      <button onClick={() => toggleRequestSelection(req.id)} className="flex-shrink-0">
+                                        {selectedRequestIds.includes(req.id)
+                                          ? <CheckSquare className="w-5 h-5 text-amber-500" />
+                                          : <Square className="w-5 h-5 text-gray-300" />
+                                        }
+                                      </button>
+                                    )}
+                                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-400 to-fuchsia-500 flex items-center justify-center shadow-md shadow-purple-500/20">
+                                      <ClipboardList className="w-5 h-5 text-white" />
+                                    </div>
+                                    <div>
+                                      <h3 className="font-semibold">{req.service?.name}</h3>
+                                      <Badge className={getStatusColor(req.status)}>
+                                        {getStatusLabel(req.status)}
+                                      </Badge>
+                                    </div>
                                   </div>
-                                  <div>
-                                    <h3 className="font-semibold">{req.service?.name}</h3>
-                                    <Badge className={getStatusColor(req.status)}>
-                                      {getStatusLabel(req.status)}
-                                    </Badge>
+                                  <div className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-2 text-sm">
+                                    <div><span className="text-gray-400">المستفيد:</span> <span className="font-medium">{req.beneficiary?.name}</span></div>
+                                    <div><span className="text-gray-400">الهاتف:</span> <span className="font-medium">{req.beneficiary?.phone}</span></div>
+                                    <div><span className="text-gray-400">السعر:</span> <span className="font-medium bg-gradient-to-l from-amber-500 to-orange-600 bg-clip-text text-transparent">{formatPrice(req.service?.price || 0)}</span></div>
+                                    {req.paymentMethod && <div><span className="text-gray-400">طريقة الدفع:</span> <span className="font-medium">{req.paymentMethod}</span></div>}
+                                    {req.notes && <div><span className="text-gray-400">ملاحظات:</span> <span className="font-medium">{req.notes}</span></div>}
+                                    {req.address && <div><span className="text-gray-400">العنوان:</span> <span className="font-medium">{req.address}</span></div>}
+                                    {req.createdAt && <div><span className="text-gray-400">تاريخ الطلب:</span> <span className="font-medium">{new Date(req.createdAt).toLocaleDateString('ar')}</span></div>}
+                                    {req.assignment && (
+                                      <div><span className="text-gray-400">الممرض المعيّن:</span> <span className="font-medium">{req.assignment.nurse?.firstName} {req.assignment.nurse?.lastName}</span></div>
+                                    )}
                                   </div>
-                                </div>
-                                <div className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-2 text-sm">
-                                  <div><span className="text-muted-foreground">المستفيد:</span> <span className="font-medium">{req.beneficiary?.name}</span></div>
-                                  <div><span className="text-muted-foreground">الهاتف:</span> <span className="font-medium">{req.beneficiary?.phone}</span></div>
-                                  <div><span className="text-muted-foreground">السعر:</span> <span className="font-medium text-emerald-600">{formatPrice(req.service?.price || 0)}</span></div>
-                                  {req.paymentMethod && <div><span className="text-muted-foreground">طريقة الدفع:</span> <span className="font-medium">{req.paymentMethod}</span></div>}
-                                  {req.notes && <div><span className="text-muted-foreground">ملاحظات:</span> <span className="font-medium">{req.notes}</span></div>}
-                                  {req.address && <div><span className="text-muted-foreground">العنوان:</span> <span className="font-medium">{req.address}</span></div>}
-                                  {req.createdAt && <div><span className="text-muted-foreground">تاريخ الطلب:</span> <span className="font-medium">{new Date(req.createdAt).toLocaleDateString('ar')}</span></div>}
-                                  {req.assignment && (
-                                    <div><span className="text-muted-foreground">الممرض المعيّن:</span> <span className="font-medium">{req.assignment.nurse?.firstName} {req.assignment.nurse?.lastName}</span></div>
+                                  {req.adminNotes && (
+                                    <div className="mt-2 p-2 bg-red-50 rounded-lg text-sm text-red-700">
+                                      <span className="font-medium">ملاحظات الإدارة:</span> {req.adminNotes}
+                                    </div>
                                   )}
                                 </div>
-                                {req.adminNotes && (
-                                  <div className="mt-2 p-2 bg-red-50 dark:bg-red-950/30 rounded-lg text-sm text-red-700">
-                                    <span className="font-medium">ملاحظات الإدارة:</span> {req.adminNotes}
+                                {req.status === 'pending' && (
+                                  <div className="flex items-center gap-2">
+                                    <Button size="sm" className="bg-gradient-to-l from-emerald-400 to-teal-500 hover:scale-[1.02] active:scale-[0.98] text-white shadow-md shadow-emerald-500/25 transition-all duration-200" onClick={() => handleRequestAction(req.id, 'approved')}>
+                                      <CheckCircle className="w-4 h-4 ml-1" />
+                                      قبول
+                                    </Button>
+                                    <Button size="sm" variant="outline" className="text-red-500 hover:text-red-600 hover:bg-red-50 border-red-200" onClick={() => handleRequestAction(req.id, 'rejected')}>
+                                      <XCircle className="w-4 h-4 ml-1" />
+                                      رفض
+                                    </Button>
                                   </div>
                                 )}
+                                {req.status === 'approved' && !req.assignment && (
+                                  <Button size="sm" variant="outline" className="border-amber-300 text-amber-700 hover:bg-amber-50 hover:border-amber-400" onClick={() => {
+                                    setSelectedRequest(req)
+                                    setSelectedNurseId('')
+                                    setAssignDialog(true)
+                                  }}>
+                                    <UserPlus className="w-4 h-4 ml-1" />
+                                    تعيين ممرض
+                                  </Button>
+                                )}
                               </div>
-                              {req.status === 'pending' && (
-                                <div className="flex items-center gap-2">
-                                  <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" onClick={() => handleRequestAction(req.id, 'approved')}>
-                                    <CheckCircle className="w-4 h-4 ml-1" />
-                                    قبول
-                                  </Button>
-                                  <Button size="sm" variant="outline" className="text-red-600" onClick={() => handleRequestAction(req.id, 'rejected')}>
-                                    <XCircle className="w-4 h-4 ml-1" />
-                                    رفض
-                                  </Button>
-                                </div>
-                              )}
-                              {req.status === 'approved' && !req.assignment && (
-                                <Button size="sm" variant="outline" className="border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300" onClick={() => {
-                                  setSelectedRequest(req)
-                                  setSelectedNurseId('')
-                                  setAssignDialog(true)
-                                }}>
-                                  <UserPlus className="w-4 h-4 ml-1" />
-                                  تعيين ممرض
-                                </Button>
-                              )}
-                            </div>
-                          </CardContent>
-                        </Card>
+                            </CardContent>
+                          </Card>
+                        </motion.div>
                       ))}
                       {filteredRequests.length === 0 && (
-                        <div className="text-center py-16 text-muted-foreground">
+                        <div className="text-center py-16 text-gray-400">
                           <ClipboardList className="w-12 h-12 mx-auto mb-3 opacity-30" />
                           <p>{requestSearch || requestStatusFilter !== 'all' || requestServiceFilter !== 'all' ? 'لا توجد نتائج مطابقة' : 'لا توجد طلبات بعد'}</p>
                         </div>
@@ -1280,11 +1365,11 @@ export default function AdminDashboard() {
                   <div className="space-y-6">
                     <div className="flex items-center justify-between">
                       <div>
-                        <h1 className="text-2xl font-bold">طرق الدفع</h1>
-                        <p className="text-muted-foreground text-sm mt-1">إدارة طرق الدفع المتاحة للمستفيدين</p>
+                        <h1 className="text-2xl font-bold bg-gradient-to-l from-amber-600 via-orange-600 to-rose-600 bg-clip-text text-transparent">طرق الدفع</h1>
+                        <p className="text-gray-500 text-sm mt-1">إدارة طرق الدفع المتاحة للمستفيدين</p>
                       </div>
                       <Button
-                        className="bg-emerald-600 hover:bg-emerald-700"
+                        className="bg-gradient-to-l from-amber-500 via-orange-500 to-rose-500 hover:scale-[1.02] active:scale-[0.98] text-white shadow-lg shadow-amber-500/25 transition-all duration-200"
                         onClick={() => {
                           setEditingPayment(null)
                           setPaymentForm({ name: '', accountInfo: '', isActive: true })
@@ -1296,37 +1381,45 @@ export default function AdminDashboard() {
                       </Button>
                     </div>
                     <div className="grid gap-4">
-                      {payments.map(payment => (
-                        <Card key={payment.id} className="border-0 shadow-sm hover:shadow-md transition-shadow">
-                          <CardContent className="p-5">
-                            <div className="flex items-center justify-between gap-4">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2 mb-1">
-                                  <h3 className="font-semibold">{payment.name}</h3>
-                                  <Badge variant={payment.isActive ? 'default' : 'secondary'} className={payment.isActive ? 'bg-emerald-100 dark:bg-emerald-950/40 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300' : ''}>
-                                    {payment.isActive ? 'نشط' : 'غير نشط'}
-                                  </Badge>
+                      {payments.map((payment, i) => (
+                        <motion.div
+                          key={payment.id}
+                          variants={cardVariants}
+                          initial="hidden"
+                          animate="visible"
+                          transition={{ delay: i * 0.05, duration: 0.3 }}
+                        >
+                          <Card className="border-0 shadow-md shadow-amber-500/5 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-amber-500/10 transition-all duration-300 overflow-hidden">
+                            <CardContent className="p-5">
+                              <div className="flex items-center justify-between gap-4">
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <h3 className="font-semibold">{payment.name}</h3>
+                                    <Badge variant={payment.isActive ? 'default' : 'secondary'} className={payment.isActive ? 'bg-gradient-to-l from-emerald-400 to-teal-500 text-white shadow-sm' : ''}>
+                                      {payment.isActive ? 'نشط' : 'غير نشط'}
+                                    </Badge>
+                                  </div>
+                                  <p className="text-sm text-gray-500">{payment.accountInfo}</p>
                                 </div>
-                                <p className="text-sm text-muted-foreground">{payment.accountInfo}</p>
+                                <div className="flex items-center gap-2">
+                                  <Button variant="outline" size="sm" className="border-amber-200 hover:bg-amber-50 hover:border-amber-300" onClick={() => {
+                                    setEditingPayment(payment)
+                                    setPaymentForm({ name: payment.name, accountInfo: payment.accountInfo, isActive: payment.isActive })
+                                    setPaymentDialog(true)
+                                  }}>
+                                    <Pencil className="w-4 h-4" />
+                                  </Button>
+                                  <Button variant="outline" size="sm" className="text-red-500 hover:text-red-600 hover:bg-red-50 border-red-200" onClick={() => handleDeletePayment(payment.id)}>
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                </div>
                               </div>
-                              <div className="flex items-center gap-2">
-                                <Button variant="outline" size="sm" onClick={() => {
-                                  setEditingPayment(payment)
-                                  setPaymentForm({ name: payment.name, accountInfo: payment.accountInfo, isActive: payment.isActive })
-                                  setPaymentDialog(true)
-                                }}>
-                                  <Pencil className="w-4 h-4" />
-                                </Button>
-                                <Button variant="outline" size="sm" className="text-red-600" onClick={() => handleDeletePayment(payment.id)}>
-                                  <Trash2 className="w-4 h-4" />
-                                </Button>
-                              </div>
-                            </div>
-                          </CardContent>
-                        </Card>
+                            </CardContent>
+                          </Card>
+                        </motion.div>
                       ))}
                       {payments.length === 0 && (
-                        <div className="text-center py-16 text-muted-foreground">
+                        <div className="text-center py-16 text-gray-400">
                           <CreditCard className="w-12 h-12 mx-auto mb-3 opacity-30" />
                           <p>لا توجد طرق دفع بعد</p>
                         </div>
@@ -1340,11 +1433,11 @@ export default function AdminDashboard() {
                   <div className="space-y-6">
                     <div className="flex items-center justify-between">
                       <div>
-                        <h1 className="text-2xl font-bold">إدارة الكوبونات</h1>
-                        <p className="text-muted-foreground text-sm mt-1">إنشاء وإدارة أكواد الخصم</p>
+                        <h1 className="text-2xl font-bold bg-gradient-to-l from-amber-600 via-orange-600 to-rose-600 bg-clip-text text-transparent">إدارة الكوبونات</h1>
+                        <p className="text-gray-500 text-sm mt-1">إنشاء وإدارة أكواد الخصم</p>
                       </div>
                       <Button
-                        className="bg-emerald-600 hover:bg-emerald-700"
+                        className="bg-gradient-to-l from-amber-500 via-orange-500 to-rose-500 hover:scale-[1.02] active:scale-[0.98] text-white shadow-lg shadow-amber-500/25 transition-all duration-200"
                         onClick={() => {
                           setEditingCoupon(null)
                           setCouponForm({ code: '', discountPercent: '', maxUses: '', expiresAt: '', isActive: true })
@@ -1358,95 +1451,93 @@ export default function AdminDashboard() {
 
                     {/* Stats */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      <Card className="border-0 shadow-sm">
-                        <CardContent className="p-4 text-center">
-                          <Tag className="w-6 h-6 text-emerald-600 mx-auto mb-1" />
-                          <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-300">{coupons.length}</p>
-                          <p className="text-xs text-muted-foreground">إجمالي الكوبونات</p>
-                        </CardContent>
-                      </Card>
-                      <Card className="border-0 shadow-sm">
-                        <CardContent className="p-4 text-center">
-                          <CheckCircle className="w-6 h-6 text-green-600 mx-auto mb-1" />
-                          <p className="text-2xl font-bold text-green-700">{coupons.filter(c => c.isActive).length}</p>
-                          <p className="text-xs text-muted-foreground">نشط</p>
-                        </CardContent>
-                      </Card>
-                      <Card className="border-0 shadow-sm">
-                        <CardContent className="p-4 text-center">
-                          <XCircle className="w-6 h-6 text-red-600 mx-auto mb-1" />
-                          <p className="text-2xl font-bold text-red-700">{coupons.filter(c => !c.isActive).length}</p>
-                          <p className="text-xs text-muted-foreground">غير نشط</p>
-                        </CardContent>
-                      </Card>
-                      <Card className="border-0 shadow-sm">
-                        <CardContent className="p-4 text-center">
-                          <Gift className="w-6 h-6 text-purple-600 mx-auto mb-1" />
-                          <p className="text-2xl font-bold text-purple-700">{coupons.reduce((acc: number, c: any) => acc + (c.usedCount || 0), 0)}</p>
-                          <p className="text-xs text-muted-foreground">إجمالي الاستخدام</p>
-                        </CardContent>
-                      </Card>
+                      {[
+                        { icon: Tag, label: 'إجمالي الكوبونات', value: coupons.length, gradient: 'from-amber-400 to-orange-500', shadow: 'shadow-amber-500/20' },
+                        { icon: CheckCircle, label: 'نشط', value: coupons.filter(c => c.isActive).length, gradient: 'from-emerald-400 to-teal-500', shadow: 'shadow-emerald-500/20' },
+                        { icon: XCircle, label: 'غير نشط', value: coupons.filter(c => !c.isActive).length, gradient: 'from-red-400 to-rose-500', shadow: 'shadow-red-500/20' },
+                        { icon: Gift, label: 'إجمالي الاستخدام', value: coupons.reduce((acc: number, c: any) => acc + (c.usedCount || 0), 0), gradient: 'from-purple-400 to-fuchsia-500', shadow: 'shadow-purple-500/20' },
+                      ].map((item, i) => (
+                        <motion.div key={i} variants={cardVariants} initial="hidden" animate="visible" transition={{ delay: i * 0.05, duration: 0.3 }}>
+                          <Card className={`border-0 shadow-lg ${item.shadow} hover:-translate-y-1 hover:shadow-xl transition-all duration-300`}>
+                            <CardContent className="p-4 text-center">
+                              <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${item.gradient} flex items-center justify-center shadow-md mx-auto mb-2`}>
+                                <item.icon className="w-5 h-5 text-white" />
+                              </div>
+                              <p className={`text-2xl font-bold bg-gradient-to-l ${item.gradient} bg-clip-text text-transparent`}>{item.value}</p>
+                              <p className="text-xs text-gray-500">{item.label}</p>
+                            </CardContent>
+                          </Card>
+                        </motion.div>
+                      ))}
                     </div>
 
                     {/* Coupons List */}
                     <div className="grid gap-4">
-                      {coupons.map((coupon: any) => {
+                      {coupons.map((coupon: any, i: number) => {
                         const isExpired = coupon.expiresAt && new Date(coupon.expiresAt) < new Date()
                         const isMaxed = coupon.usedCount >= coupon.maxUses
                         return (
-                          <Card key={coupon.id} className="border-0 shadow-sm hover:shadow-md transition-shadow">
-                            <CardContent className="p-5">
-                              <div className="flex items-start justify-between gap-4">
-                                <div className="flex-1">
-                                  <div className="flex items-center gap-2 mb-2 flex-wrap">
-                                    <h3 className="font-mono font-bold text-lg bg-gray-100 dark:bg-gray-800 px-3 py-1 rounded-lg">{coupon.code}</h3>
-                                    <Badge variant={coupon.isActive && !isExpired && !isMaxed ? 'default' : 'secondary'} className={coupon.isActive && !isExpired && !isMaxed ? 'bg-emerald-100 dark:bg-emerald-950/40 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300' : isExpired ? 'bg-red-100 dark:bg-red-950/40 text-red-700' : 'bg-gray-100 dark:bg-gray-800 text-gray-600'}>
-                                      {isExpired ? 'منتهي الصلاحية' : isMaxed ? 'استُنفد' : coupon.isActive ? 'نشط' : 'غير نشط'}
-                                    </Badge>
-                                  </div>
-                                  <div className="flex items-center gap-4 text-sm flex-wrap">
-                                    <span className="flex items-center gap-1">
-                                      <Percent className="w-3.5 h-3.5 text-emerald-500" />
-                                      خصم <span className="font-bold text-emerald-600">{coupon.discountPercent}%</span>
-                                    </span>
-                                    <span className="text-muted-foreground">
-                                      الاستخدام: <span className="font-medium">{coupon.usedCount || 0}/{coupon.maxUses}</span>
-                                    </span>
-                                    {coupon.expiresAt && (
-                                      <span className="text-muted-foreground">
-                                        ينتهي: <span className="font-medium">{new Date(coupon.expiresAt).toLocaleDateString('ar-YE')}</span>
+                          <motion.div
+                            key={coupon.id}
+                            variants={cardVariants}
+                            initial="hidden"
+                            animate="visible"
+                            transition={{ delay: i * 0.05, duration: 0.3 }}
+                          >
+                            <Card className="border-0 shadow-md shadow-amber-500/5 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-amber-500/10 transition-all duration-300 overflow-hidden">
+                              <CardContent className="p-5">
+                                <div className="flex items-start justify-between gap-4">
+                                  <div className="flex-1">
+                                    <div className="flex items-center gap-2 mb-2 flex-wrap">
+                                      <h3 className="font-mono font-bold text-lg bg-amber-50 px-3 py-1 rounded-lg">{coupon.code}</h3>
+                                      <Badge variant={coupon.isActive && !isExpired && !isMaxed ? 'default' : 'secondary'} className={coupon.isActive && !isExpired && !isMaxed ? 'bg-gradient-to-l from-emerald-400 to-teal-500 text-white shadow-sm' : isExpired ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600'}>
+                                        {isExpired ? 'منتهي الصلاحية' : isMaxed ? 'استُنفد' : coupon.isActive ? 'نشط' : 'غير نشط'}
+                                      </Badge>
+                                    </div>
+                                    <div className="flex items-center gap-4 text-sm flex-wrap">
+                                      <span className="flex items-center gap-1">
+                                        <Percent className="w-3.5 h-3.5 text-amber-500" />
+                                        خصم <span className="font-bold bg-gradient-to-l from-amber-500 to-orange-600 bg-clip-text text-transparent">{coupon.discountPercent}%</span>
                                       </span>
-                                    )}
+                                      <span className="text-gray-400">
+                                        الاستخدام: <span className="font-medium text-gray-600">{coupon.usedCount || 0}/{coupon.maxUses}</span>
+                                      </span>
+                                      {coupon.expiresAt && (
+                                        <span className="text-gray-400">
+                                          ينتهي: <span className="font-medium text-gray-600">{new Date(coupon.expiresAt).toLocaleDateString('ar-YE')}</span>
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <Button variant="outline" size="sm" className="border-amber-200 hover:bg-amber-50 hover:border-amber-300" onClick={() => handleToggleCouponStatus(coupon)}>
+                                      {coupon.isActive ? 'تعطيل' : 'تفعيل'}
+                                    </Button>
+                                    <Button variant="outline" size="sm" className="border-amber-200 hover:bg-amber-50" onClick={() => {
+                                      setEditingCoupon(coupon)
+                                      setCouponForm({
+                                        code: coupon.code,
+                                        discountPercent: coupon.discountPercent.toString(),
+                                        maxUses: coupon.maxUses.toString(),
+                                        expiresAt: coupon.expiresAt ? coupon.expiresAt.split('T')[0] : '',
+                                        isActive: coupon.isActive,
+                                      })
+                                      setCouponDialog(true)
+                                    }}>
+                                      <Pencil className="w-4 h-4" />
+                                    </Button>
+                                    <Button variant="outline" size="sm" className="text-red-500 hover:text-red-600 hover:bg-red-50 border-red-200" onClick={() => handleDeleteCoupon(coupon.id)}>
+                                      <Trash2 className="w-4 h-4" />
+                                    </Button>
                                   </div>
                                 </div>
-                                <div className="flex items-center gap-2">
-                                  <Button variant="outline" size="sm" onClick={() => handleToggleCouponStatus(coupon)}>
-                                    {coupon.isActive ? 'تعطيل' : 'تفعيل'}
-                                  </Button>
-                                  <Button variant="outline" size="sm" onClick={() => {
-                                    setEditingCoupon(coupon)
-                                    setCouponForm({
-                                      code: coupon.code,
-                                      discountPercent: coupon.discountPercent.toString(),
-                                      maxUses: coupon.maxUses.toString(),
-                                      expiresAt: coupon.expiresAt ? coupon.expiresAt.split('T')[0] : '',
-                                      isActive: coupon.isActive,
-                                    })
-                                    setCouponDialog(true)
-                                  }}>
-                                    <Pencil className="w-4 h-4" />
-                                  </Button>
-                                  <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700" onClick={() => handleDeleteCoupon(coupon.id)}>
-                                    <Trash2 className="w-4 h-4" />
-                                  </Button>
-                                </div>
-                              </div>
-                            </CardContent>
-                          </Card>
+                              </CardContent>
+                            </Card>
+                          </motion.div>
                         )
                       })}
                       {coupons.length === 0 && (
-                        <div className="text-center py-16 text-muted-foreground">
+                        <div className="text-center py-16 text-gray-400">
                           <Tag className="w-12 h-12 mx-auto mb-3 opacity-30" />
                           <p>لا توجد كوبونات بعد. أضف أول كوبون!</p>
                         </div>
@@ -1459,23 +1550,23 @@ export default function AdminDashboard() {
                 {activeTab === 'reports' && (
                   <div className="space-y-6">
                     <div>
-                      <h1 className="text-2xl font-bold">التقارير</h1>
-                      <p className="text-muted-foreground text-sm mt-1">تقارير وإحصائيات النظام</p>
+                      <h1 className="text-2xl font-bold bg-gradient-to-l from-amber-600 via-orange-600 to-rose-600 bg-clip-text text-transparent">التقارير</h1>
+                      <p className="text-gray-500 text-sm mt-1">تقارير وإحصائيات النظام</p>
                     </div>
 
                     {/* Date Range Selector */}
-                    <Card className="border-0 shadow-sm">
+                    <Card className="border-0 shadow-md shadow-amber-500/10 overflow-hidden">
                       <CardContent className="p-4">
                         <div className="flex flex-col sm:flex-row items-end gap-3">
                           <div className="flex-1 space-y-1">
                             <Label className="text-sm">من تاريخ</Label>
-                            <Input type="date" value={reportFromDate} onChange={e => setReportFromDate(e.target.value)} />
+                            <Input type="date" value={reportFromDate} onChange={e => setReportFromDate(e.target.value)} className="bg-white/70 border-amber-100 focus:border-amber-300" />
                           </div>
                           <div className="flex-1 space-y-1">
                             <Label className="text-sm">إلى تاريخ</Label>
-                            <Input type="date" value={reportToDate} onChange={e => setReportToDate(e.target.value)} />
+                            <Input type="date" value={reportToDate} onChange={e => setReportToDate(e.target.value)} className="bg-white/70 border-amber-100 focus:border-amber-300" />
                           </div>
-                          <Button variant="outline" onClick={() => { setReportFromDate(''); setReportToDate('') }} className="w-full sm:w-auto">
+                          <Button variant="outline" onClick={() => { setReportFromDate(''); setReportToDate('') }} className="w-full sm:w-auto border-amber-200 hover:bg-amber-50">
                             مسح الفلتر
                           </Button>
                         </div>
@@ -1484,57 +1575,64 @@ export default function AdminDashboard() {
 
                     {/* Revenue Summary */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <Card className="border-0 shadow-sm bg-gradient-to-l from-emerald-500 to-emerald-700 text-white">
-                        <CardContent className="p-6">
-                          <p className="text-emerald-100 text-sm">إجمالي الإيرادات</p>
-                          <p className="text-2xl font-bold mt-1">{formatPrice(stats?.totalRevenue || 0)}</p>
-                        </CardContent>
-                      </Card>
-                      <Card className="border-0 shadow-sm">
-                        <CardContent className="p-6">
-                          <p className="text-sm text-muted-foreground">إجمالي الطلبات</p>
-                          <p className="text-2xl font-bold mt-1">{stats?.totalRequests || 0}</p>
-                        </CardContent>
-                      </Card>
-                      <Card className="border-0 shadow-sm">
-                        <CardContent className="p-6">
-                          <p className="text-sm text-muted-foreground">متوسط قيمة الطلب</p>
-                          <p className="text-2xl font-bold mt-1">
-                            {stats?.totalRequests ? formatPrice(Math.round(stats.totalRevenue / stats.totalRequests)) : formatPrice(0)}
-                          </p>
-                        </CardContent>
-                      </Card>
+                      <motion.div variants={cardVariants} initial="hidden" animate="visible" transition={{ delay: 0.1, duration: 0.3 }}>
+                        <Card className="border-0 shadow-xl shadow-amber-500/25 bg-gradient-to-l from-amber-500 via-orange-500 to-rose-500 text-white overflow-hidden relative">
+                          <div className="absolute top-0 left-0 w-20 h-20 bg-white/10 rounded-full -translate-x-1/2 -translate-y-1/2" />
+                          <CardContent className="p-6 relative z-10">
+                            <p className="text-amber-100 text-sm">إجمالي الإيرادات</p>
+                            <p className="text-2xl font-bold mt-1">{formatPrice(stats?.totalRevenue || 0)}</p>
+                          </CardContent>
+                        </Card>
+                      </motion.div>
+                      <motion.div variants={cardVariants} initial="hidden" animate="visible" transition={{ delay: 0.2, duration: 0.3 }}>
+                        <Card className="border-0 shadow-lg shadow-blue-500/10 hover:-translate-y-0.5 transition-all duration-300">
+                          <CardContent className="p-6">
+                            <p className="text-sm text-gray-500">إجمالي الطلبات</p>
+                            <p className="text-2xl font-bold mt-1">{stats?.totalRequests || 0}</p>
+                          </CardContent>
+                        </Card>
+                      </motion.div>
+                      <motion.div variants={cardVariants} initial="hidden" animate="visible" transition={{ delay: 0.3, duration: 0.3 }}>
+                        <Card className="border-0 shadow-lg shadow-green-500/10 hover:-translate-y-0.5 transition-all duration-300">
+                          <CardContent className="p-6">
+                            <p className="text-sm text-gray-500">متوسط قيمة الطلب</p>
+                            <p className="text-2xl font-bold mt-1">
+                              {stats?.totalRequests ? formatPrice(Math.round(stats.totalRevenue / stats.totalRequests)) : formatPrice(0)}
+                            </p>
+                          </CardContent>
+                        </Card>
+                      </motion.div>
                     </div>
 
                     {/* Service Popularity */}
-                    <Card className="border-0 shadow-sm">
+                    <Card className="border-0 shadow-lg shadow-amber-500/10 overflow-hidden">
                       <CardHeader className="pb-2">
                         <CardTitle className="text-lg">ترتيب الخدمات حسب الطلب</CardTitle>
                       </CardHeader>
                       <CardContent>
                         {servicePopularity.length > 0 ? (
-                          <div className="space-y-3">
+                          <div className="space-y-2">
                             {servicePopularity.map((svc, i) => (
-                              <div key={i} className="flex items-center gap-4 p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50">
-                                <div className="w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-950/40 flex items-center justify-center text-emerald-700 dark:text-emerald-300 font-bold text-sm">
+                              <div key={i} className={`flex items-center gap-4 p-3 rounded-xl transition-colors ${i % 2 === 0 ? 'bg-amber-50/50' : 'bg-white'}`}>
+                                <div className={`w-8 h-8 rounded-full bg-gradient-to-br ${i < 3 ? 'from-amber-400 to-orange-500' : 'from-gray-300 to-gray-400'} flex items-center justify-center text-white font-bold text-sm shadow-sm`}>
                                   {i + 1}
                                 </div>
                                 <div className="flex-1">
                                   <p className="font-medium">{svc.name}</p>
-                                  <p className="text-xs text-muted-foreground">{svc.count} طلب</p>
+                                  <p className="text-xs text-gray-400">{svc.count} طلب</p>
                                 </div>
-                                <span className="font-bold text-emerald-600">{formatPrice(svc.revenue)}</span>
+                                <span className="font-bold bg-gradient-to-l from-amber-500 to-orange-600 bg-clip-text text-transparent">{formatPrice(svc.revenue)}</span>
                               </div>
                             ))}
                           </div>
                         ) : (
-                          <p className="text-center text-muted-foreground py-8">لا توجد بيانات كافية</p>
+                          <p className="text-center text-gray-400 py-8">لا توجد بيانات كافية</p>
                         )}
                       </CardContent>
                     </Card>
 
                     {/* Nurse Performance */}
-                    <Card className="border-0 shadow-sm">
+                    <Card className="border-0 shadow-lg shadow-amber-500/10 overflow-hidden">
                       <CardHeader className="pb-2">
                         <CardTitle className="text-lg">أداء الممرضين</CardTitle>
                       </CardHeader>
@@ -1543,21 +1641,21 @@ export default function AdminDashboard() {
                           <div className="overflow-x-auto">
                             <table className="w-full text-sm">
                               <thead>
-                                <tr className="border-b">
-                                  <th className="py-3 px-4 text-right font-medium text-muted-foreground">الممرض</th>
-                                  <th className="py-3 px-4 text-right font-medium text-muted-foreground">التعيينات</th>
-                                  <th className="py-3 px-4 text-right font-medium text-muted-foreground">المكتملة</th>
-                                  <th className="py-3 px-4 text-right font-medium text-muted-foreground">نسبة الإنجاز</th>
+                                <tr className="border-b border-amber-100">
+                                  <th className="py-3 px-4 text-right font-medium text-gray-500">الممرض</th>
+                                  <th className="py-3 px-4 text-right font-medium text-gray-500">التعيينات</th>
+                                  <th className="py-3 px-4 text-right font-medium text-gray-500">المكتملة</th>
+                                  <th className="py-3 px-4 text-right font-medium text-gray-500">نسبة الإنجاز</th>
                                 </tr>
                               </thead>
                               <tbody>
                                 {nursePerformance.map((n, i) => (
-                                  <tr key={i} className="border-b last:border-0 hover:bg-gray-50 dark:hover:bg-gray-800">
+                                  <tr key={i} className={`border-b border-amber-50 last:border-0 ${i % 2 === 0 ? 'bg-amber-50/30' : ''}`}>
                                     <td className="py-3 px-4 font-medium">{n.name}</td>
                                     <td className="py-3 px-4">{n.assignments}</td>
                                     <td className="py-3 px-4">{n.completed}</td>
                                     <td className="py-3 px-4">
-                                      <span className={`font-medium ${n.assignments > 0 ? 'text-emerald-600' : 'text-gray-400 dark:text-gray-500'}`}>
+                                      <span className={`font-medium ${n.assignments > 0 ? 'bg-gradient-to-l from-emerald-500 to-teal-600 bg-clip-text text-transparent' : 'text-gray-300'}`}>
                                         {n.assignments > 0 ? Math.round(n.completed / n.assignments * 100) : 0}%
                                       </span>
                                     </td>
@@ -1567,7 +1665,7 @@ export default function AdminDashboard() {
                             </table>
                           </div>
                         ) : (
-                          <p className="text-center text-muted-foreground py-8">لا توجد بيانات كافية</p>
+                          <p className="text-center text-gray-400 py-8">لا توجد بيانات كافية</p>
                         )}
                       </CardContent>
                     </Card>
@@ -1578,35 +1676,43 @@ export default function AdminDashboard() {
                 {activeTab === 'activity' && (
                   <div className="space-y-6">
                     <div>
-                      <h1 className="text-2xl font-bold">سجل النشاط</h1>
-                      <p className="text-muted-foreground text-sm mt-1">جميع الأنشطة والأحداث في النظام</p>
+                      <h1 className="text-2xl font-bold bg-gradient-to-l from-amber-600 via-orange-600 to-rose-600 bg-clip-text text-transparent">سجل النشاط</h1>
+                      <p className="text-gray-500 text-sm mt-1">جميع الأنشطة والأحداث في النظام</p>
                     </div>
                     {activityLogs.length > 0 ? (
                       <div className="space-y-3">
-                        {activityLogs.map((log: any) => (
-                          <Card key={log.id} className="border-0 shadow-sm">
-                            <CardContent className="p-4">
-                              <div className="flex items-start gap-3">
-                                <div className="w-9 h-9 rounded-full bg-emerald-50 dark:bg-emerald-950/30 flex items-center justify-center flex-shrink-0 mt-0.5">
-                                  <Activity className="w-4 h-4 text-emerald-600" />
-                                </div>
-                                <div className="flex-1">
-                                  <p className="text-sm font-medium">{log.description}</p>
-                                  <div className="flex items-center gap-3 mt-1">
-                                    <Badge variant="outline" className="text-xs">{log.type}</Badge>
-                                    {log.userName && <span className="text-xs text-muted-foreground">بواسطة: {log.userName}</span>}
+                        {activityLogs.map((log: any, i: number) => (
+                          <motion.div
+                            key={log.id}
+                            variants={cardVariants}
+                            initial="hidden"
+                            animate="visible"
+                            transition={{ delay: i * 0.03, duration: 0.3 }}
+                          >
+                            <Card className={`border-0 shadow-md shadow-amber-500/5 overflow-hidden ${i % 2 === 0 ? 'bg-white' : 'bg-amber-50/30'}`}>
+                              <CardContent className="p-4">
+                                <div className="flex items-start gap-3">
+                                  <div className="w-9 h-9 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center flex-shrink-0 mt-0.5 shadow-sm">
+                                    <Activity className="w-4 h-4 text-white" />
                                   </div>
-                                  <p className="text-xs text-muted-foreground mt-1">
-                                    {log.createdAt ? new Date(log.createdAt).toLocaleString('ar') : ''}
-                                  </p>
+                                  <div className="flex-1">
+                                    <p className="text-sm font-medium">{log.description}</p>
+                                    <div className="flex items-center gap-3 mt-1">
+                                      <Badge variant="outline" className="text-xs border-amber-200 text-amber-700">{log.type}</Badge>
+                                      {log.userName && <span className="text-xs text-gray-400">بواسطة: {log.userName}</span>}
+                                    </div>
+                                    <p className="text-xs text-gray-400 mt-1">
+                                      {log.createdAt ? new Date(log.createdAt).toLocaleString('ar') : ''}
+                                    </p>
+                                  </div>
                                 </div>
-                              </div>
-                            </CardContent>
-                          </Card>
+                              </CardContent>
+                            </Card>
+                          </motion.div>
                         ))}
                       </div>
                     ) : (
-                      <div className="text-center py-16 text-muted-foreground">
+                      <div className="text-center py-16 text-gray-400">
                         <Activity className="w-12 h-12 mx-auto mb-3 opacity-30" />
                         <p>لا يوجد نشاط مسجل بعد</p>
                         <p className="text-sm mt-1">ستظهر هنا أنشطة النظام مثل التسجيلات وتغييرات الحالة</p>
@@ -1619,20 +1725,23 @@ export default function AdminDashboard() {
                 {activeTab === 'settings' && (
                   <div className="space-y-6">
                     <div>
-                      <h1 className="text-2xl font-bold">الإعدادات</h1>
-                      <p className="text-muted-foreground text-sm mt-1">إعدادات حساب المدير والنظام</p>
+                      <h1 className="text-2xl font-bold bg-gradient-to-l from-amber-600 via-orange-600 to-rose-600 bg-clip-text text-transparent">الإعدادات</h1>
+                      <p className="text-gray-500 text-sm mt-1">إعدادات حساب المدير والنظام</p>
                     </div>
                     {/* Account Info */}
-                    <Card className="border-0 shadow-sm">
+                    <Card className="border-0 shadow-lg shadow-amber-500/10 overflow-hidden">
                       <CardContent className="p-6">
-                        <h3 className="font-semibold text-lg mb-4">معلومات الحساب</h3>
-                        <div className="space-y-4">
-                          <div className="flex items-center justify-between p-p-4 bg-gray-50 dark:bg-gray-800/50 rounded bg-gray-50 dark:bg-gray-800/50 rounded-xl">
+                        <h3 className="font-semibold text-lg mb-4 flex items-center gap-2">
+                          <UserCog className="w-5 h-5 text-amber-500" />
+                          معلومات الحساب
+                        </h3>
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between p-4 bg-amber-50/50 rounded-xl">
                             <div>
-                              <p className="text-sm text-muted-foreground">الاسم</p>
+                              <p className="text-sm text-gray-500">الاسم</p>
                               <p className="font-medium">{(user as any)?.name || 'المدير'}</p>
                             </div>
-                            <Button variant="outline" size="sm" onClick={() => {
+                            <Button variant="outline" size="sm" className="border-amber-200 hover:bg-amber-50 hover:border-amber-300" onClick={() => {
                               setEditName((user as any)?.name || '')
                               setEditNameDialog(true)
                             }}>
@@ -1640,77 +1749,66 @@ export default function AdminDashboard() {
                               تعديل
                             </Button>
                           </div>
-                          <div className="flex items-center justify-between p-p-4 bg-gray-50 dark:bg-gray-800/50 rounded bg-gray-50 dark:bg-gray-800/50 rounded-xl">
+                          <div className="flex items-center justify-between p-4 bg-amber-50/50 rounded-xl">
                             <div>
-                              <p className="text-sm text-muted-foreground">اسم المستخدم</p>
+                              <p className="text-sm text-gray-500">اسم المستخدم</p>
                               <p className="font-medium">{(user as any)?.username || 'admin'}</p>
                             </div>
                           </div>
-                          <div className="flex items-center justify-between p-p-4 bg-gray-50 dark:bg-gray-800/50 rounded bg-gray-50 dark:bg-gray-800/50 rounded-xl">
+                          <div className="flex items-center justify-between p-4 bg-amber-50/50 rounded-xl">
                             <div>
-                              <p className="text-sm text-muted-foreground">الصلاحية</p>
+                              <p className="text-sm text-gray-500">الصلاحية</p>
                               <p className="font-medium">مدير النظام</p>
                             </div>
-                            <Badge className="bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300">مدير</Badge>
+                            <Badge className="bg-gradient-to-l from-amber-400 to-orange-500 text-white shadow-sm">مدير</Badge>
                           </div>
                         </div>
                       </CardContent>
                     </Card>
 
                     {/* Change Password */}
-                    <Card className="border-0 shadow-sm">
+                    <Card className="border-0 shadow-lg shadow-amber-500/10 overflow-hidden">
                       <CardContent className="p-6">
-                        <h3 className="font-semibold text-lg mb-4">تغيير كلمة المرور</h3>
-                        <Button variant="outline" onClick={() => setView('admin-change-password')}>
+                        <h3 className="font-semibold text-lg mb-4 flex items-center gap-2">
+                          <Shield className="w-5 h-5 text-amber-500" />
+                          تغيير كلمة المرور
+                        </h3>
+                        <Button variant="outline" className="border-amber-200 hover:bg-amber-50 hover:border-amber-300" onClick={() => setView('admin-change-password')}>
                           تغيير كلمة المرور
                         </Button>
                       </CardContent>
                     </Card>
 
-                    {/* Dark Mode */}
-                    <Card className="border-0 shadow-sm">
-                      <CardContent className="p-6">
-                        <h3 className="font-semibold text-lg mb-4">المظهر</h3>
-                        <div className="flex items-center justify-between p-p-4 bg-gray-50 dark:bg-gray-800/50 rounded bg-gray-50 dark:bg-gray-800/50 rounded-xl">
-                          <div className="flex items-center gap-3">
-                            {darkMode ? <Moon className="w-5 h-5 text-gray-700" /> : <Sun className="w-5 h-5 text-yellow-500" />}
-                            <div>
-                              <p className="font-medium">{darkMode ? 'الوضع الداكن' : 'الوضع الفاتح'}</p>
-                              <p className="text-xs text-muted-foreground">تبديل مظهر الواجهة</p>
-                            </div>
-                          </div>
-                          <Switch checked={darkMode} onCheckedChange={toggleDarkMode} />
-                        </div>
-                      </CardContent>
-                    </Card>
-
                     {/* System Info */}
-                    <Card className="border-0 shadow-sm">
+                    <Card className="border-0 shadow-lg shadow-amber-500/10 overflow-hidden">
                       <CardContent className="p-6">
-                        <h3 className="font-semibold text-lg mb-4">معلومات النظام</h3>
+                        <h3 className="font-semibold text-lg mb-4 flex items-center gap-2">
+                          <BarChart3 className="w-5 h-5 text-amber-500" />
+                          معلومات النظام
+                        </h3>
                         <div className="space-y-3">
-                          <div className="flex items-center justify-between p-p-4 bg-gray-50 dark:bg-gray-800/50 rounded bg-gray-50 dark:bg-gray-800/50 rounded-xl">
-                            <p className="text-sm text-muted-foreground">حالة Firebase</p>
-                            <Badge className="bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300">متصل</Badge>
+                          <div className="flex items-center justify-between p-4 bg-amber-50/50 rounded-xl">
+                            <p className="text-sm text-gray-500">حالة Firebase</p>
+                            <Badge className="bg-gradient-to-l from-emerald-400 to-teal-500 text-white shadow-sm">متصل</Badge>
                           </div>
-                          <div className="flex items-center justify-between p-p-4 bg-gray-50 dark:bg-gray-800/50 rounded bg-gray-50 dark:bg-gray-800/50 rounded-xl">
-                            <p className="text-sm text-muted-foreground">إجمالي الممرضين</p>
+                          <div className="flex items-center justify-between p-4 bg-amber-50/50 rounded-xl">
+                            <p className="text-sm text-gray-500">إجمالي الممرضين</p>
                             <span className="font-medium">{stats?.totalNurses || 0}</span>
                           </div>
-                          <div className="flex items-center justify-between p-p-4 bg-gray-50 dark:bg-gray-800/50 rounded bg-gray-50 dark:bg-gray-800/50 rounded-xl">
-                            <p className="text-sm text-muted-foreground">إجمالي المستفيدين</p>
+                          <div className="flex items-center justify-between p-4 bg-amber-50/50 rounded-xl">
+                            <p className="text-sm text-gray-500">إجمالي المستفيدين</p>
                             <span className="font-medium">{stats?.totalBeneficiaries || 0}</span>
                           </div>
-                          <div className="flex items-center justify-between p-p-4 bg-gray-50 dark:bg-gray-800/50 rounded bg-gray-50 dark:bg-gray-800/50 rounded-xl">
-                            <p className="text-sm text-muted-foreground">إجمالي الطلبات</p>
+                          <div className="flex items-center justify-between p-4 bg-amber-50/50 rounded-xl">
+                            <p className="text-sm text-gray-500">إجمالي الطلبات</p>
                             <span className="font-medium">{stats?.totalRequests || 0}</span>
                           </div>
-                          <div className="flex items-center justify-between p-p-4 bg-gray-50 dark:bg-gray-800/50 rounded bg-gray-50 dark:bg-gray-800/50 rounded-xl">
-                            <p className="text-sm text-muted-foreground">إجمالي الخدمات</p>
+                          <div className="flex items-center justify-between p-4 bg-amber-50/50 rounded-xl">
+                            <p className="text-sm text-gray-500">إجمالي الخدمات</p>
                             <span className="font-medium">{stats?.totalServices || 0}</span>
                           </div>
-                          <div className="flex items-center justify-between p-p-4 bg-gray-50 dark:bg-gray-800/50 rounded bg-gray-50 dark:bg-gray-800/50 rounded-xl">
-                            <p className="text-sm text-muted-foreground">إصدار النظام</p>
+                          <div className="flex items-center justify-between p-4 bg-amber-50/50 rounded-xl">
+                            <p className="text-sm text-gray-500">إصدار النظام</p>
                             <span className="font-medium">1.0.0</span>
                           </div>
                         </div>
@@ -1726,27 +1824,27 @@ export default function AdminDashboard() {
 
       {/* Service Dialog */}
       <Dialog open={serviceDialog} onOpenChange={setServiceDialog}>
-        <DialogContent className="max-w-md" dir="rtl">
+        <DialogContent className="max-w-md bg-white/80 backdrop-blur-xl border-amber-100/50" dir="rtl">
           <DialogHeader>
             <DialogTitle>{editingService ? 'تعديل الخدمة' : 'إضافة خدمة جديدة'}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label>اسم الخدمة</Label>
-              <Input value={serviceForm.name} onChange={e => setServiceForm(f => ({ ...f, name: e.target.value }))} placeholder="مثال: قياس الضغط" />
+              <Input value={serviceForm.name} onChange={e => setServiceForm(f => ({ ...f, name: e.target.value }))} placeholder="مثال: قياس الضغط" className="border-amber-100 focus:border-amber-300" />
             </div>
             <div className="space-y-2">
               <Label>الوصف</Label>
-              <Textarea value={serviceForm.description} onChange={e => setServiceForm(f => ({ ...f, description: e.target.value }))} placeholder="وصف الخدمة" />
+              <Textarea value={serviceForm.description} onChange={e => setServiceForm(f => ({ ...f, description: e.target.value }))} placeholder="وصف الخدمة" className="border-amber-100 focus:border-amber-300" />
             </div>
             <div className="space-y-2">
               <Label>السعر (ر.ي)</Label>
-              <Input type="number" value={serviceForm.price} onChange={e => setServiceForm(f => ({ ...f, price: e.target.value }))} placeholder="0" />
+              <Input type="number" value={serviceForm.price} onChange={e => setServiceForm(f => ({ ...f, price: e.target.value }))} placeholder="0" className="border-amber-100 focus:border-amber-300" />
             </div>
             <div className="space-y-2">
               <Label>التصنيف</Label>
               <Select value={serviceForm.category} onValueChange={v => setServiceForm(f => ({ ...f, category: v }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger className="border-amber-100"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="عام">عام</SelectItem>
                   <SelectItem value="تمريض">تمريض</SelectItem>
@@ -1762,8 +1860,8 @@ export default function AdminDashboard() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setServiceDialog(false)}>إلغاء</Button>
-            <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleSaveService}>
+            <Button variant="outline" onClick={() => setServiceDialog(false)} className="border-amber-200 hover:bg-amber-50">إلغاء</Button>
+            <Button className="bg-gradient-to-l from-amber-500 via-orange-500 to-rose-500 hover:scale-[1.02] active:scale-[0.98] text-white shadow-lg shadow-amber-500/25 transition-all duration-200" onClick={handleSaveService}>
               {editingService ? 'تحديث' : 'إضافة'}
             </Button>
           </DialogFooter>
@@ -1772,18 +1870,18 @@ export default function AdminDashboard() {
 
       {/* Payment Dialog */}
       <Dialog open={paymentDialog} onOpenChange={setPaymentDialog}>
-        <DialogContent className="max-w-md" dir="rtl">
+        <DialogContent className="max-w-md bg-white/80 backdrop-blur-xl border-amber-100/50" dir="rtl">
           <DialogHeader>
             <DialogTitle>{editingPayment ? 'تعديل طريقة الدفع' : 'إضافة طريقة دفع'}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label>الاسم</Label>
-              <Input value={paymentForm.name} onChange={e => setPaymentForm(f => ({ ...f, name: e.target.value }))} placeholder="مثال: جوال كاش" />
+              <Input value={paymentForm.name} onChange={e => setPaymentForm(f => ({ ...f, name: e.target.value }))} placeholder="مثال: جوال كاش" className="border-amber-100 focus:border-amber-300" />
             </div>
             <div className="space-y-2">
               <Label>معلومات الحساب</Label>
-              <Textarea value={paymentForm.accountInfo} onChange={e => setPaymentForm(f => ({ ...f, accountInfo: e.target.value }))} placeholder="رقم الحساب أو معلومات التحويل" />
+              <Textarea value={paymentForm.accountInfo} onChange={e => setPaymentForm(f => ({ ...f, accountInfo: e.target.value }))} placeholder="رقم الحساب أو معلومات التحويل" className="border-amber-100 focus:border-amber-300" />
             </div>
             <div className="flex items-center gap-3">
               <Switch checked={paymentForm.isActive} onCheckedChange={v => setPaymentForm(f => ({ ...f, isActive: v }))} />
@@ -1791,8 +1889,8 @@ export default function AdminDashboard() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setPaymentDialog(false)}>إلغاء</Button>
-            <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleSavePayment}>
+            <Button variant="outline" onClick={() => setPaymentDialog(false)} className="border-amber-200 hover:bg-amber-50">إلغاء</Button>
+            <Button className="bg-gradient-to-l from-amber-500 via-orange-500 to-rose-500 hover:scale-[1.02] active:scale-[0.98] text-white shadow-lg shadow-amber-500/25 transition-all duration-200" onClick={handleSavePayment}>
               {editingPayment ? 'تحديث' : 'إضافة'}
             </Button>
           </DialogFooter>
@@ -1801,7 +1899,7 @@ export default function AdminDashboard() {
 
       {/* Coupon Dialog */}
       <Dialog open={couponDialog} onOpenChange={setCouponDialog}>
-        <DialogContent className="max-w-md" dir="rtl">
+        <DialogContent className="max-w-md bg-white/80 backdrop-blur-xl border-amber-100/50" dir="rtl">
           <DialogHeader>
             <DialogTitle>{editingCoupon ? 'تعديل الكوبون' : 'إضافة كوبون جديد'}</DialogTitle>
           </DialogHeader>
@@ -1812,7 +1910,7 @@ export default function AdminDashboard() {
                 value={couponForm.code}
                 onChange={e => setCouponForm(f => ({ ...f, code: e.target.value.toUpperCase() }))}
                 placeholder="مثال: SAVE20"
-                className="font-mono"
+                className="font-mono border-amber-100 focus:border-amber-300"
                 disabled={!!editingCoupon}
               />
             </div>
@@ -1825,6 +1923,7 @@ export default function AdminDashboard() {
                 value={couponForm.discountPercent}
                 onChange={e => setCouponForm(f => ({ ...f, discountPercent: e.target.value }))}
                 placeholder="20"
+                className="border-amber-100 focus:border-amber-300"
               />
             </div>
             <div className="space-y-2">
@@ -1835,6 +1934,7 @@ export default function AdminDashboard() {
                 value={couponForm.maxUses}
                 onChange={e => setCouponForm(f => ({ ...f, maxUses: e.target.value }))}
                 placeholder="100"
+                className="border-amber-100 focus:border-amber-300"
               />
             </div>
             <div className="space-y-2">
@@ -1843,6 +1943,7 @@ export default function AdminDashboard() {
                 type="date"
                 value={couponForm.expiresAt}
                 onChange={e => setCouponForm(f => ({ ...f, expiresAt: e.target.value }))}
+                className="border-amber-100 focus:border-amber-300"
               />
             </div>
             <div className="flex items-center gap-3">
@@ -1851,8 +1952,8 @@ export default function AdminDashboard() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCouponDialog(false)}>إلغاء</Button>
-            <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleSaveCoupon}>
+            <Button variant="outline" onClick={() => setCouponDialog(false)} className="border-amber-200 hover:bg-amber-50">إلغاء</Button>
+            <Button className="bg-gradient-to-l from-amber-500 via-orange-500 to-rose-500 hover:scale-[1.02] active:scale-[0.98] text-white shadow-lg shadow-amber-500/25 transition-all duration-200" onClick={handleSaveCoupon}>
               {editingCoupon ? 'تحديث' : 'إضافة'}
             </Button>
           </DialogFooter>
@@ -1861,22 +1962,22 @@ export default function AdminDashboard() {
 
       {/* Assign Nurse Dialog */}
       <Dialog open={assignDialog} onOpenChange={setAssignDialog}>
-        <DialogContent className="max-w-md" dir="rtl">
+        <DialogContent className="max-w-md bg-white/80 backdrop-blur-xl border-amber-100/50" dir="rtl">
           <DialogHeader>
             <DialogTitle>تعيين ممرض للطلب</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
-            <p className="text-sm text-muted-foreground">
-              الخدمة: <span className="font-medium text-foreground">{selectedRequest?.service?.name}</span>
+            <p className="text-sm text-gray-500">
+              الخدمة: <span className="font-medium text-gray-800">{selectedRequest?.service?.name}</span>
             </p>
-            <p className="text-sm text-muted-foreground">
-              المستفيد: <span className="font-medium text-foreground">{selectedRequest?.beneficiary?.name}</span>
+            <p className="text-sm text-gray-500">
+              المستفيد: <span className="font-medium text-gray-800">{selectedRequest?.beneficiary?.name}</span>
             </p>
-            <Separator />
+            <Separator className="bg-amber-100" />
             <div className="space-y-2">
               <Label>اختر الممرض</Label>
               <Select value={selectedNurseId} onValueChange={setSelectedNurseId}>
-                <SelectTrigger><SelectValue placeholder="اختر ممرضاً" /></SelectTrigger>
+                <SelectTrigger className="border-amber-100 focus:border-amber-300"><SelectValue placeholder="اختر ممرضاً" /></SelectTrigger>
                 <SelectContent>
                   {approvedNurses.map(nurse => (
                     <SelectItem key={nurse.id} value={nurse.id}>
@@ -1888,46 +1989,46 @@ export default function AdminDashboard() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setAssignDialog(false)}>إلغاء</Button>
-            <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleAssignNurse}>تعيين</Button>
+            <Button variant="outline" onClick={() => setAssignDialog(false)} className="border-amber-200 hover:bg-amber-50">إلغاء</Button>
+            <Button className="bg-gradient-to-l from-amber-500 via-orange-500 to-rose-500 hover:scale-[1.02] active:scale-[0.98] text-white shadow-lg shadow-amber-500/25 transition-all duration-200" onClick={handleAssignNurse}>تعيين</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* Reject Dialog */}
       <Dialog open={rejectDialog} onOpenChange={setRejectDialog}>
-        <DialogContent className="max-w-md" dir="rtl">
+        <DialogContent className="max-w-md bg-white/80 backdrop-blur-xl border-amber-100/50" dir="rtl">
           <DialogHeader>
             <DialogTitle>تأكيد الرفض</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label>ملاحظات (اختياري)</Label>
-              <Textarea value={adminNotes} onChange={e => setAdminNotes(e.target.value)} placeholder="سبب الرفض..." />
+              <Textarea value={adminNotes} onChange={e => setAdminNotes(e.target.value)} placeholder="سبب الرفض..." className="border-amber-100 focus:border-amber-300" />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setRejectDialog(false)}>إلغاء</Button>
-            <Button variant="destructive" onClick={handleRejectConfirm}>تأكيد الرفض</Button>
+            <Button variant="outline" onClick={() => setRejectDialog(false)} className="border-amber-200 hover:bg-amber-50">إلغاء</Button>
+            <Button variant="destructive" className="hover:scale-[1.02] active:scale-[0.98] transition-all duration-200" onClick={handleRejectConfirm}>تأكيد الرفض</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* Edit Name Dialog */}
       <Dialog open={editNameDialog} onOpenChange={setEditNameDialog}>
-        <DialogContent className="max-w-md" dir="rtl">
+        <DialogContent className="max-w-md bg-white/80 backdrop-blur-xl border-amber-100/50" dir="rtl">
           <DialogHeader>
             <DialogTitle>تعديل الاسم</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label>الاسم الجديد</Label>
-              <Input value={editName} onChange={e => setEditName(e.target.value)} placeholder="أدخل الاسم الجديد" />
+              <Input value={editName} onChange={e => setEditName(e.target.value)} placeholder="أدخل الاسم الجديد" className="border-amber-100 focus:border-amber-300" />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEditNameDialog(false)}>إلغاء</Button>
-            <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleUpdateName}>حفظ</Button>
+            <Button variant="outline" onClick={() => setEditNameDialog(false)} className="border-amber-200 hover:bg-amber-50">إلغاء</Button>
+            <Button className="bg-gradient-to-l from-amber-500 via-orange-500 to-rose-500 hover:scale-[1.02] active:scale-[0.98] text-white shadow-lg shadow-amber-500/25 transition-all duration-200" onClick={handleUpdateName}>حفظ</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
