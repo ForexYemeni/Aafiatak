@@ -9,7 +9,7 @@ import {
   Mail, Shield, Award, Navigation, Info, Sparkles
 } from 'lucide-react'
 import { useAppStore, formatPrice, getStatusLabel, getStatusColor } from '@/lib/store'
-import { openInMaps, getGPSLocation, searchLocation, extractCoordinates, getDisplayLocation } from '@/lib/location-utils'
+import { openInMaps, getGPSLocation, searchLocation, extractCoordinates, getDisplayLocation, getMapEmbedUrl, getDirectionsUrl } from '@/lib/location-utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -266,6 +266,11 @@ export default function NurseDashboard() {
   const [gpsLoading, setGpsLoading] = useState(false)
   const [locationSearchResults, setLocationSearchResults] = useState<Array<{ name: string; lat: string; lng: string; display: string }>>([])
   const [locationSearchLoading, setLocationSearchLoading] = useState(false)
+
+  // Map preview dialog
+  const [mapPreviewDialog, setMapPreviewDialog] = useState(false)
+  const [mapPreviewLocation, setMapPreviewLocation] = useState('')
+  const [mapPreviewLabel, setMapPreviewLabel] = useState('')
 
   // Ratings state - fetch from API
   const [ratings, setRatings] = useState<Rating[]>([])
@@ -829,7 +834,7 @@ export default function NurseDashboard() {
                               <div className="flex items-center gap-1.5">
                                 <MapPin className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
                                 <span className="font-medium text-gray-700">الموقع:</span>
-                                <button onClick={() => openInMaps(assignment.request!.beneficiary!.location)} className="text-blue-600 hover:text-blue-800 hover:underline truncate transition-colors">{getDisplayLocation(assignment.request.beneficiary.location)}</button>
+                                <button onClick={() => { setMapPreviewLocation(assignment.request!.beneficiary!.location); setMapPreviewLabel(getDisplayLocation(assignment.request!.beneficiary!.location)); setMapPreviewDialog(true) }} className="text-blue-600 hover:text-blue-800 hover:underline truncate transition-colors">{getDisplayLocation(assignment.request.beneficiary.location)}</button>
                               </div>
                             )}
                             {assignment.request?.service?.price !== undefined && (
@@ -1896,6 +1901,69 @@ export default function NurseDashboard() {
                 </>
               )}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Map Preview Dialog */}
+      <Dialog open={mapPreviewDialog} onOpenChange={setMapPreviewDialog}>
+        <DialogContent className="sm:max-w-[600px] max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <MapPin className="w-5 h-5 text-blue-500" />
+              موقع: {mapPreviewLabel}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {getMapEmbedUrl(mapPreviewLocation) ? (
+              <div className="w-full h-[350px] rounded-xl overflow-hidden border border-gray-200 shadow-sm">
+                <iframe
+                  src={getMapEmbedUrl(mapPreviewLocation)}
+                  width="100%"
+                  height="100%"
+                  style={{ border: 0 }}
+                  loading="lazy"
+                  title="موقع على الخريطة"
+                />
+              </div>
+            ) : (
+              <div className="w-full h-[200px] rounded-xl bg-gray-100 flex items-center justify-center">
+                <div className="text-center">
+                  <MapPin className="w-12 h-12 text-gray-300 mx-auto mb-2" />
+                  <p className="text-gray-400 text-sm">لا تتوفر إحداثيات لهذا الموقع</p>
+                </div>
+              </div>
+            )}
+            <div className="bg-blue-50/50 rounded-xl p-3">
+              <p className="text-sm text-gray-600 truncate">
+                <MapPin className="w-3.5 h-3.5 inline ml-1 text-blue-500" />
+                {mapPreviewLocation}
+              </p>
+              {extractCoordinates(mapPreviewLocation) && (
+                <p className="text-xs text-gray-400 mt-1">
+                  الإحداثيات: {extractCoordinates(mapPreviewLocation)!.lat.toFixed(6)}, {extractCoordinates(mapPreviewLocation)!.lng.toFixed(6)}
+                </p>
+              )}
+            </div>
+          </div>
+          <DialogFooter className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => openInMaps(mapPreviewLocation)}
+              className="flex items-center gap-1.5"
+            >
+              <MapPin className="w-4 h-4" />
+              فتح في خرائط Google
+            </Button>
+            {getDirectionsUrl(mapPreviewLocation) && (
+              <Button
+                className="bg-gradient-to-l from-cyan-500 via-blue-500 to-indigo-500 text-white"
+                onClick={() => window.open(getDirectionsUrl(mapPreviewLocation)!, '_blank')}
+              >
+                <Navigation className="w-4 h-4 ml-1.5" />
+                الاتجاهات
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -10,7 +10,7 @@ import {
   Siren, ChevronDown, ChevronUp, Shield, Gift, TrendingUp, Sparkles, Navigation
 } from 'lucide-react'
 import { useAppStore, formatPrice, getStatusLabel, getStatusColor } from '@/lib/store'
-import { openInMaps, getGPSLocation, searchLocation, extractCoordinates, getDisplayLocation } from '@/lib/location-utils'
+import { openInMaps, getGPSLocation, searchLocation, extractCoordinates, getDisplayLocation, getMapEmbedUrl, getDirectionsUrl } from '@/lib/location-utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'

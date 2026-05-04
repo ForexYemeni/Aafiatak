@@ -9,11 +9,11 @@ import {
   FileText, Activity, Search, Filter, BarChart3,
   TrendingUp, Tag, Sparkles, Star, Phone, Mail, Gift,
   Ban, Unlock, Eye, AlertTriangle, UsersRound, Settings,
-  ChevronDown, AlertCircle, MessageSquare, Clock, MapPin, Calendar
+  ChevronDown, AlertCircle, MessageSquare, Clock, MapPin, Calendar, Navigation
 } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RTooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts'
 import { useAppStore, formatPrice, getStatusLabel, getStatusColor } from '@/lib/store'
-import { openInMaps, getGPSLocation, searchLocation, extractCoordinates, getDisplayLocation } from '@/lib/location-utils'
+import { openInMaps, getGPSLocation, searchLocation, extractCoordinates, getDisplayLocation, getMapEmbedUrl, getDirectionsUrl } from '@/lib/location-utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -167,6 +167,11 @@ export default function AdminDashboard() {
   const [editingSubAdmin, setEditingSubAdmin] = useState<any>(null)
   const [subAdminForm, setSubAdminForm] = useState({ name: '', phone: '', password: '', permissions: { services: false, nurses: false, beneficiaries: false, requests: false, payments: false, coupons: false, reports: false, emergency: false, ratings: false } })
 
+  // Map preview dialog
+  const [mapPreviewDialog, setMapPreviewDialog] = useState(false)
+  const [mapPreviewLocation, setMapPreviewLocation] = useState('')
+  const [mapPreviewLabel, setMapPreviewLabel] = useState('')
+
   // ─── mustChangePassword check ──────────────────────────────
   useEffect(() => {
     if ((user as any)?.mustChangePassword) {
@@ -236,7 +241,10 @@ export default function AdminDashboard() {
         if (reqRes.ok) setRequests(await reqRes.json())
         if (svcRes.ok) setServices(await svcRes.json())
       } else if (activeTab === 'sub-admins') {
-        const saRes = await fetch(`/api/admin/sub-admins?adminId=${(user as any)?.id}`)
+        // Use adminId for sub-admins (parent admin ID) or own ID for main admin
+        const isSub = (user as any)?.role === 'sub-admin'
+        const fetchAdminId = isSub ? (user as any)?.adminId : (user as any)?.id
+        const saRes = await fetch(`/api/admin/sub-admins?adminId=${fetchAdminId}`)
         if (saRes.ok) setSubAdmins(await saRes.json())
       } else if (activeTab === 'settings') {
         const setRes = await fetch('/api/admin/settings')
@@ -252,6 +260,14 @@ export default function AdminDashboard() {
   useEffect(() => { fetchData() }, [fetchData])
 
   const handleLogout = () => { logout(); setView('landing') }
+
+  // ─── Show map preview helper ──────────────────────────────────
+  const showMapPreview = (location: string, label?: string) => {
+    if (!location || location === 'غير محدد') return
+    setMapPreviewLocation(location)
+    setMapPreviewLabel(label || getDisplayLocation(location))
+    setMapPreviewDialog(true)
+  }
 
   // ─── Update admin profile ──────────────────────────────────
   const handleUpdateProfile = async () => {
@@ -465,7 +481,7 @@ export default function AdminDashboard() {
         const res = await fetch(`/api/admin/sub-admins/${editingSubAdmin.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
         if (res.ok) { toast({ title: 'تم تحديث المسؤول الفرعي' }); setSubAdminDialog(false); fetchData() }
       } else {
-        const res = await fetch('/api/admin/sub-admins', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminId: (user as any)?.id, ...subAdminForm }) })
+        const res = await fetch('/api/admin/sub-admins', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminId: isSubAdmin ? (user as any)?.adminId : (user as any)?.id, ...subAdminForm }) })
         if (res.ok) { toast({ title: 'تم إضافة المسؤول الفرعي' }); setSubAdminDialog(false); fetchData() }
         else { const d = await res.json(); toast({ title: 'خطأ', description: d.error, variant: 'destructive' }) }
       }
@@ -633,22 +649,35 @@ export default function AdminDashboard() {
     return filtered.reduce((sum: number, r: any) => sum + (r.rating || 0), 0) / filtered.length
   }, [ratings, ratingsNurseFilter])
 
+  // ─── Sub-admin permission check ────────────────────────────
+  const isSubAdmin = (user as any)?.role === 'sub-admin'
+  const subAdminPermissions: Record<string, boolean> = (user as any)?.permissions || {}
+  const hasPermission = (perm: string) => !isSubAdmin || !!subAdminPermissions[perm]
+
   // ─── Tabs definition ───────────────────────────────────────
-  const tabs: { key: Tab; label: string; icon: any; badge?: number }[] = [
+  const allTabs: { key: Tab; label: string; icon: any; badge?: number; perm?: string }[] = [
     { key: 'dashboard', label: 'الرئيسية', icon: LayoutDashboard, badge: emergencyRequests.filter((e: any) => e.status === 'pending').length || undefined },
-    { key: 'services', label: 'الخدمات', icon: Wrench },
-    { key: 'nurses', label: 'الممرضين', icon: Users },
-    { key: 'beneficiaries', label: 'المستفيدين', icon: Heart },
-    { key: 'requests', label: 'الطلبات', icon: ClipboardList },
-    { key: 'emergency', label: 'الطوارئ', icon: AlertTriangle, badge: emergencyRequests.filter((e: any) => e.status === 'pending').length || undefined },
-    { key: 'payments', label: 'المدفوعات', icon: CreditCard },
-    { key: 'coupons', label: 'الكوبونات', icon: Tag },
-    { key: 'ratings', label: 'التقييمات', icon: Star },
-    { key: 'reports', label: 'التقارير', icon: BarChart3 },
-    { key: 'activity', label: 'النشاط', icon: Activity },
-    { key: 'sub-admins', label: 'المدراء الفرعيين', icon: UserCog },
+    { key: 'services', label: 'الخدمات', icon: Wrench, perm: 'services' },
+    { key: 'nurses', label: 'الممرضين', icon: Users, perm: 'nurses' },
+    { key: 'beneficiaries', label: 'المستفيدين', icon: Heart, perm: 'beneficiaries' },
+    { key: 'requests', label: 'الطلبات', icon: ClipboardList, perm: 'requests' },
+    { key: 'emergency', label: 'الطوارئ', icon: AlertTriangle, badge: emergencyRequests.filter((e: any) => e.status === 'pending').length || undefined, perm: 'emergency' },
+    { key: 'payments', label: 'المدفوعات', icon: CreditCard, perm: 'payments' },
+    { key: 'coupons', label: 'الكوبونات', icon: Tag, perm: 'coupons' },
+    { key: 'ratings', label: 'التقييمات', icon: Star, perm: 'ratings' },
+    { key: 'reports', label: 'التقارير', icon: BarChart3, perm: 'reports' },
+    { key: 'activity', label: 'النشاط', icon: Activity, perm: 'reports' },
+    { key: 'sub-admins', label: 'المدراء الفرعيين', icon: UserCog, perm: '__sub_admins__' },
     { key: 'settings', label: 'الإعدادات', icon: Settings },
   ]
+
+  // Filter tabs based on sub-admin permissions
+  const tabs = allTabs.filter(tab => {
+    if (!isSubAdmin) return true // Main admin sees everything
+    if (!tab.perm) return true // Always show dashboard, settings
+    if (tab.perm === '__sub_admins__') return false // Sub-admins cannot see sub-admins tab
+    return hasPermission(tab.perm)
+  })
 
   const handleTabChange = (tab: Tab) => { setActiveTab(tab); setMobileMenuOpen(false) }
   const toggleRequestSelection = (id: string) => setSelectedRequestIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
@@ -682,7 +711,7 @@ export default function AdminDashboard() {
             </div>
             <div>
               <h2 className="text-xl font-bold text-white">عافيتك</h2>
-              <p className="text-amber-100 text-xs">لوحة تحكم الإدارة</p>
+              <p className="text-amber-100 text-xs">{isSubAdmin ? 'لوحة تحكم المدير الفرعي' : 'لوحة تحكم الإدارة'}</p>
             </div>
           </div>
         </div>
@@ -698,7 +727,7 @@ export default function AdminDashboard() {
         <div className="p-4 border-t border-amber-100/50 bg-white/40 backdrop-blur-sm">
           <div className="flex items-center gap-3 mb-3 p-2 rounded-xl hover:bg-amber-50/80 cursor-pointer transition-all duration-200" onClick={() => { setEditName((user as any)?.name || ''); setEditPhone((user as any)?.phone || ''); setEditEmail((user as any)?.email || ''); setEditNameDialog(true) }}>
             <div className="w-10 h-10 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-md shadow-amber-500/25"><Shield className="w-5 h-5 text-white" /></div>
-            <div className="flex-1 min-w-0"><p className="font-medium text-sm truncate">{(user as any)?.name || 'المدير'}</p><p className="text-gray-400 text-xs">مدير النظام</p></div>
+            <div className="flex-1 min-w-0"><p className="font-medium text-sm truncate">{(user as any)?.name || 'المدير'}</p><p className="text-gray-400 text-xs">{isSubAdmin ? 'مدير فرعي' : 'مدير النظام'}</p></div>
             <Pencil className="w-3.5 h-3.5 text-gray-400" />
           </div>
           <Button variant="ghost" className="w-full justify-start text-red-500 hover:text-red-600 hover:bg-red-50 rounded-xl" onClick={handleLogout}><LogOut className="w-4 h-4 ml-2" />تسجيل الخروج</Button>
@@ -1011,7 +1040,11 @@ export default function AdminDashboard() {
                                         {/* Quick Info Row */}
                                         <div className="flex items-center gap-4 mt-2 text-sm text-gray-500 flex-wrap">
                                           <span className="flex items-center gap-1"><Phone className="w-3.5 h-3.5" />{n.phone}</span>
-                                          <span className="flex items-center gap-1"><MapPin className="w-3.5 h-3.5" />{n.location}</span>
+                                          {n.location && n.location !== 'غير محدد' ? (
+                                            <button onClick={() => showMapPreview(n.location)} className="flex items-center gap-1 text-blue-600 hover:text-blue-800 hover:underline transition-colors"><MapPin className="w-3.5 h-3.5 shrink-0" /><span className="truncate max-w-[150px]">{getDisplayLocation(n.location)}</span></button>
+                                          ) : (
+                                            <span className="flex items-center gap-1 text-gray-400"><MapPin className="w-3.5 h-3.5" />غير محدد</span>
+                                          )}
                                         </div>
                                       </div>
                                       {/* Actions */}
@@ -1063,7 +1096,7 @@ export default function AdminDashboard() {
                                 <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-400 to-blue-500 flex items-center justify-center shadow-md shrink-0"><Heart className="w-6 h-6 text-white" /></div>
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-2 flex-wrap"><p className="font-bold">{b.name}</p><Badge className={`${getStatusColor(b.status || 'active')} border text-xs`}>{getStatusLabel(b.status || 'active')}</Badge></div>
-                                  <p className="text-sm text-gray-500 mt-1">{b.phone} • {b.location}</p>
+                                  <p className="text-sm text-gray-500 mt-1">{b.phone} • {b.location && b.location !== 'غير محدد' ? <button onClick={() => showMapPreview(b.location)} className="text-blue-600 hover:text-blue-800 hover:underline transition-colors inline-flex items-center gap-1"><MapPin className="w-3 h-3 shrink-0" />{getDisplayLocation(b.location)}</button> : 'غير محدد'}</p>
                                 </div>
                                 <div className="flex gap-2 flex-wrap">
                                   <Button size="sm" variant="outline" onClick={() => { setBeneficiaryDetail(b); setBeneficiaryRequests(requests.filter((r: any) => r.beneficiaryId === b.id)) }}><Eye className="w-3.5 h-3.5" /></Button>
@@ -1126,7 +1159,7 @@ export default function AdminDashboard() {
                                   </div>
                                   <p className="text-sm text-gray-500 mt-1">المستفيد: {r.beneficiary?.name || 'غير محدد'} {r.beneficiary?.phone && `• ${r.beneficiary.phone}`}</p>
                                   {(r.address || r.beneficiary?.location) && (
-                                    <button onClick={() => openInMaps(r.address || r.beneficiary?.location || '')} className="flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-800 hover:underline mt-1 transition-colors">
+                                    <button onClick={() => showMapPreview(r.address || r.beneficiary?.location || '')} className="flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-800 hover:underline mt-1 transition-colors">
                                       <MapPin className="w-3.5 h-3.5 shrink-0" />
                                       <span className="truncate">{getDisplayLocation(r.address || r.beneficiary?.location || '')}</span>
                                       <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full">فتح الخريطة</span>
@@ -1224,7 +1257,7 @@ export default function AdminDashboard() {
                                     <div className="mt-2 space-y-1 text-sm">
                                       <p className="text-gray-600"><span className="font-medium">المستفيد:</span> {req.beneficiaryName || 'غير معروف'}</p>
                                       {req.address && (
-                                        <button onClick={() => openInMaps(req.address)} className="flex items-center gap-1.5 text-blue-600 hover:text-blue-800 hover:underline transition-colors">
+                                        <button onClick={() => showMapPreview(req.address)} className="flex items-center gap-1.5 text-blue-600 hover:text-blue-800 hover:underline transition-colors">
                                           <MapPin className="w-3.5 h-3.5 shrink-0" />
                                           <span className="truncate">{getDisplayLocation(req.address)}</span>
                                           <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full">فتح الخريطة</span>
@@ -1633,7 +1666,8 @@ export default function AdminDashboard() {
                       </CardContent>
                     </Card>
 
-                    {/* Dangerous Zone */}
+                    {/* Dangerous Zone - Only main admin */}
+                    {!isSubAdmin && (
                     <Card className="border-2 border-red-200 shadow-lg bg-red-50/20">
                       <CardHeader className="pb-3">
                         <CardTitle className="text-lg flex items-center gap-2 text-red-600"><AlertTriangle className="w-5 h-5" />منطقة خطرة</CardTitle>
@@ -1645,6 +1679,7 @@ export default function AdminDashboard() {
                         </div>
                       </CardContent>
                     </Card>
+                    )}
                   </div>
                 )}
 
@@ -1729,7 +1764,7 @@ export default function AdminDashboard() {
                 <p className="text-sm text-gray-500">المستفيد: {selectedRequest.beneficiary?.name || 'غير محدد'}</p>
                 {(selectedRequest.beneficiary?.location || selectedRequest.address || selectedRequest.location) && (
                   <button
-                    onClick={() => openInMaps(selectedRequest.beneficiary?.location || selectedRequest.address || selectedRequest.location)}
+                    onClick={() => showMapPreview(selectedRequest.beneficiary?.location || selectedRequest.address || selectedRequest.location)}
                     className="flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-800 hover:underline mt-1 transition-colors"
                   >
                     <MapPin className="w-3.5 h-3.5 shrink-0" />
@@ -1932,7 +1967,7 @@ export default function AdminDashboard() {
                 <div>
                   <span className="text-gray-500">الموقع:</span>
                   {beneficiaryDetail.location && beneficiaryDetail.location !== 'غير محدد' ? (
-                    <button onClick={() => openInMaps(beneficiaryDetail.location)} className="flex items-center gap-1.5 text-blue-600 hover:text-blue-800 hover:underline font-medium transition-colors">
+                    <button onClick={() => showMapPreview(beneficiaryDetail.location)} className="flex items-center gap-1.5 text-blue-600 hover:text-blue-800 hover:underline font-medium transition-colors">
                       <MapPin className="w-3.5 h-3.5 shrink-0" />
                       <span className="truncate">{getDisplayLocation(beneficiaryDetail.location)}</span>
                     </button>
@@ -2029,6 +2064,71 @@ export default function AdminDashboard() {
             <Button variant="destructive" disabled={!resetPassword || resetConfirmText !== 'حذف' || resetLoading} onClick={handleResetData}>
               {resetLoading ? <><Loader2 className="w-4 h-4 ml-2 animate-spin" />جارٍ الحذف...</> : 'حذف جميع البيانات'}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Map Preview Dialog */}
+      <Dialog open={mapPreviewDialog} onOpenChange={setMapPreviewDialog}>
+        <DialogContent className="sm:max-w-[600px] max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <MapPin className="w-5 h-5 text-amber-500" />
+              موقع: {mapPreviewLabel}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {/* Embedded Map */}
+            {getMapEmbedUrl(mapPreviewLocation) ? (
+              <div className="w-full h-[350px] rounded-xl overflow-hidden border border-gray-200 shadow-sm">
+                <iframe
+                  src={getMapEmbedUrl(mapPreviewLocation)}
+                  width="100%"
+                  height="100%"
+                  style={{ border: 0 }}
+                  loading="lazy"
+                  title="موقع على الخريطة"
+                />
+              </div>
+            ) : (
+              <div className="w-full h-[200px] rounded-xl bg-gray-100 flex items-center justify-center">
+                <div className="text-center">
+                  <MapPin className="w-12 h-12 text-gray-300 mx-auto mb-2" />
+                  <p className="text-gray-400 text-sm">لا تتوفر إحداثيات لهذا الموقع</p>
+                </div>
+              </div>
+            )}
+            {/* Location Details */}
+            <div className="bg-amber-50/50 rounded-xl p-3">
+              <p className="text-sm text-gray-600 truncate">
+                <MapPin className="w-3.5 h-3.5 inline ml-1 text-amber-500" />
+                {mapPreviewLocation}
+              </p>
+              {extractCoordinates(mapPreviewLocation) && (
+                <p className="text-xs text-gray-400 mt-1">
+                  الإحداثيات: {extractCoordinates(mapPreviewLocation)!.lat.toFixed(6)}, {extractCoordinates(mapPreviewLocation)!.lng.toFixed(6)}
+                </p>
+              )}
+            </div>
+          </div>
+          <DialogFooter className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => openInMaps(mapPreviewLocation)}
+              className="flex items-center gap-1.5"
+            >
+              <MapPin className="w-4 h-4" />
+              فتح في خرائط Google
+            </Button>
+            {getDirectionsUrl(mapPreviewLocation) && (
+              <Button
+                className="bg-gradient-to-l from-amber-500 via-orange-500 to-rose-500 text-white"
+                onClick={() => window.open(getDirectionsUrl(mapPreviewLocation)!, '_blank')}
+              >
+                <Navigation className="w-4 h-4 ml-1.5" />
+                الاتجاهات
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

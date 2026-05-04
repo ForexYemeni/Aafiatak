@@ -1118,6 +1118,13 @@ export async function createRating(data: {
 
 // ==================== SUB-ADMINS ====================
 
+export async function getSubAdminByPhone(phone: string) {
+  checkFirebase()
+  const snapshot = await firestore.collection('subAdmins').where('phone', '==', phone).limit(1).get()
+  if (snapshot.empty) return null
+  return docToObject(snapshot.docs[0])
+}
+
 export async function getSubAdmins(adminId: string) {
   checkFirebase()
   try {

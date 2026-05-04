@@ -245,7 +245,8 @@ export default function LandingPage() {
           toast({ title: 'يجب تغيير كلمة المرور', description: 'يجب تغيير كلمة المرور الافتراضية قبل المتابعة' })
         } else {
           setView('admin-dashboard')
-          toast({ title: 'مرحباً ' + data.name })
+          const roleLabel = data.role === 'sub-admin' ? 'مدير فرعي' : 'مدير'
+          toast({ title: `مرحباً ${data.name}`, description: `تم تسجيل الدخول ك${roleLabel}` })
         }
       } else {
         toast({ title: 'خطأ', description: data.error || 'اسم المستخدم أو كلمة المرور غير صحيحة', variant: 'destructive' })

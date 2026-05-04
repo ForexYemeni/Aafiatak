@@ -12,10 +12,12 @@ export type AppView =
 
 interface AdminUser {
   id: string
-  username: string
+  username?: string
   name: string
   phone?: string
-  role?: string
+  role?: 'admin' | 'sub-admin'
+  adminId?: string
+  permissions?: Record<string, boolean>
   mustChangePassword?: boolean
 }
 

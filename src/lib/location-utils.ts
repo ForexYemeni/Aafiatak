@@ -104,3 +104,29 @@ export function getDisplayLocation(location: string): string {
   // Remove the [lat,lng] part for display
   return location.replace(/\s*\[-?\d+\.?\d*\s*,\s*-?\d+\.?\d*\]\s*$/, '').trim() || location
 }
+
+/**
+ * Get OpenStreetMap embed URL for a location
+ * Returns an iframe src URL showing a map with a marker
+ */
+export function getMapEmbedUrl(location: string): string | null {
+  const coords = extractCoordinates(location)
+  if (coords) {
+    return `https://www.openstreetmap.org/export/embed.html?bbox=${coords.lng - 0.01}%2C${coords.lat - 0.01}%2C${coords.lng + 0.01}%2C${coords.lat + 0.01}&layer=mapnik&marker=${coords.lat}%2C${coords.lng}`
+  }
+  return null
+}
+
+/**
+ * Get Google Maps directions URL from current location to target
+ */
+export function getDirectionsUrl(location: string): string | null {
+  const coords = extractCoordinates(location)
+  if (coords) {
+    return `https://www.google.com/maps/dir/?api=1&destination=${coords.lat},${coords.lng}`
+  }
+  if (location && location !== 'غير محدد') {
+    return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(getDisplayLocation(location))}`
+  }
+  return null
+}
