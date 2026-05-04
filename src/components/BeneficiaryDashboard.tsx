@@ -297,6 +297,7 @@ export default function BeneficiaryDashboard() {
   const [paymentSubmitting, setPaymentSubmitting] = useState(false)
   const [lastCreatedRequestId, setLastCreatedRequestId] = useState<string>('')
   const [paymentTransactions, setPaymentTransactions] = useState<any[]>([])
+  const [paymentAmount, setPaymentAmount] = useState<number>(0)
 
   // Nurse search state
   const [nurseSearchResults, setNurseSearchResults] = useState<any[]>([])
@@ -550,6 +551,8 @@ export default function BeneficiaryDashboard() {
         } else {
           setRequestDialog(false)
         }
+        // Save payment amount before clearing dynamic pricing and selected service
+        setPaymentAmount(dynamicPricing?.totalPrice || selectedService?.price || 0)
         setSelectedService(null)
         setSelectedServices([])
         setRequestForm({ paymentMethod: '', paymentMethodId: '', notes: '', address: '', couponCode: '' })
@@ -1043,14 +1046,14 @@ export default function BeneficiaryDashboard() {
     if (!lastCreatedRequestId) return
     setPaymentSubmitting(true)
     try {
-      const amount = dynamicPricing?.totalPrice || selectedService?.price || 0
+      const amount = paymentAmount || dynamicPricing?.totalPrice || selectedService?.price || 0
       const res = await fetch('/api/payments/process', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           requestId: lastCreatedRequestId,
           beneficiaryId: beneficiaryUser?.id,
-          amount: dynamicPricing?.totalPrice || selectedService?.price || 0,
+          amount: paymentAmount || dynamicPricing?.totalPrice || selectedService?.price || 0,
           method: paymentForm.method,
           paymentMethod: paymentForm.method,
           transactionRef: paymentForm.transactionRef || undefined,
@@ -3089,7 +3092,7 @@ export default function BeneficiaryDashboard() {
                   <p className="font-semibold text-sm">{selectedService?.name || 'خدمة'}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">رقم الطلب: #{lastCreatedRequestId ? lastCreatedRequestId.slice(0, 8).toUpperCase() : ''}</p>
                 </div>
-                <span className="text-xl font-bold text-emerald-600">{formatPrice(dynamicPricing?.totalPrice || selectedService?.price || 0)}</span>
+                <span className="text-xl font-bold text-emerald-600">{formatPrice(paymentAmount || dynamicPricing?.totalPrice || selectedService?.price || 0)}</span>
               </div>
             </div>
 
@@ -3166,7 +3169,7 @@ export default function BeneficiaryDashboard() {
             {paymentForm.method && paymentForm.method !== 'cash' && (() => {
               const selectedPm = availablePaymentMethods.find((m: any) => m.id === paymentForm.paymentMethodId)
               if (!selectedPm) return null
-              const amount = dynamicPricing?.totalPrice || selectedService?.price || 0
+              const amount = paymentAmount || dynamicPricing?.totalPrice || selectedService?.price || 0
               const walletLabel = selectedPm.walletType ? (
                 selectedPm.walletType === 'one-cash' ? 'ون كاش' :
                 selectedPm.walletType === 'cash-wallet' ? 'محفظة كاش' :
@@ -3338,7 +3341,7 @@ export default function BeneficiaryDashboard() {
               <div className="p-4 bg-amber-50 rounded-xl text-center border border-amber-100">
                 <DollarSign className="w-8 h-8 text-amber-400 mx-auto mb-2" />
                 <p className="text-amber-700 font-bold">الدفع نقداً عند الاستلام</p>
-                <p className="text-amber-600 text-xs mt-1">يرجى تجهيز المبلغ: <strong>{formatPrice(dynamicPricing?.totalPrice || selectedService?.price || 0)}</strong></p>
+                <p className="text-amber-600 text-xs mt-1">يرجى تجهيز المبلغ: <strong>{formatPrice(paymentAmount || dynamicPricing?.totalPrice || selectedService?.price || 0)}</strong></p>
               </div>
             )}
 

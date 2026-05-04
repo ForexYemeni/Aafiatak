@@ -13,6 +13,14 @@ export async function GET() {
         referralBonusPoints: 50,
         referralBonusPointsReceiver: 25,
         referralEnabled: true,
+        nightSurchargePercent: 50,
+        fridaySurchargePercent: 25,
+        distanceFeesEnabled: true,
+        distanceFeePerKm5to15: 100,
+        distanceFeePerKm15to30: 150,
+        distanceFeePerKmOver30: 200,
+        distanceFreeKm: 5,
+        commissionPercent: 15,
       })
     }
     return NextResponse.json(settings)
@@ -25,7 +33,7 @@ export async function GET() {
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json()
-    const allowedFields = ['phone', 'email', 'emergencyPhone', 'whatsappNumber', 'referralBonusPoints', 'referralBonusPointsReceiver', 'referralEnabled']
+    const allowedFields = ['phone', 'email', 'emergencyPhone', 'whatsappNumber', 'referralBonusPoints', 'referralBonusPointsReceiver', 'referralEnabled', 'nightSurchargePercent', 'fridaySurchargePercent', 'distanceFeesEnabled', 'distanceFeePerKm5to15', 'distanceFeePerKm15to30', 'distanceFeePerKmOver30', 'distanceFreeKm', 'commissionPercent']
     const updateData: Record<string, any> = {}
 
     for (const field of allowedFields) {

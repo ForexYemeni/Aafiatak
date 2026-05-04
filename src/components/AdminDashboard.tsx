@@ -2114,6 +2114,72 @@ export default function AdminDashboard() {
                       </CardContent>
                     </Card>
 
+                    {/* Dynamic Pricing Settings */}
+                    <Card className="border-0 shadow-lg">
+                      <CardHeader className="pb-3"><CardTitle className="text-lg flex items-center gap-2"><TrendingUp className="w-5 h-5 text-blue-500" />إعدادات التسعير الديناميكي</CardTitle></CardHeader>
+                      <CardContent className="space-y-4">
+                        <div className="p-3 bg-blue-50/50 rounded-xl border border-blue-100">
+                          <p className="text-sm text-blue-700">تحكم في نسب الرسوم الإضافية للخدمات مثل رسوم الوقت والمسافة ويوم الجمعة</p>
+                        </div>
+                        
+                        {/* Night Surcharge */}
+                        <div className="p-3 bg-indigo-50/50 rounded-xl border border-indigo-100 space-y-3">
+                          <div className="flex items-center gap-2">
+                            <Clock className="w-4 h-4 text-indigo-500" />
+                            <p className="font-medium text-sm text-indigo-700">رسوم الوقت (الليل)</p>
+                          </div>
+                          <p className="text-xs text-gray-500">تُطبق من الساعة 10 مساءً إلى 6 صباحاً</p>
+                          <div><Label>نسبة رسوم الليل (%)</Label><Input type="number" value={settings.nightSurchargePercent ?? 50} onChange={e => setSettings({ ...settings, nightSurchargePercent: Number(e.target.value) })} className="border-amber-200 mt-1" min={0} max={200} /></div>
+                        </div>
+
+                        {/* Friday Surcharge */}
+                        <div className="p-3 bg-amber-50/50 rounded-xl border border-amber-100 space-y-3">
+                          <div className="flex items-center gap-2">
+                            <Calendar className="w-4 h-4 text-amber-500" />
+                            <p className="font-medium text-sm text-amber-700">رسوم يوم الجمعة</p>
+                          </div>
+                          <div><Label>نسبة رسوم الجمعة (%)</Label><Input type="number" value={settings.fridaySurchargePercent ?? 25} onChange={e => setSettings({ ...settings, fridaySurchargePercent: Number(e.target.value) })} className="border-amber-200 mt-1" min={0} max={200} /></div>
+                        </div>
+
+                        {/* Distance Fees */}
+                        <div className="p-3 bg-emerald-50/50 rounded-xl border border-emerald-100 space-y-3">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <MapPin className="w-4 h-4 text-emerald-500" />
+                              <p className="font-medium text-sm text-emerald-700">رسوم المسافة</p>
+                            </div>
+                            <Switch checked={settings.distanceFeesEnabled ?? true} onCheckedChange={v => setSettings({ ...settings, distanceFeesEnabled: v })} />
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div><Label>المسافة المجانية (كم)</Label><Input type="number" value={settings.distanceFreeKm ?? 5} onChange={e => setSettings({ ...settings, distanceFreeKm: Number(e.target.value) })} className="border-amber-200 mt-1" min={0} /><p className="text-[10px] text-gray-400 mt-0.5">أول X كم بدون رسوم</p></div>
+                            <div><Label>رسوم الكلم (5-15 كم) ر.ي</Label><Input type="number" value={settings.distanceFeePerKm5to15 ?? 100} onChange={e => setSettings({ ...settings, distanceFeePerKm5to15: Number(e.target.value) })} className="border-amber-200 mt-1" min={0} /></div>
+                            <div><Label>رسوم الكلم (15-30 كم) ر.ي</Label><Input type="number" value={settings.distanceFeePerKm15to30 ?? 150} onChange={e => setSettings({ ...settings, distanceFeePerKm15to30: Number(e.target.value) })} className="border-amber-200 mt-1" min={0} /></div>
+                            <div><Label>رسوم الكلم (أكثر من 30 كم) ر.ي</Label><Input type="number" value={settings.distanceFeePerKmOver30 ?? 200} onChange={e => setSettings({ ...settings, distanceFeePerKmOver30: Number(e.target.value) })} className="border-amber-200 mt-1" min={0} /></div>
+                          </div>
+                        </div>
+
+                        {/* Commission */}
+                        <div className="p-3 bg-rose-50/50 rounded-xl border border-rose-100 space-y-3">
+                          <div className="flex items-center gap-2">
+                            <DollarSign className="w-4 h-4 text-rose-500" />
+                            <p className="font-medium text-sm text-rose-700">عمولة المنصة</p>
+                          </div>
+                          <div><Label>نسبة العمولة (%)</Label><Input type="number" value={settings.commissionPercent ?? 15} onChange={e => setSettings({ ...settings, commissionPercent: Number(e.target.value) })} className="border-amber-200 mt-1" min={0} max={100} /><p className="text-[10px] text-gray-400 mt-0.5">النسبة المئوية التي تأخذها المنصة من كل طلب</p></div>
+                        </div>
+
+                        <Button className="bg-gradient-to-l from-amber-500 via-orange-500 to-rose-500 text-white shadow-lg shadow-amber-500/25" onClick={() => handleSaveSettings({
+                          nightSurchargePercent: settings.nightSurchargePercent,
+                          fridaySurchargePercent: settings.fridaySurchargePercent,
+                          distanceFeesEnabled: settings.distanceFeesEnabled,
+                          distanceFeePerKm5to15: settings.distanceFeePerKm5to15,
+                          distanceFeePerKm15to30: settings.distanceFeePerKm15to30,
+                          distanceFeePerKmOver30: settings.distanceFeePerKmOver30,
+                          distanceFreeKm: settings.distanceFreeKm,
+                          commissionPercent: settings.commissionPercent,
+                        })}>حفظ إعدادات التسعير</Button>
+                      </CardContent>
+                    </Card>
+
                     {/* Payment Settings */}
                     <Card className="border-0 shadow-lg">
                       <CardHeader className="pb-3"><CardTitle className="text-lg flex items-center gap-2"><CreditCard className="w-5 h-5 text-emerald-500" />إعدادات الدفع</CardTitle></CardHeader>
@@ -2304,7 +2370,6 @@ export default function AdminDashboard() {
                   </Select>
                 </div>
                 <div><Label className="text-sm font-medium">رقم المحفظة *</Label><Input value={paymentForm.accountNumber} onChange={e => setPaymentForm({ ...paymentForm, accountNumber: e.target.value })} placeholder="رقم هاتف المحفظة" className="border-amber-200 mt-1" dir="ltr" /></div>
-                <div><Label className="text-sm font-medium">اسم صاحب المحفظة</Label><Input value={paymentForm.accountName} onChange={e => setPaymentForm({ ...paymentForm, accountName: e.target.value })} placeholder="الاسم المسجل في المحفظة" className="border-amber-200 mt-1" /></div>
               </>
             )}
 

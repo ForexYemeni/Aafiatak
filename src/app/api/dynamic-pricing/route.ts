@@ -17,6 +17,32 @@ export async function GET(request: NextRequest) {
     const distanceKmParam = searchParams.get('distanceKm')
     const dayOfWeekParam = searchParams.get('dayOfWeek') // 0=Sunday, 5=Friday
 
+    // Fetch admin pricing settings
+    let pricingSettings: Record<string, any> = {
+      nightSurchargePercent: 50,
+      fridaySurchargePercent: 25,
+      distanceFeesEnabled: true,
+      distanceFeePerKm5to15: 100,
+      distanceFeePerKm15to30: 150,
+      distanceFeePerKmOver30: 200,
+      distanceFreeKm: 5,
+      commissionPercent: 15,
+    }
+    try {
+      const settingsDoc = await firestore.collection('appSettings').doc('admin').get()
+      if (settingsDoc.exists) {
+        const data = settingsDoc.data()!
+        if (data.nightSurchargePercent !== undefined) pricingSettings.nightSurchargePercent = data.nightSurchargePercent
+        if (data.fridaySurchargePercent !== undefined) pricingSettings.fridaySurchargePercent = data.fridaySurchargePercent
+        if (data.distanceFeesEnabled !== undefined) pricingSettings.distanceFeesEnabled = data.distanceFeesEnabled
+        if (data.distanceFeePerKm5to15 !== undefined) pricingSettings.distanceFeePerKm5to15 = data.distanceFeePerKm5to15
+        if (data.distanceFeePerKm15to30 !== undefined) pricingSettings.distanceFeePerKm15to30 = data.distanceFeePerKm15to30
+        if (data.distanceFeePerKmOver30 !== undefined) pricingSettings.distanceFeePerKmOver30 = data.distanceFeePerKmOver30
+        if (data.distanceFreeKm !== undefined) pricingSettings.distanceFreeKm = data.distanceFreeKm
+        if (data.commissionPercent !== undefined) pricingSettings.commissionPercent = data.commissionPercent
+      }
+    } catch {}
+
     // Support both single and multiple service IDs
     const ids = serviceIds
       ? serviceIds.split(',').filter(Boolean)
@@ -48,44 +74,35 @@ export async function GET(request: NextRequest) {
       if (!isNaN(parsed) && parsed >= 0) distanceKm = parsed
     }
 
-    // Calculate time multiplier
+    // Calculate time multiplier using admin settings
     let timeMultiplier = 1.0
     let timeLabel = 'سعر عادي'
 
     // Night hours (22:00 - 06:00)
     if (hour >= 22 || hour < 6) {
-      timeMultiplier = 1.5
-      timeLabel = 'رسوم ليلية (50%)'
-    }
-    // Early morning peak (06:00 - 09:00)
-    else if (hour >= 6 && hour < 9) {
-      timeMultiplier = 1.2
-      timeLabel = 'رسوم ذروة صباحية (20%)'
-    }
-    // Evening peak (17:00 - 20:00)
-    else if (hour >= 17 && hour < 20) {
-      timeMultiplier = 1.15
-      timeLabel = 'رسوم ذروة مسائية (15%)'
+      timeMultiplier = 1 + pricingSettings.nightSurchargePercent / 100
+      timeLabel = `رسوم ليلية (${pricingSettings.nightSurchargePercent}%)`
     }
 
-    // Friday surcharge
+    // Friday surcharge using admin settings
     let fridayMultiplier = 1.0
     let fridayLabel = ''
     if (dayOfWeek === 5) { // Friday in JS
-      fridayMultiplier = 1.25
-      fridayLabel = 'رسوم يوم الجمعة (25%)'
+      fridayMultiplier = 1 + pricingSettings.fridaySurchargePercent / 100
+      fridayLabel = `رسوم يوم الجمعة (${pricingSettings.fridaySurchargePercent}%)`
     }
 
-    // Calculate distance surcharge (Yemen Rial per km)
+    // Calculate distance surcharge using admin settings
     let distanceSurcharge = 0
     let distanceLabel = ''
-    if (distanceKm > 5) {
+    if (pricingSettings.distanceFeesEnabled && distanceKm > pricingSettings.distanceFreeKm) {
+      const billableKm = distanceKm - pricingSettings.distanceFreeKm
       if (distanceKm <= 15) {
-        distanceSurcharge = (distanceKm - 5) * 100 // 100 YER/km
+        distanceSurcharge = billableKm * pricingSettings.distanceFeePerKm5to15
       } else if (distanceKm <= 30) {
-        distanceSurcharge = 10 * 100 + (distanceKm - 15) * 150 // 150 YER/km
+        distanceSurcharge = (15 - pricingSettings.distanceFreeKm) * pricingSettings.distanceFeePerKm5to15 + (distanceKm - 15) * pricingSettings.distanceFeePerKm15to30
       } else {
-        distanceSurcharge = 10 * 100 + 15 * 150 + (distanceKm - 30) * 200 // 200 YER/km
+        distanceSurcharge = (15 - pricingSettings.distanceFreeKm) * pricingSettings.distanceFeePerKm5to15 + 15 * pricingSettings.distanceFeePerKm15to30 + (distanceKm - 30) * pricingSettings.distanceFeePerKmOver30
       }
       distanceLabel = `رسوم مسافة (${distanceKm.toFixed(1)} كم)`
     }
@@ -130,8 +147,8 @@ export async function GET(request: NextRequest) {
     const totalDistanceSurcharge = Math.round(distanceSurcharge)
     const grandTotal = totalFinalPrice + totalDistanceSurcharge
 
-    // Calculate commission (admin fee) - 15% default
-    const commissionPercent = 15
+    // Calculate commission (admin fee) from settings
+    const commissionPercent = pricingSettings.commissionPercent
     const commissionAmount = Math.round(grandTotal * commissionPercent / 100)
     const nursePayout = grandTotal - commissionAmount
 
