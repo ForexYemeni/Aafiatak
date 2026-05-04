@@ -386,6 +386,7 @@ export async function createServiceRequest(data: {
   serviceId: string
   status: string
   paymentMethod?: string | null
+  paymentMethodId?: string | null
   notes?: string | null
   address?: string | null
   serviceIds?: string[]

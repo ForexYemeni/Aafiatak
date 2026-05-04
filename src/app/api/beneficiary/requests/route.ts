@@ -26,6 +26,7 @@ export async function POST(request: NextRequest) {
       serviceId,          // single service (backward compat)
       serviceIds,         // multiple services (array)
       paymentMethod,
+      paymentMethodId,
       notes,
       address,
       couponCode,
@@ -65,6 +66,7 @@ export async function POST(request: NextRequest) {
       services: validServices,        // service details
       isMultiService,
       paymentMethod: paymentMethod || null,
+      paymentMethodId: paymentMethodId || null,
       notes: notes || null,
       address: address || null,
       couponCode: couponCode || null,

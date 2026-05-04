@@ -186,8 +186,10 @@ export default function BeneficiaryDashboard() {
   // Request dialog state
   const [requestDialog, setRequestDialog] = useState(false)
   const [selectedService, setSelectedService] = useState<any>(null)
-  const [requestForm, setRequestForm] = useState({ paymentMethod: '', notes: '', address: '', couponCode: '' })
+  const [requestForm, setRequestForm] = useState({ paymentMethod: '', paymentMethodId: '', notes: '', address: '', couponCode: '' })
   const [submitting, setSubmitting] = useState(false)
+  const [requestPaymentMethods, setRequestPaymentMethods] = useState<any[]>([])
+  const [requestPaymentMethodsLoading, setRequestPaymentMethodsLoading] = useState(false)
 
   // Coupon validation state
   const [validCoupon, setValidCoupon] = useState<any>(null)
@@ -306,6 +308,24 @@ export default function BeneficiaryDashboard() {
   const [notificationsRefreshing, setNotificationsRefreshing] = useState(false)
 
   const beneficiaryUser = user as { id: string; name: string; phone: string; location: string } | null
+
+  // Fetch admin-defined payment methods for request dialog
+  const fetchRequestPaymentMethods = useCallback(async () => {
+    setRequestPaymentMethodsLoading(true)
+    try {
+      const res = await fetch('/api/payments/methods')
+      if (res.ok) {
+        const data = await res.json()
+        setRequestPaymentMethods(Array.isArray(data) ? data : [])
+      } else {
+        setRequestPaymentMethods([])
+      }
+    } catch {
+      setRequestPaymentMethods([])
+    } finally {
+      setRequestPaymentMethodsLoading(false)
+    }
+  }, [])
 
   // Fetch admin settings on mount
   useEffect(() => {
@@ -476,6 +496,7 @@ export default function BeneficiaryDashboard() {
           services: selectedServices.length > 0 ? selectedServices.map((s: any) => ({ id: s.id, name: s.name, price: s.price })) : selectedService ? [{ id: selectedService.id, name: selectedService.name, price: selectedService.price }] : [],
           isMultiService: selectedServices.length > 1,
           paymentMethod: requestForm.paymentMethod || null,
+          paymentMethodId: requestForm.paymentMethodId || null,
           notes: requestForm.notes || null,
           address: requestForm.address || null,
           couponCode: validCoupon?.id || null,
@@ -502,28 +523,35 @@ export default function BeneficiaryDashboard() {
         // If payment method is card or wallet, open payment dialog
         if (requestForm.paymentMethod && requestForm.paymentMethod !== 'cash') {
           setLastCreatedRequestId(data.id || data.requestId || '')
-          setPaymentForm(prev => ({ ...prev, method: requestForm.paymentMethod }))
+          setPaymentForm(prev => ({ ...prev, method: requestForm.paymentMethod, paymentMethodId: requestForm.paymentMethodId }))
           setRequestDialog(false)
-          // Fetch admin payment methods before opening dialog
-          try {
-            const pmRes = await fetch('/api/payments/methods')
-            if (pmRes.ok) {
-              const pmData = await pmRes.json()
-              setAvailablePaymentMethods(Array.isArray(pmData) ? pmData : [])
-              // Auto-select first matching method
-              const matching = (Array.isArray(pmData) ? pmData : []).find((m: any) => m.type === requestForm.paymentMethod)
-              if (matching) {
-                setPaymentForm(prev => ({ ...prev, method: matching.type, paymentMethodId: matching.id }))
-              }
+          // Use already-fetched payment methods or fetch them
+          if (requestPaymentMethods.length > 0) {
+            setAvailablePaymentMethods(requestPaymentMethods)
+            const matching = requestPaymentMethods.find((m: any) => m.id === requestForm.paymentMethodId || m.type === requestForm.paymentMethod)
+            if (matching) {
+              setPaymentForm(prev => ({ ...prev, method: matching.type, paymentMethodId: matching.id }))
             }
-          } catch {}
+          } else {
+            try {
+              const pmRes = await fetch('/api/payments/methods')
+              if (pmRes.ok) {
+                const pmData = await pmRes.json()
+                setAvailablePaymentMethods(Array.isArray(pmData) ? pmData : [])
+                const matching = (Array.isArray(pmData) ? pmData : []).find((m: any) => m.type === requestForm.paymentMethod)
+                if (matching) {
+                  setPaymentForm(prev => ({ ...prev, method: matching.type, paymentMethodId: matching.id }))
+                }
+              }
+            } catch {}
+          }
           setPaymentDialog(true)
         } else {
           setRequestDialog(false)
         }
         setSelectedService(null)
         setSelectedServices([])
-        setRequestForm({ paymentMethod: '', notes: '', address: '', couponCode: '' })
+        setRequestForm({ paymentMethod: '', paymentMethodId: '', notes: '', address: '', couponCode: '' })
         setValidCoupon(null)
         setCouponError('')
         setRequestFavoriteNurse(false)
@@ -564,10 +592,11 @@ export default function BeneficiaryDashboard() {
   const handleReorder = (req: any) => {
     const service = req.service || { id: req.serviceId, name: 'خدمة', price: 0 }
     setSelectedService(service)
-    setRequestForm({ paymentMethod: req.paymentMethod || '', notes: '', address: req.address || beneficiaryUser?.location || '', couponCode: '' })
+    setRequestForm({ paymentMethod: '', paymentMethodId: '', notes: '', address: req.address || beneficiaryUser?.location || '', couponCode: '' })
     setValidCoupon(null)
     setCouponError('')
     setRequestDialog(true)
+    fetchRequestPaymentMethods()
   }
 
   // Coupon validation handler
@@ -1614,12 +1643,13 @@ export default function BeneficiaryDashboard() {
                                       const newSelection = selectedServices.find((s: any) => s.id === service.id)
                                         ? selectedServices.filter((s: any) => s.id !== service.id)
                                         : [...selectedServices, service]
-                                      setRequestForm({ paymentMethod: '', notes: '', address: beneficiaryUser?.location || '', couponCode: '' })
+                                      setRequestForm({ paymentMethod: '', paymentMethodId: '', notes: '', address: beneficiaryUser?.location || '', couponCode: '' })
                                       setValidCoupon(null)
                                       setCouponError('')
                                       setDynamicPricing(null)
                                       setRequestFavoriteNurse(false)
                                       setRequestDialog(true)
+                                      fetchRequestPaymentMethods()
                                       if (newSelection.length > 0) {
                                         fetchDynamicPricing(newSelection.map((s: any) => s.id), beneficiaryUser?.location || '')
                                       }
@@ -2263,9 +2293,10 @@ export default function BeneficiaryDashboard() {
                                   className="bg-gradient-to-r from-fuchsia-500 to-violet-500 text-white rounded-xl text-xs flex-1"
                                   onClick={() => {
                                     setSelectedService(null)
-                                    setRequestForm({ paymentMethod: '', notes: '', address: beneficiaryUser?.location || '', couponCode: '' })
+                                    setRequestForm({ paymentMethod: '', paymentMethodId: '', notes: '', address: beneficiaryUser?.location || '', couponCode: '' })
                                     setRequestFavoriteNurse(true)
                                     setRequestDialog(true)
+                                    fetchRequestPaymentMethods()
                                   }}
                                 >
                                   <Plus className="w-3.5 h-3.5 ml-1" />
@@ -3630,23 +3661,163 @@ export default function BeneficiaryDashboard() {
               )}
             </div>
 
-            {/* Payment Method */}
+            {/* Payment Method - Admin Defined */}
             <div className="space-y-2">
               <Label className="text-sm font-medium">
                 <CreditCard className="w-3.5 h-3.5 inline ml-1" />
                 طريقة الدفع
               </Label>
-              <Select value={requestForm.paymentMethod} onValueChange={(v) => setRequestForm(prev => ({ ...prev, paymentMethod: v }))}>
-                <SelectTrigger className="rounded-xl">
-                  <SelectValue placeholder="اختر طريقة الدفع" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="wallet-deposit">إيداع عبر محفظة</SelectItem>
-                  <SelectItem value="exchange-transfer">تحويل عبر صراف</SelectItem>
-                  <SelectItem value="bank-transfer">تحويل بنكي</SelectItem>
-                  <SelectItem value="cash">نقدي عند الاستلام</SelectItem>
-                </SelectContent>
-              </Select>
+              {requestPaymentMethodsLoading ? (
+                <div className="flex items-center gap-2 p-4 bg-violet-50 rounded-xl justify-center">
+                  <Loader2 className="w-4 h-4 animate-spin text-violet-500" />
+                  <span className="text-sm text-violet-600">جاري تحميل طرق الدفع...</span>
+                </div>
+              ) : requestPaymentMethods.length > 0 ? (
+                <div className="space-y-2 max-h-64 overflow-y-auto">
+                  {(() => {
+                    // Group methods by type
+                    const walletMethods = requestPaymentMethods.filter((m: any) => m.type === 'wallet-deposit')
+                    const exchangeMethods = requestPaymentMethods.filter((m: any) => m.type === 'exchange-transfer')
+                    const bankMethods = requestPaymentMethods.filter((m: any) => m.type === 'bank-transfer')
+                    const cashMethods = requestPaymentMethods.filter((m: any) => m.type === 'cash')
+                    const otherMethods = requestPaymentMethods.filter((m: any) => !['wallet-deposit', 'exchange-transfer', 'bank-transfer', 'cash'].includes(m.type))
+                    
+                    type GroupInfo = { label: string; icon: any; color: string; methods: any[] }
+                    const groups: GroupInfo[] = [
+                      { label: 'إيداع عبر محفظة', icon: Wallet, color: 'from-blue-400 to-indigo-500', methods: walletMethods },
+                      { label: 'تحويل عبر صراف', icon: Send, color: 'from-amber-400 to-orange-500', methods: exchangeMethods },
+                      { label: 'تحويل بنكي', icon: Building, color: 'from-emerald-400 to-teal-500', methods: bankMethods },
+                      { label: 'أخرى', icon: CreditCard, color: 'from-purple-400 to-violet-500', methods: otherMethods },
+                    ].filter(g => g.methods.length > 0)
+                    
+                    return (
+                      <>
+                        {groups.map(group => (
+                          <div key={group.label} className="space-y-1.5">
+                            <div className="flex items-center gap-1.5 px-1">
+                              <group.icon className="w-3.5 h-3.5 text-gray-400" />
+                              <span className="text-xs font-bold text-gray-500">{group.label}</span>
+                              <span className="text-[10px] text-gray-400">({group.methods.length})</span>
+                            </div>
+                            {group.methods.map((pm: any) => {
+                              const isSelected = requestForm.paymentMethodId === pm.id
+                              const Icon = group.icon
+                              return (
+                                <button
+                                  key={pm.id}
+                                  type="button"
+                                  onClick={() => setRequestForm(prev => ({ ...prev, paymentMethod: pm.type, paymentMethodId: pm.id }))}
+                                  className={`w-full p-3 rounded-xl border-2 transition-all text-right ${
+                                    isSelected
+                                      ? 'border-violet-400 bg-violet-50 shadow-md'
+                                      : 'border-gray-200 hover:border-violet-200 hover:bg-gray-50'
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-2.5">
+                                    <div className={`w-9 h-9 rounded-lg bg-gradient-to-br ${group.color} flex items-center justify-center shadow-sm shrink-0`}>
+                                      <Icon className="w-4 h-4 text-white" />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <p className="font-bold text-sm truncate">{pm.name}</p>
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        {pm.walletType && (
+                                          <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full">{
+                                            pm.walletType === 'zain-cash' ? 'زين كاش' :
+                                            pm.walletType === 'hala-cash' ? 'هلا كاش' :
+                                            pm.walletType === 'mtn-momo' ? 'إم تي إن' :
+                                            pm.walletType === 'y-cash' ? 'واي كاش' :
+                                            pm.walletType === 'flous' ? 'فلوس' : pm.walletType
+                                          }</span>
+                                        )}
+                                        {pm.accountNumber && (
+                                          <span className="text-[10px] text-gray-500 font-mono" dir="ltr">{pm.accountNumber}</span>
+                                        )}
+                                        {pm.bankName && (
+                                          <span className="text-[10px] text-gray-500">{pm.bankName}</span>
+                                        )}
+                                        {pm.exchangeName && (
+                                          <span className="text-[10px] text-gray-500">صراف: {pm.exchangeName}</span>
+                                        )}
+                                      </div>
+                                    </div>
+                                    {isSelected && <Check className="w-4 h-4 text-violet-500 shrink-0" />}
+                                  </div>
+                                </button>
+                              )
+                            })}
+                          </div>
+                        ))}
+                        {/* Cash on delivery - always available */}
+                        <div className="space-y-1.5">
+                          <div className="flex items-center gap-1.5 px-1">
+                            <DollarSign className="w-3.5 h-3.5 text-gray-400" />
+                            <span className="text-xs font-bold text-gray-500">نقدي</span>
+                          </div>
+                          {cashMethods.map((pm: any) => {
+                            const isSelected = requestForm.paymentMethodId === pm.id
+                            return (
+                              <button
+                                key={pm.id}
+                                type="button"
+                                onClick={() => setRequestForm(prev => ({ ...prev, paymentMethod: 'cash', paymentMethodId: pm.id }))}
+                                className={`w-full p-3 rounded-xl border-2 transition-all text-right ${
+                                  isSelected
+                                    ? 'border-violet-400 bg-violet-50 shadow-md'
+                                    : 'border-gray-200 hover:border-violet-200 hover:bg-gray-50'
+                                }`}
+                              >
+                                <div className="flex items-center gap-2.5">
+                                  <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-gray-400 to-gray-500 flex items-center justify-center shadow-sm shrink-0">
+                                    <DollarSign className="w-4 h-4 text-white" />
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="font-bold text-sm">{pm.name}</p>
+                                    {pm.instructions && <p className="text-[10px] text-gray-500 mt-0.5">{pm.instructions}</p>}
+                                  </div>
+                                  {isSelected && <Check className="w-4 h-4 text-violet-500 shrink-0" />}
+                                </div>
+                              </button>
+                            )
+                          })}
+                          <button
+                            type="button"
+                            onClick={() => setRequestForm(prev => ({ ...prev, paymentMethod: 'cash', paymentMethodId: 'cash-on-delivery' }))}
+                            className={`w-full p-3 rounded-xl border-2 transition-all text-right ${
+                              requestForm.paymentMethod === 'cash' && requestForm.paymentMethodId === 'cash-on-delivery'
+                                ? 'border-violet-400 bg-violet-50 shadow-md'
+                                : 'border-gray-200 hover:border-violet-200 hover:bg-gray-50'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-gray-400 to-gray-500 flex items-center justify-center shadow-sm shrink-0">
+                                <DollarSign className="w-4 h-4 text-white" />
+                              </div>
+                              <div className="flex-1">
+                                <p className="font-bold text-sm">نقدي عند الاستلام</p>
+                                <p className="text-[10px] text-gray-500">سيتم الدفع نقداً عند وصول الممرض</p>
+                              </div>
+                              {requestForm.paymentMethod === 'cash' && requestForm.paymentMethodId === 'cash-on-delivery' && <Check className="w-4 h-4 text-violet-500 shrink-0" />}
+                            </div>
+                          </button>
+                        </div>
+                      </>
+                    )
+                  })()}
+                </div>
+              ) : (
+                <div className="p-4 bg-amber-50 rounded-xl text-center">
+                  <CreditCard className="w-8 h-8 text-amber-400 mx-auto mb-2" />
+                  <p className="text-amber-700 text-sm font-medium">لا توجد طرق دفع إلكترونية متاحة حالياً</p>
+                  <p className="text-amber-600 text-xs mt-1">يمكنك الدفع نقداً عند الاستلام</p>
+                  <button
+                    type="button"
+                    onClick={() => setRequestForm(prev => ({ ...prev, paymentMethod: 'cash', paymentMethodId: 'cash-on-delivery' }))}
+                    className="mt-3 px-4 py-2 bg-amber-500 text-white rounded-xl text-sm hover:bg-amber-600 transition-colors"
+                  >
+                    الدفع نقداً عند الاستلام
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Notes Field */}
