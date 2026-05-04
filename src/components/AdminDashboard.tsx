@@ -386,11 +386,22 @@ export default function AdminDashboard() {
   }
 
   // ─── Request actions ───────────────────────────────────────
-  const handleOpenApproveDialog = (req: any) => {
+  const handleOpenApproveDialog = async (req: any) => {
     setSelectedRequest(req); setApproveMode('assign'); setSelectedNurseId(''); setNurseDistances({}); setApproveDialog(true)
+    // Fetch nurses from API if not already loaded (e.g. when on requests tab)
+    let currentNurses = nurses
+    if (nurses.length === 0) {
+      try {
+        const res = await fetch('/api/admin/nurses')
+        if (res.ok) {
+          currentNurses = await res.json()
+          setNurses(currentNurses)
+        }
+      } catch { /* silently fail */ }
+    }
     // Fetch distances for nearby nurses
     const benefLoc = req.beneficiary?.location || req.address || req.location || ''
-    if (benefLoc) fetchNurseDistances(benefLoc)
+    if (benefLoc) fetchNurseDistancesWithNurses(benefLoc, currentNurses)
   }
 
   const handleConfirmApprove = async () => {
@@ -552,13 +563,19 @@ export default function AdminDashboard() {
   }
 
   // ─── Geocoding & Haversine for Nearby Nurses ────────────────
-  const geocodeCache = useCallback(async (address: string): Promise<{ lat: number; lng: number } | null> => {
+  const geocodeWithTimeout = useCallback(async (address: string, timeoutMs = 5000): Promise<{ lat: number; lng: number } | null> => {
     if (!address || address === 'غير محدد') return null
     try {
-      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&accept-language=ar&limit=1`)
+      const controller = new AbortController()
+      const timer = setTimeout(() => controller.abort(), timeoutMs)
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&accept-language=ar&limit=1`,
+        { signal: controller.signal }
+      )
+      clearTimeout(timer)
       const data = await res.json()
       if (data && data.length > 0) return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) }
-    } catch { /* silently fail */ }
+    } catch { /* silently fail - timeout or network error */ }
     return null
   }, [])
 
@@ -570,39 +587,54 @@ export default function AdminDashboard() {
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
   }
 
-  const fetchNurseDistances = useCallback(async (beneficiaryLocation: string) => {
+  // Fetch nurse distances with a nurses array parameter (so it works even when nurses state is stale)
+  const fetchNurseDistancesWithNurses = useCallback(async (beneficiaryLocation: string, nursesList: any[]) => {
     if (!beneficiaryLocation || beneficiaryLocation === 'غير محدد') { setNurseDistances({}); return }
     setGeocodingLoading(true)
     try {
       // First try to extract coordinates from the location string directly
       let benefCoords = extractCoordinates(beneficiaryLocation)
-      // If no coordinates embedded, try geocoding the address
+      // If no coordinates embedded, try geocoding the address with timeout
       if (!benefCoords) {
-        benefCoords = await geocodeCache(beneficiaryLocation)
+        benefCoords = await geocodeWithTimeout(beneficiaryLocation, 6000)
       }
       if (!benefCoords) { setNurseDistances({}); setGeocodingLoading(false); return }
       const distances: Record<string, number> = {}
-      const approved = nurses.filter((n: any) => n.status === 'approved')
-      // Geocode nurses - try extracting coordinates first, then fall back to geocoding
-      const nursesToGeocode = approved.slice(0, 15)
-      const coords = await Promise.all(nursesToGeocode.map(async (n: any) => {
+      const approved = nursesList.filter((n: any) => n.status === 'approved')
+      // Process nurses sequentially with rate limiting to avoid Nominatim blocking
+      // First pass: quickly handle nurses that have embedded coordinates
+      const needGeocoding: any[] = []
+      for (const n of approved.slice(0, 20)) {
         const loc = n.location || ''
-        // Try extracting coordinates from nurse location string first
         const nurseCoords = extractCoordinates(loc)
-        if (nurseCoords) return { id: n.id, coords: nurseCoords }
-        // Fall back to geocoding
-        const geocodedCoords = await geocodeCache(loc)
-        return { id: n.id, coords: geocodedCoords }
-      }))
-      for (const c of coords) {
-        if (c.coords) {
-          distances[c.id] = haversine(benefCoords.lat, benefCoords.lng, c.coords.lat, c.coords.lng)
+        if (nurseCoords) {
+          distances[n.id] = haversine(benefCoords.lat, benefCoords.lng, nurseCoords.lat, nurseCoords.lng)
+        } else if (loc && loc !== 'غير محدد') {
+          needGeocoding.push(n)
         }
       }
-      setNurseDistances(distances)
+      // Update distances immediately for nurses with embedded coords
+      if (Object.keys(distances).length > 0) {
+        setNurseDistances(prev => ({ ...prev, ...distances }))
+      }
+      // Second pass: geocode remaining nurses one by one with delay (respect Nominatim rate limit)
+      for (let i = 0; i < Math.min(needGeocoding.length, 8); i++) {
+        const n = needGeocoding[i]
+        if (i > 0) await new Promise(r => setTimeout(r, 1200)) // 1.2s delay between requests
+        const geocodedCoords = await geocodeWithTimeout(n.location, 4000)
+        if (geocodedCoords) {
+          const dist = haversine(benefCoords.lat, benefCoords.lng, geocodedCoords.lat, geocodedCoords.lng)
+          setNurseDistances(prev => ({ ...prev, [n.id]: dist }))
+        }
+      }
     } catch { setNurseDistances({}) }
     finally { setGeocodingLoading(false) }
-  }, [nurses, geocodeCache])
+  }, [geocodeWithTimeout])
+
+  // Legacy wrapper that uses nurses state
+  const fetchNurseDistances = useCallback(async (beneficiaryLocation: string) => {
+    return fetchNurseDistancesWithNurses(beneficiaryLocation, nurses)
+  }, [nurses, fetchNurseDistancesWithNurses])
 
   // Sorted nurses by proximity for the approve dialog
   const sortedNursesByProximity = useMemo(() => {
@@ -1305,7 +1337,7 @@ export default function AdminDashboard() {
                                   <div className="flex flex-col gap-2 shrink-0">
                                     {req.status === 'pending' && (
                                       <>
-                                        <Button size="sm" className="bg-gradient-to-l from-purple-500 to-indigo-500 text-white shadow-lg shadow-purple-500/25" onClick={() => { setSelectedRequest(req); setApproveMode('assign'); setSelectedNurseId(''); setApproveDialog(true) }}><UserPlus className="w-3.5 h-3.5 ml-1" />تعيين ممرض</Button>
+                                        <Button size="sm" className="bg-gradient-to-l from-purple-500 to-indigo-500 text-white shadow-lg shadow-purple-500/25" onClick={() => handleOpenApproveDialog({ ...req, isEmergency: true })}><UserPlus className="w-3.5 h-3.5 ml-1" />تعيين ممرض</Button>
                                         <Button size="sm" className="bg-gradient-to-l from-blue-500 to-indigo-500 text-white shadow-lg shadow-blue-500/25" onClick={async () => {
                                           await fetch('/api/admin/emergency', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: req.id, status: 'in_progress' }) })
                                           toast({ title: 'تم بدء المعالجة' })
@@ -2050,12 +2082,12 @@ export default function AdminDashboard() {
                   {geocodingLoading && (
                     <div className="flex items-center gap-2 p-2 bg-blue-50/50 rounded-lg">
                       <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
-                      <span className="text-sm text-blue-600">جارٍ البحث عن الممرضين القريبين...</span>
+                      <span className="text-sm text-blue-600">جارٍ حساب المسافات للممرضين القريبين...</span>
                     </div>
                   )}
-                  {!geocodingLoading && Object.keys(nurseDistances).length > 0 && (
+                  {Object.keys(nurseDistances).length > 0 && (
                     <div className="p-3 bg-gradient-to-l from-emerald-50/80 to-teal-50/50 rounded-xl border border-emerald-200/50">
-                      <p className="text-xs font-bold text-emerald-700 mb-2 flex items-center gap-1"><MapPin className="w-3.5 h-3.5" />مقترحات الممرضين القريبين</p>
+                      <p className="text-xs font-bold text-emerald-700 mb-2 flex items-center gap-1"><MapPin className="w-3.5 h-3.5" />مقترحات الممرضين القريبين ({Object.keys(nurseDistances).length} ممرض){geocodingLoading && <Loader2 className="w-3 h-3 animate-spin mr-1" />}</p>
                       <div className="space-y-1.5 max-h-32 overflow-y-auto">
                         {sortedNursesByProximity.filter((n: any) => nurseDistances[n.id] !== undefined).slice(0, 5).map((n: any) => (
                           <button key={n.id} onClick={() => setSelectedNurseId(n.id)} className={`w-full flex items-center justify-between p-2 rounded-lg text-sm transition-all ${selectedNurseId === n.id ? 'bg-emerald-500 text-white' : 'bg-white/80 hover:bg-emerald-50'}`}>
@@ -2067,17 +2099,20 @@ export default function AdminDashboard() {
                     </div>
                   )}
                   <div>
-                    <Label>اختر الممرض</Label>
+                    <Label>اختر الممرض ({sortedNursesByProximity.length} ممرض معتمد)</Label>
                     <Select value={selectedNurseId} onValueChange={setSelectedNurseId}>
-                      <SelectTrigger className="border-amber-200 mt-1"><SelectValue placeholder="اختر ممرض" /></SelectTrigger>
+                      <SelectTrigger className="border-amber-200 mt-1"><SelectValue placeholder={sortedNursesByProximity.length === 0 ? 'لا يوجد ممرضين معتمدين' : 'اختر ممرض'} /></SelectTrigger>
                       <SelectContent>
                         {sortedNursesByProximity.map((n: any) => (
                           <SelectItem key={n.id} value={n.id}>
-                            {n.firstName} {n.lastName}{nurseDistances[n.id] !== undefined ? ` (${nurseDistances[n.id].toFixed(1)} كم)` : ''}
+                            {n.firstName} {n.lastName}{nurseDistances[n.id] !== undefined ? ` (${nurseDistances[n.id].toFixed(1)} كم)` : n.location ? ` - ${getDisplayLocation(n.location)}` : ''}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
+                    {sortedNursesByProximity.length === 0 && !geocodingLoading && (
+                      <p className="text-xs text-red-500 mt-1">لا يوجد ممرضين معتمدين حالياً. يرجى إضافة وقبول ممرضين أولاً.</p>
+                    )}
                   </div>
                 </div>
               )}
