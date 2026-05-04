@@ -9,6 +9,7 @@ import {
   RefreshCw, BadgeCheck
 } from 'lucide-react'
 import { useAppStore } from '@/lib/store'
+import { getGPSLocation, getDisplayLocation } from '@/lib/location-utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -125,47 +126,25 @@ function StepIndicator({ currentStep, steps }: { currentStep: NurseRegStep; step
   )
 }
 
-// ─── Geolocation Helper ───
+// ─── Geolocation Helper (fast <5s) ───
 function useGeoLocation() {
   const { toast } = useToast()
 
-  const getLocation = useCallback((onSuccess: (address: string) => void) => {
+  const getLocation = useCallback(async (onSuccess: (address: string) => void) => {
     if (!navigator.geolocation) {
       toast({ title: 'غير مدعوم', description: 'متصفحك لا يدعم تحديد الموقع', variant: 'destructive' })
       return
     }
     toast({ title: 'جارٍ تحديد الموقع...', description: 'يرجى الانتظار' })
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        const { latitude, longitude } = pos.coords
-        try {
-          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&accept-language=ar&zoom=16&addressdetails=1`, { headers: { 'User-Agent': 'AafiatakApp/1.0' } })
-          const data = await res.json()
-          // Build a clean short address
-          const addr = data.address || {}
-          const parts = [
-            addr.road || addr.street || '',
-            addr.neighbourhood || addr.suburb || addr.village || '',
-            addr.city || addr.town || addr.state || '',
-            addr.country || ''
-          ].filter(Boolean)
-          const shortAddress = parts.length > 0
-            ? parts.join('، ')
-            : (data.display_name || `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`)
-          const address = `${shortAddress} [${latitude.toFixed(6)},${longitude.toFixed(6)}]`
-          onSuccess(address)
-          toast({ title: 'تم تحديد الموقع بنجاح', description: shortAddress.substring(0, 80) })
-        } catch {
-          const coord = `${latitude.toFixed(6)},${longitude.toFixed(6)}`
-          onSuccess(coord)
-          toast({ title: 'تم تحديد الموقع', description: `${latitude.toFixed(4)}, ${longitude.toFixed(4)}` })
-        }
-      },
-      () => {
-        toast({ title: 'خطأ في تحديد الموقع', description: 'يرجى السماح بالوصول إلى الموقع أو إدخاله يدوياً', variant: 'destructive' })
-      },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 }
-    )
+
+    const result = await getGPSLocation()
+    if (result) {
+      onSuccess(result.address)
+      const display = getDisplayLocation(result.address)
+      toast({ title: 'تم تحديد الموقع بنجاح', description: display.substring(0, 80) })
+    } else {
+      toast({ title: 'خطأ في تحديد الموقع', description: 'يرجى السماح بالوصول إلى الموقع أو إدخاله يدوياً', variant: 'destructive' })
+    }
   }, [toast])
 
   return { getLocation }

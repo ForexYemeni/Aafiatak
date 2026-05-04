@@ -8,6 +8,7 @@ import {
   FileBadge, Lock, ChevronLeft, User, BadgeCheck
 } from 'lucide-react'
 import { useAppStore } from '@/lib/store'
+import { getGPSLocation, getDisplayLocation } from '@/lib/location-utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -151,31 +152,20 @@ export default function NurseRegister() {
     }
   }
 
-  const getLocation = useCallback(() => {
+  const getLocation = useCallback(async () => {
     if (!navigator.geolocation) {
       toast({ title: 'غير مدعوم', description: 'متصفحك لا يدعم تحديد الموقع', variant: 'destructive' })
       return
     }
     toast({ title: 'جارٍ تحديد الموقع...', description: 'يرجى الانتظار' })
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        const { latitude, longitude } = pos.coords
-        try {
-          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&accept-language=ar`)
-          const data = await res.json()
-          const address = data.display_name || `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`
-          updateField('location', address)
-          toast({ title: 'تم تحديد الموقع بنجاح', description: address.substring(0, 80) })
-        } catch {
-          updateField('location', `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`)
-          toast({ title: 'تم تحديد الموقع', description: `${latitude.toFixed(4)}, ${longitude.toFixed(4)}` })
-        }
-      },
-      () => {
-        toast({ title: 'خطأ في تحديد الموقع', description: 'يرجى السماح بالوصول إلى الموقع أو إدخاله يدوياً', variant: 'destructive' })
-      },
-      { enableHighAccuracy: true, timeout: 15000 }
-    )
+
+    const result = await getGPSLocation()
+    if (result) {
+      updateField('location', result.address)
+      toast({ title: 'تم تحديد الموقع بنجاح', description: getDisplayLocation(result.address).substring(0, 80) })
+    } else {
+      toast({ title: 'خطأ في تحديد الموقع', description: 'يرجى السماح بالوصول إلى الموقع أو إدخاله يدوياً', variant: 'destructive' })
+    }
   }, [toast])
 
   if (success) {

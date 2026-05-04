@@ -677,6 +677,16 @@ export default function NurseDashboard() {
           }).catch(() => {})
         }
 
+        // Send an immediate position first (fast, from cache/network)
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            sendLocation(position.coords.latitude, position.coords.longitude)
+          },
+          () => {},
+          { enableHighAccuracy: false, timeout: 5000, maximumAge: 300000 }
+        )
+
+        // Then watch with high accuracy for continuous updates
         locationWatchIdRef.current = navigator.geolocation.watchPosition(
           (position) => {
             sendLocation(position.coords.latitude, position.coords.longitude)
@@ -684,7 +694,7 @@ export default function NurseDashboard() {
           () => {
             toast({ title: 'خطأ في الموقع', description: 'تعذر الوصول إلى موقعك', variant: 'destructive' })
           },
-          { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
+          { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 }
         )
 
         // Send updates every 15 seconds
@@ -694,7 +704,7 @@ export default function NurseDashboard() {
               sendLocation(position.coords.latitude, position.coords.longitude)
             },
             () => {},
-            { enableHighAccuracy: true, timeout: 10000 }
+            { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 }
           )
         }, 15000)
       } else {
