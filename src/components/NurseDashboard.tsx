@@ -31,9 +31,19 @@ function formatDate(timestamp: any): string {
   if (!timestamp) return 'غير محدد'
   try {
     let date: Date
-    if (typeof timestamp === 'object' && timestamp !== null && 'seconds' in timestamp) {
-      date = new Date(timestamp.seconds * 1000)
+    if (typeof timestamp === 'object' && timestamp !== null) {
+      // Firestore Timestamp: { seconds, nanoseconds } or { _seconds, _nanoseconds }
+      const secs = timestamp.seconds ?? timestamp._seconds ?? 0
+      if (secs > 0) {
+        date = new Date(secs * 1000 + (timestamp.nanoseconds ?? timestamp._nanoseconds ?? 0) / 1000000)
+      } else if (timestamp instanceof Date) {
+        date = timestamp
+      } else {
+        return 'غير محدد'
+      }
     } else if (typeof timestamp === 'string') {
+      date = new Date(timestamp)
+    } else if (typeof timestamp === 'number') {
       date = new Date(timestamp)
     } else {
       return 'غير محدد'
@@ -49,9 +59,18 @@ function formatDateTime(timestamp: any): string {
   if (!timestamp) return 'غير محدد'
   try {
     let date: Date
-    if (typeof timestamp === 'object' && timestamp !== null && 'seconds' in timestamp) {
-      date = new Date(timestamp.seconds * 1000)
+    if (typeof timestamp === 'object' && timestamp !== null) {
+      const secs = timestamp.seconds ?? timestamp._seconds ?? 0
+      if (secs > 0) {
+        date = new Date(secs * 1000 + (timestamp.nanoseconds ?? timestamp._nanoseconds ?? 0) / 1000000)
+      } else if (timestamp instanceof Date) {
+        date = timestamp
+      } else {
+        return 'غير محدد'
+      }
     } else if (typeof timestamp === 'string') {
+      date = new Date(timestamp)
+    } else if (typeof timestamp === 'number') {
       date = new Date(timestamp)
     } else {
       return 'غير محدد'
@@ -67,9 +86,18 @@ function getDateKey(timestamp: any): string {
   if (!timestamp) return ''
   try {
     let date: Date
-    if (typeof timestamp === 'object' && timestamp !== null && 'seconds' in timestamp) {
-      date = new Date(timestamp.seconds * 1000)
+    if (typeof timestamp === 'object' && timestamp !== null) {
+      const secs = timestamp.seconds ?? timestamp._seconds ?? 0
+      if (secs > 0) {
+        date = new Date(secs * 1000 + (timestamp.nanoseconds ?? timestamp._nanoseconds ?? 0) / 1000000)
+      } else if (timestamp instanceof Date) {
+        date = timestamp
+      } else {
+        return ''
+      }
     } else if (typeof timestamp === 'string') {
+      date = new Date(timestamp)
+    } else if (typeof timestamp === 'number') {
       date = new Date(timestamp)
     } else {
       return ''
@@ -421,7 +449,8 @@ export default function NurseDashboard() {
       const res = await fetch(`/api/nurse/portfolio?nurseId=${nurseId}`)
       if (res.ok) {
         const data = await res.json()
-        setPortfolio(data || {})
+        // API returns { nurseId, portfolio: { bio, experience, specializations, ... } }
+        setPortfolio(data.portfolio || data || {})
       } else {
         setPortfolio({})
       }
@@ -439,7 +468,7 @@ export default function NurseDashboard() {
       const res = await fetch('/api/nurse/portfolio', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nurseId, ...portfolio }),
+        body: JSON.stringify({ nurseId, portfolio }),
       })
       if (res.ok) {
         toast({ title: 'تم الحفظ', description: 'تم حفظ الملف الاحترافي بنجاح' })
@@ -473,12 +502,16 @@ export default function NurseDashboard() {
   }, [nurseId])
 
   const handleAcceptRejectAssignment = useCallback(async (assignmentId: string, action: 'accept' | 'reject') => {
+    if (!nurseId) {
+      toast({ title: 'خطأ', description: 'معرف الممرض غير متوفر', variant: 'destructive' })
+      return
+    }
     setActionLoading(true)
     try {
       const res = await fetch('/api/nurse/accept-assignment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ assignmentId, action }),
+        body: JSON.stringify({ assignmentId, nurseId, action }),
       })
       if (res.ok) {
         toast({
@@ -1091,13 +1124,11 @@ export default function NurseDashboard() {
                                 <span className="text-emerald-600 font-bold">{formatPrice(assignment.request.service.price)}</span>
                               </div>
                             )}
-                            {assignment.createdAt && (
-                              <div className="flex items-center gap-1.5">
-                                <Clock className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                                <span className="font-medium text-gray-700">تاريخ التعيين:</span>
-                                <span className="text-gray-500">{formatDate(assignment.createdAt)}</span>
-                              </div>
-                            )}
+                            <div className="flex items-center gap-1.5">
+                              <Clock className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                              <span className="font-medium text-gray-700">تاريخ التعيين:</span>
+                              <span className="text-gray-500">{formatDateTime(assignment.createdAt)}</span>
+                            </div>
                           </div>
 
                           {/* Notes */}
