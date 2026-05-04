@@ -719,12 +719,22 @@ export async function getAllBeneficiaries() {
 
 export async function getChatMessages(requestId: string, limitCount: number = 50) {
   checkFirebase()
+  // Fetch without orderBy to avoid needing a composite Firestore index
   const snapshot = await firestore.collection('chats')
     .where('requestId', '==', requestId)
-    .orderBy('createdAt', 'asc')
     .limit(limitCount)
     .get()
-  return snapshot.docs.map(docToObject)
+  const docs = snapshot.docs.map(docToObject)
+  // Sort by createdAt ascending in code
+  docs.sort((a: any, b: any) => {
+    const getTime = (t: any) => {
+      if (!t) return 0
+      if (typeof t === 'object' && t !== null && 'seconds' in t) return t.seconds * 1000
+      return new Date(t).getTime() || 0
+    }
+    return getTime(a.createdAt) - getTime(b.createdAt)
+  })
+  return docs
 }
 
 export async function sendChatMessage(data: {
@@ -793,14 +803,19 @@ export async function deleteCoupon(id: string) {
 
 export async function validateCoupon(code: string) {
   checkFirebase()
+  // Use single where clause to avoid needing a composite Firestore index
+  // Filter isActive in code instead
   const snapshot = await firestore.collection('coupons')
     .where('code', '==', code)
-    .where('isActive', '==', true)
     .limit(1)
     .get()
   if (snapshot.empty) return null
 
   const coupon = docToObject(snapshot.docs[0])
+  
+  // Check if coupon is active
+  if (!coupon.isActive) return null
+
   const now = new Date()
 
   // Check expiry
@@ -828,11 +843,21 @@ export async function incrementCouponUsage(couponId: string) {
 
 export async function getLoyaltyPoints(beneficiaryId: string) {
   checkFirebase()
+  // Fetch without orderBy to avoid needing a composite Firestore index
   const snapshot = await firestore.collection('loyaltyPoints')
     .where('beneficiaryId', '==', beneficiaryId)
-    .orderBy('createdAt', 'desc')
     .get()
-  return snapshot.docs.map(docToObject)
+  const docs = snapshot.docs.map(docToObject)
+  // Sort by createdAt descending in code
+  docs.sort((a: any, b: any) => {
+    const getTime = (t: any) => {
+      if (!t) return 0
+      if (typeof t === 'object' && t !== null && 'seconds' in t) return t.seconds * 1000
+      return new Date(t).getTime() || 0
+    }
+    return getTime(b.createdAt) - getTime(a.createdAt)
+  })
+  return docs
 }
 
 export async function addLoyaltyPoints(beneficiaryId: string, points: number, reason: string) {
@@ -915,11 +940,22 @@ export async function createEmergencyRequest(data: {
 
 export async function getEmergencyRequestsByBeneficiary(beneficiaryId: string) {
   checkFirebase()
+  // Fetch without orderBy to avoid needing a composite Firestore index
+  // Sort in code instead (same pattern as other beneficiary queries)
   const snapshot = await firestore.collection('emergencyRequests')
     .where('beneficiaryId', '==', beneficiaryId)
-    .orderBy('createdAt', 'desc')
     .get()
-  return snapshot.docs.map(docToObject)
+  const docs = snapshot.docs.map(docToObject)
+  // Sort by createdAt descending in code
+  docs.sort((a: any, b: any) => {
+    const getTime = (t: any) => {
+      if (!t) return 0
+      if (typeof t === 'object' && t !== null && 'seconds' in t) return t.seconds * 1000
+      return new Date(t).getTime() || 0
+    }
+    return getTime(b.createdAt) - getTime(a.createdAt)
+  })
+  return docs
 }
 
 // ==================== REFERRAL SYSTEM ====================
@@ -1082,11 +1118,21 @@ export async function updateAdminSettings(data: Record<string, any>) {
 
 export async function getNurseRatings(nurseId: string) {
   checkFirebase()
+  // Fetch without orderBy to avoid needing a composite Firestore index
   const snapshot = await firestore.collection('ratings')
     .where('nurseId', '==', nurseId)
-    .orderBy('createdAt', 'desc')
     .get()
-  return snapshot.docs.map(docToObject)
+  const docs = snapshot.docs.map(docToObject)
+  // Sort by createdAt descending in code
+  docs.sort((a: any, b: any) => {
+    const getTime = (t: any) => {
+      if (!t) return 0
+      if (typeof t === 'object' && t !== null && 'seconds' in t) return t.seconds * 1000
+      return new Date(t).getTime() || 0
+    }
+    return getTime(b.createdAt) - getTime(a.createdAt)
+  })
+  return docs
 }
 
 export async function getAllRatings() {

@@ -1855,7 +1855,7 @@ export default function BeneficiaryDashboard() {
 
       {/* ===== EMERGENCY DIALOG ===== */}
       <Dialog open={emergencyDialog} onOpenChange={setEmergencyDialog}>
-        <DialogContent className="sm:max-w-md border-0 shadow-2xl p-0 overflow-hidden" dir="rtl">
+        <DialogContent className="sm:max-w-md border-0 shadow-2xl p-0 max-h-[90vh] overflow-y-auto" dir="rtl">
           {/* Red Gradient Header */}
           <div className="bg-gradient-to-l from-red-600 via-rose-600 to-red-700 p-5 text-white relative overflow-hidden">
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.1)_0%,transparent_70%)]" />
@@ -2021,7 +2021,7 @@ export default function BeneficiaryDashboard() {
 
       {/* ===== SERVICE REQUEST DIALOG ===== */}
       <Dialog open={requestDialog} onOpenChange={setRequestDialog}>
-        <DialogContent className="sm:max-w-md border-0 shadow-2xl p-0 overflow-hidden" dir="rtl">
+        <DialogContent className="sm:max-w-md border-0 shadow-2xl p-0 max-h-[90vh] overflow-y-auto" dir="rtl">
           {/* Gradient Header */}
           <div className="bg-gradient-to-l from-violet-600 via-purple-600 to-fuchsia-600 p-5 text-white relative overflow-hidden">
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.1)_0%,transparent_70%)]" />
@@ -2222,7 +2222,7 @@ export default function BeneficiaryDashboard() {
 
       {/* ===== RATING DIALOG ===== */}
       <Dialog open={ratingDialog} onOpenChange={setRatingDialog}>
-        <DialogContent className="sm:max-w-md border-0 shadow-2xl p-0 overflow-hidden" dir="rtl">
+        <DialogContent className="sm:max-w-md border-0 shadow-2xl p-0 max-h-[90vh] overflow-y-auto" dir="rtl">
           {/* Gradient Header */}
           <div className="bg-gradient-to-l from-amber-500 via-orange-500 to-amber-600 p-5 text-white relative overflow-hidden">
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.1)_0%,transparent_70%)]" />
