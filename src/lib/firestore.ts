@@ -7,9 +7,31 @@ function checkFirebase() {
   }
 }
 
+// Helper to convert Firestore Timestamps to serializable format
+function convertTimestamps(data: any): any {
+  if (!data || typeof data !== 'object') return data
+  if (data instanceof admin.firestore.Timestamp) {
+    return { seconds: data.seconds, nanoseconds: data.nanoseconds }
+  }
+  if (Array.isArray(data)) return data.map(convertTimestamps)
+  const result: any = {}
+  for (const key of Object.keys(data)) {
+    const val = data[key]
+    if (val instanceof admin.firestore.Timestamp) {
+      result[key] = { seconds: val.seconds, nanoseconds: val.nanoseconds }
+    } else if (val && typeof val === 'object' && !Array.isArray(val)) {
+      result[key] = convertTimestamps(val)
+    } else {
+      result[key] = val
+    }
+  }
+  return result
+}
+
 // Helper to convert Firestore doc to object with id
 function docToObject(doc: FirebaseFirestore.QueryDocumentSnapshot | FirebaseFirestore.DocumentSnapshot) {
-  return { id: doc.id, ...doc.data() }
+  const data = doc.data()
+  return { id: doc.id, ...convertTimestamps(data) }
 }
 
 // ==================== ADMINS ====================
@@ -293,7 +315,7 @@ export async function getAllServiceRequests() {
     
     let assignment = null
     if (!assignmentSnapshot.empty) {
-      const assignData = assignmentSnapshot.docs[0].data()
+      const assignData = convertTimestamps(assignmentSnapshot.docs[0].data())
       const nurseDoc = await firestore.collection('nurses').doc(assignData.nurseId).get()
       assignment = {
         id: assignmentSnapshot.docs[0].id,
@@ -312,7 +334,7 @@ export async function getAllServiceRequests() {
 
     requests.push({
       id: doc.id,
-      ...data,
+      ...convertTimestamps(data),
       beneficiary: beneficiaryDoc.exists
         ? { id: beneficiaryDoc.id, name: beneficiaryDoc.data()!.name, phone: beneficiaryDoc.data()!.phone }
         : null,
@@ -345,7 +367,7 @@ export async function getServiceRequestsByBeneficiary(beneficiaryId: string) {
     
     let assignment = null
     if (!assignmentSnapshot.empty) {
-      const assignData = assignmentSnapshot.docs[0].data()
+      const assignData = convertTimestamps(assignmentSnapshot.docs[0].data())
       const nurseDoc = await firestore.collection('nurses').doc(assignData.nurseId).get()
       assignment = {
         id: assignmentSnapshot.docs[0].id,
@@ -364,7 +386,7 @@ export async function getServiceRequestsByBeneficiary(beneficiaryId: string) {
 
     requests.push({
       id: doc.id,
-      ...data,
+      ...convertTimestamps(data),
       service: serviceDoc.exists
         ? { id: serviceDoc.id, name: serviceDoc.data()!.name, price: serviceDoc.data()!.price, description: serviceDoc.data()!.description }
         : null,

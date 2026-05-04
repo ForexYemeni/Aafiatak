@@ -30,25 +30,36 @@ import { useToast } from '@/hooks/use-toast'
 import Image from 'next/image'
 
 // ─── Date Helpers ──────────────────────────────────────────────
-function formatDate(ts: any): string {
-  if (!ts) return 'غير محدد'
+function parseTimestamp(ts: any): Date | null {
+  if (!ts) return null
   try {
-    let d: Date
-    if (typeof ts === 'object' && ts !== null && 'seconds' in ts) d = new Date(ts.seconds * 1000)
-    else if (typeof ts === 'string') d = new Date(ts)
-    else return 'غير محدد'
-    return isNaN(d.getTime()) ? 'غير محدد' : d.toLocaleDateString('ar-YE', { year: 'numeric', month: 'long', day: 'numeric' })
-  } catch { return 'غير محدد' }
+    // Firestore Timestamp object { seconds, nanoseconds } or { _seconds, _nanoseconds }
+    if (typeof ts === 'object' && ts !== null) {
+      const sec = ts.seconds ?? ts._seconds ?? ts.sec
+      if (sec !== undefined) return new Date(sec * 1000)
+      // If it's a Date object
+      if (ts instanceof Date) return ts
+      // If it has toDate method (Firestore Timestamp)
+      if (typeof ts.toDate === 'function') return ts.toDate()
+    }
+    if (typeof ts === 'number') return new Date(ts)
+    if (typeof ts === 'string') {
+      const d = new Date(ts)
+      if (!isNaN(d.getTime())) return d
+    }
+    return null
+  } catch { return null }
+}
+
+function formatDate(ts: any): string {
+  const d = parseTimestamp(ts)
+  if (!d) return 'غير محدد'
+  return isNaN(d.getTime()) ? 'غير محدد' : d.toLocaleDateString('ar-YE', { year: 'numeric', month: 'long', day: 'numeric' })
 }
 function formatDateTime(ts: any): string {
-  if (!ts) return 'غير محدد'
-  try {
-    let d: Date
-    if (typeof ts === 'object' && ts !== null && 'seconds' in ts) d = new Date(ts.seconds * 1000)
-    else if (typeof ts === 'string') d = new Date(ts)
-    else return 'غير محدد'
-    return isNaN(d.getTime()) ? 'غير محدد' : d.toLocaleDateString('ar-YE', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })
-  } catch { return 'غير محدد' }
+  const d = parseTimestamp(ts)
+  if (!d) return 'غير محدد'
+  return isNaN(d.getTime()) ? 'غير محدد' : d.toLocaleDateString('ar-YE', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
 // ─── Types ─────────────────────────────────────────────────────
@@ -1359,7 +1370,25 @@ export default function AdminDashboard() {
                                     {r.paymentStatus && <Badge className={`text-[10px] px-1 py-0 border-0 ${r.paymentStatus === 'cash_on_delivery' ? 'bg-amber-100 text-amber-700' : r.paymentStatus === 'paid' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>{getStatusLabel(r.paymentStatus)}</Badge>}
                                   </p>}
                                   {r.notes && <p className="text-sm text-gray-400 mt-1">{r.notes}</p>}
-                                  <p className="text-xs text-gray-400 mt-1">{formatDateTime(r.createdAt)}</p>
+                                  {/* Time & Date Info */}
+                                  <div className="flex items-center gap-3 mt-2 flex-wrap">
+                                    <span className="text-xs text-gray-400 flex items-center gap-1">
+                                      <Clock className="w-3 h-3" />
+                                      {formatDateTime(r.createdAt)}
+                                    </span>
+                                    {r.updatedAt && r.updatedAt !== r.createdAt && (
+                                      <span className="text-xs text-blue-400 flex items-center gap-1">
+                                        <Navigation className="w-3 h-3" />
+                                        آخر تحديث: {formatDateTime(r.updatedAt)}
+                                      </span>
+                                    )}
+                                    {(r.dynamicPrice || r.service?.price) && (
+                                      <span className="text-xs text-emerald-600 font-bold flex items-center gap-1">
+                                        <DollarSign className="w-3 h-3" />
+                                        {formatPrice(r.dynamicPrice || r.service?.price || 0)}
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
                                 <div className="flex gap-2 flex-wrap">
                                   {r.status === 'pending' && (<><Button size="sm" className="bg-gradient-to-l from-amber-500 via-orange-500 to-rose-500 text-white" onClick={() => handleRequestAction(r.id, 'approved')}><CheckCircle className="w-3.5 h-3.5 ml-1" />قبول</Button><Button size="sm" variant="outline" className="text-red-500 hover:bg-red-50" onClick={() => handleRequestAction(r.id, 'rejected')}><XCircle className="w-3.5 h-3.5 ml-1" />رفض</Button></>)}
