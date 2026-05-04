@@ -84,6 +84,7 @@ export default function AdminDashboard() {
   const [beneficiaries, setBeneficiaries] = useState<any[]>([])
   const [requests, setRequests] = useState<any[]>([])
   const [payments, setPayments] = useState<any[]>([])
+  const [transactions, setTransactions] = useState<any[]>([])
   const [activityLogs, setActivityLogs] = useState<any[]>([])
   const [ratings, setRatings] = useState<any[]>([])
   const [emergencyRequests, setEmergencyRequests] = useState<any[]>([])
@@ -234,6 +235,13 @@ export default function AdminDashboard() {
       } else if (activeTab === 'payments') {
         const res = await fetch('/api/admin/payments')
         if (res.ok) setPayments(await res.json())
+        try {
+          const transRes = await fetch('/api/payments/process')
+          if (transRes.ok) {
+            const transData = await transRes.json()
+            setTransactions(Array.isArray(transData) ? transData : [])
+          }
+        } catch {}
       } else if (activeTab === 'coupons') {
         const res = await fetch('/api/admin/coupons')
         if (res.ok) setCoupons(await res.json())
@@ -478,6 +486,47 @@ export default function AdminDashboard() {
     try { const res = await fetch(`/api/admin/payments/${id}`, { method: 'DELETE' }); if (res.ok) { toast({ title: 'تم حذف طريقة الدفع' }); fetchData() } } catch { toast({ title: 'خطأ', description: 'حدث خطأ', variant: 'destructive' }) }
   }
 
+  // Confirm payment transaction
+  const handleConfirmPayment = async (transactionId: string) => {
+    try {
+      const res = await fetch('/api/payments/process', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transactionId, action: 'confirm', adminId }),
+      })
+      if (res.ok) {
+        toast({ title: 'تم تأكيد الدفع', description: 'يمكن الآن تنفيذ الطلب وتعيين ممرض' })
+        fetchData()
+      } else {
+        const data = await res.json()
+        toast({ title: 'خطأ', description: data.error, variant: 'destructive' })
+      }
+    } catch {
+      toast({ title: 'خطأ', description: 'حدث خطأ', variant: 'destructive' })
+    }
+  }
+
+  // Reject payment transaction
+  const handleRejectPayment = async (transactionId: string) => {
+    if (!confirm('هل أنت متأكد من رفض هذا الدفع؟')) return
+    try {
+      const res = await fetch('/api/payments/process', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transactionId, action: 'reject', adminId }),
+      })
+      if (res.ok) {
+        toast({ title: 'تم رفض الدفع' })
+        fetchData()
+      } else {
+        const data = await res.json()
+        toast({ title: 'خطأ', description: data.error, variant: 'destructive' })
+      }
+    } catch {
+      toast({ title: 'خطأ', description: 'حدث خطأ', variant: 'destructive' })
+    }
+  }
+
   // ─── Coupon CRUD ───────────────────────────────────────────
   const handleSaveCoupon = async () => {
     if (!couponForm.code || !couponForm.discountPercent || !couponForm.maxUses || !couponForm.expiresAt) { toast({ title: 'خطأ', description: 'يرجى ملء جميع الحقول المطلوبة', variant: 'destructive' }); return }
@@ -710,6 +759,7 @@ export default function AdminDashboard() {
 
   // ─── Sub-admin permission check ────────────────────────────
   const isSubAdmin = (user as any)?.role === 'sub-admin'
+  const adminId = (user as any)?.id || (user as any)?.adminId || ''
   const subAdminPermissions: Record<string, boolean> = (user as any)?.permissions || {}
   const hasPermission = (perm: string) => !isSubAdmin || !!subAdminPermissions[perm]
 
@@ -1374,29 +1424,115 @@ export default function AdminDashboard() {
                 {activeTab === 'payments' && (
                   <div className="space-y-6">
                     <div className="flex items-center justify-between">
-                      <div><h1 className="text-2xl font-bold bg-gradient-to-l from-amber-600 via-orange-600 to-rose-600 bg-clip-text text-transparent">طرق الدفع</h1><p className="text-gray-500 text-sm mt-1">إدارة طرق الدفع المتاحة</p></div>
+                      <div><h1 className="text-2xl font-bold bg-gradient-to-l from-amber-600 via-orange-600 to-rose-600 bg-clip-text text-transparent">المدفوعات والمعاملات</h1><p className="text-gray-500 text-sm mt-1">إدارة طرق الدفع وتأكيد المعاملات</p></div>
                       <Button className="bg-gradient-to-l from-amber-500 via-orange-500 to-rose-500 text-white shadow-lg shadow-amber-500/25" onClick={() => { setEditingPayment(null); setPaymentForm({ name: '', accountInfo: '', isActive: true }); setPaymentDialog(true) }}><Plus className="w-4 h-4 ml-2" />إضافة طريقة دفع</Button>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {payments.map((p: any) => (
-                        <motion.div key={p.id} variants={cardVariants} initial="hidden" animate="visible">
-                          <Card className="border-0 shadow-lg hover:-translate-y-1 hover:shadow-xl transition-all duration-300">
+
+                    {/* Pending Payments Section */}
+                    {transactions.filter((t: any) => t.status === 'pending_confirmation' || t.status === 'pending').length > 0 && (
+                      <div className="space-y-3">
+                        <h2 className="text-lg font-bold text-red-600 flex items-center gap-2">
+                          <AlertTriangle className="w-5 h-5" />
+                          مدفوعات بانتظار التأكيد ({transactions.filter((t: any) => t.status === 'pending_confirmation' || t.status === 'pending').length})
+                        </h2>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {transactions.filter((t: any) => t.status === 'pending_confirmation' || t.status === 'pending').map((t: any) => (
+                            <motion.div key={t.id} variants={cardVariants} initial="hidden" animate="visible">
+                              <Card className="border-2 border-amber-200 shadow-lg">
+                                <CardContent className="p-4 space-y-3">
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-md">
+                                        <Clock className="w-5 h-5 text-white" />
+                                      </div>
+                                      <div>
+                                        <p className="font-bold text-sm">{t.beneficiaryName || 'مستفيد'}</p>
+                                        <p className="text-xs text-gray-400">{formatDate(t.createdAt)}</p>
+                                      </div>
+                                    </div>
+                                    <Badge className="bg-amber-100 text-amber-700 border-0">بانتظار التأكيد</Badge>
+                                  </div>
+                                  <div className="space-y-1.5 text-sm">
+                                    <div className="flex justify-between"><span className="text-gray-500">المبلغ:</span><span className="font-bold text-amber-600">{t.amount} ر.ي</span></div>
+                                    <div className="flex justify-between"><span className="text-gray-500">الطريقة:</span><span className="font-medium">
+                                      {t.paymentMethod === 'wallet-deposit' ? 'إيداع محفظة' : t.paymentMethod === 'exchange-transfer' ? 'تحويل صراف' : t.paymentMethod === 'bank-transfer' ? 'تحويل بنكي' : t.paymentMethod === 'cash' ? 'نقدي' : t.paymentMethod}
+                                    </span></div>
+                                    {t.transactionRef && <div className="flex justify-between"><span className="text-gray-500">رقم العملية:</span><span className="font-mono text-xs">{t.transactionRef}</span></div>}
+                                    {t.senderName && <div className="flex justify-between"><span className="text-gray-500">المرسل:</span><span>{t.senderName}</span></div>}
+                                    {t.senderPhone && <div className="flex justify-between"><span className="text-gray-500">هاتف المرسل:</span><span dir="ltr">{t.senderPhone}</span></div>}
+                                    {t.exchangeName && <div className="flex justify-between"><span className="text-gray-500">الصراف:</span><span>{t.exchangeName}</span></div>}
+                                  </div>
+                                  <div className="flex gap-2 pt-2 border-t">
+                                    <Button size="sm" className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white" onClick={() => handleConfirmPayment(t.id)}>
+                                      <CheckCircle className="w-3.5 h-3.5 ml-1" />تأكيد الدفع
+                                    </Button>
+                                    <Button size="sm" variant="outline" className="text-red-500 hover:bg-red-50" onClick={() => handleRejectPayment(t.id)}>
+                                      <XCircle className="w-3.5 h-3.5 ml-1" />رفض
+                                    </Button>
+                                  </div>
+                                </CardContent>
+                              </Card>
+                            </motion.div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Confirmed Transactions */}
+                    <div className="space-y-3">
+                      <h2 className="text-lg font-bold text-emerald-600 flex items-center gap-2">
+                        <CheckCircle className="w-5 h-5" />
+                        المعاملات المكتملة
+                      </h2>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {transactions.filter((t: any) => t.status === 'paid').slice(0, 20).map((t: any) => (
+                          <Card key={t.id} className="border-0 shadow-lg">
                             <CardContent className="p-4">
-                              <div className="flex items-start justify-between mb-3">
-                                <div className="flex items-center gap-2"><div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center shadow-md"><CreditCard className="w-5 h-5 text-white" /></div><p className="font-bold">{p.name}</p></div>
-                                <Badge className={`${getStatusColor(p.isActive ? 'active' : 'suspended')} border text-xs`}>{p.isActive ? 'نشطة' : 'معطلة'}</Badge>
+                              <div className="flex items-center justify-between mb-2">
+                                <p className="font-bold text-sm">{t.beneficiaryName || 'مستفيد'}</p>
+                                <Badge className="bg-emerald-100 text-emerald-700 border-0">مدفوع</Badge>
                               </div>
-                              <p className="text-sm text-gray-500 mb-3">{p.accountInfo}</p>
-                              <div className="flex gap-2">
-                                <Button size="sm" variant="outline" className="flex-1" onClick={() => { setEditingPayment(p); setPaymentForm({ name: p.name, accountInfo: p.accountInfo, isActive: p.isActive }); setPaymentDialog(true) }}><Pencil className="w-3.5 h-3.5 ml-1" />تعديل</Button>
-                                <Button size="sm" variant="outline" className="text-red-500 hover:bg-red-50" onClick={() => handleDeletePayment(p.id)}><Trash2 className="w-3.5 h-3.5" /></Button>
+                              <div className="space-y-1 text-sm">
+                                <div className="flex justify-between"><span className="text-gray-500">المبلغ:</span><span className="font-bold">{t.amount} ر.ي</span></div>
+                                <div className="flex justify-between"><span className="text-gray-500">الطريقة:</span><span>{t.paymentMethod === 'wallet-deposit' ? 'محفظة' : t.paymentMethod === 'exchange-transfer' ? 'صراف' : t.paymentMethod === 'bank-transfer' ? 'بنكي' : 'نقدي'}</span></div>
+                                <p className="text-xs text-gray-400">{formatDate(t.confirmedAt || t.createdAt)}</p>
                               </div>
                             </CardContent>
                           </Card>
-                        </motion.div>
-                      ))}
+                        ))}
+                        {transactions.filter((t: any) => t.status === 'paid').length === 0 && (
+                          <div className="col-span-full text-center py-8"><CheckCircle className="w-10 h-10 text-gray-300 mx-auto mb-2" /><p className="text-gray-400 text-sm">لا توجد معاملات مكتملة</p></div>
+                        )}
+                      </div>
                     </div>
-                    {payments.length === 0 && <div className="text-center py-16"><CreditCard className="w-12 h-12 text-gray-300 mx-auto mb-3" /><p className="text-gray-400">لا توجد طرق دفع</p></div>}
+
+                    {/* Payment Methods Section */}
+                    <div className="space-y-3 pt-4 border-t">
+                      <h2 className="text-lg font-bold text-gray-700 flex items-center gap-2">
+                        <CreditCard className="w-5 h-5" />
+                        طرق الدفع المتاحة
+                      </h2>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {payments.map((p: any) => (
+                          <motion.div key={p.id} variants={cardVariants} initial="hidden" animate="visible">
+                            <Card className="border-0 shadow-lg hover:-translate-y-1 hover:shadow-xl transition-all duration-300">
+                              <CardContent className="p-4">
+                                <div className="flex items-start justify-between mb-3">
+                                  <div className="flex items-center gap-2"><div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center shadow-md"><CreditCard className="w-5 h-5 text-white" /></div><p className="font-bold">{p.name}</p></div>
+                                  <Badge className={`${getStatusColor(p.isActive ? 'active' : 'suspended')} border text-xs`}>{p.isActive ? 'نشطة' : 'معطلة'}</Badge>
+                                </div>
+                                <p className="text-sm text-gray-500 mb-3">{p.accountInfo}</p>
+                                <div className="flex gap-2">
+                                  <Button size="sm" variant="outline" className="flex-1" onClick={() => { setEditingPayment(p); setPaymentForm({ name: p.name, accountInfo: p.accountInfo, isActive: p.isActive }); setPaymentDialog(true) }}><Pencil className="w-3.5 h-3.5 ml-1" />تعديل</Button>
+                                  <Button size="sm" variant="outline" className="text-red-500 hover:bg-red-50" onClick={() => handleDeletePayment(p.id)}><Trash2 className="w-3.5 h-3.5" /></Button>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          </motion.div>
+                        ))}
+                      </div>
+                      {payments.length === 0 && <div className="text-center py-8"><CreditCard className="w-12 h-12 text-gray-300 mx-auto mb-3" /><p className="text-gray-400">لا توجد طرق دفع</p></div>}
+                    </div>
                   </div>
                 )}
 

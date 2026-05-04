@@ -21,28 +21,65 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { beneficiaryId, serviceId, paymentMethod, notes, address } = body
+    const {
+      beneficiaryId,
+      serviceId,          // single service (backward compat)
+      serviceIds,         // multiple services (array)
+      paymentMethod,
+      notes,
+      address,
+      couponCode,
+      requestFavoriteNurse,
+      dynamicPrice,
+      pricingBreakdown,
+      commission,
+    } = body
 
-    if (!beneficiaryId || !serviceId) {
-      return NextResponse.json({ error: 'معرف المستفيد ومعرف الخدمة مطلوبان' }, { status: 400 })
+    if (!beneficiaryId) {
+      return NextResponse.json({ error: 'معرف المستفيد مطلوب' }, { status: 400 })
     }
 
-    const service = await getServiceById(serviceId)
-    if (!service || !service.isActive) {
-      return NextResponse.json({ error: 'الخدمة غير متاحة' }, { status: 400 })
+    // Support both single and multiple services
+    const svcIds: string[] = serviceIds || (serviceId ? [serviceId] : [])
+    if (svcIds.length === 0) {
+      return NextResponse.json({ error: 'يجب اختيار خدمة واحدة على الأقل' }, { status: 400 })
     }
+
+    // Validate all services exist and are active
+    const validServices: Array<{ id: string; name: string; price: number }> = []
+    for (const sid of svcIds) {
+      const service = await getServiceById(sid)
+      if (!service || !service.isActive) {
+        return NextResponse.json({ error: `الخدمة غير متاحة: ${sid}` }, { status: 400 })
+      }
+      validServices.push({ id: sid, name: service.name, price: service.price || 0 })
+    }
+
+    // For multiple services, create a single grouped request
+    const isMultiService = validServices.length > 1
 
     const serviceRequest = await createServiceRequest({
       beneficiaryId,
-      serviceId,
+      serviceId: validServices[0].id, // primary service
+      serviceIds: svcIds,             // all services
+      services: validServices,        // service details
+      isMultiService,
       paymentMethod: paymentMethod || null,
       notes: notes || null,
       address: address || null,
-      status: 'pending',
+      couponCode: couponCode || null,
+      requestFavoriteNurse: requestFavoriteNurse || null,
+      dynamicPrice: dynamicPrice || null,
+      pricingBreakdown: pricingBreakdown || null,
+      commission: commission || null,
+      // Payment gate: status is 'pending_payment' until payment confirmed
+      status: 'pending_payment',
+      paymentStatus: 'unpaid',
     })
 
     return NextResponse.json(serviceRequest)
   } catch (error) {
+    console.error('Create service request error:', error)
     return NextResponse.json({ error: 'حدث خطأ في الخادم' }, { status: 500 })
   }
 }

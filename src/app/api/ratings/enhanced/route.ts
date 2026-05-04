@@ -63,14 +63,53 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'تم تقييم هذا الطلب مسبقاً' }, { status: 400 })
     }
 
+    // ── Look up nurse name, beneficiary name, and service name from DB ──
+    let resolvedNurseName = nurseName || ''
+    let resolvedBeneficiaryName = beneficiaryName || ''
+    let resolvedServiceName = serviceName || ''
+
+    // Fetch nurse name
+    if (!resolvedNurseName) {
+      try {
+        const nurseDoc = await firestore.collection('nurses').doc(nurseId).get()
+        if (nurseDoc.exists) {
+          const nd = nurseDoc.data()!
+          resolvedNurseName = `${nd.firstName || ''} ${nd.secondName || ''} ${nd.thirdName || ''} ${nd.lastName || ''}`.replace(/\s+/g, ' ').trim()
+        }
+      } catch {}
+    }
+
+    // Fetch beneficiary name
+    if (!resolvedBeneficiaryName) {
+      try {
+        const benefDoc = await firestore.collection('beneficiaries').doc(beneficiaryId).get()
+        if (benefDoc.exists) {
+          resolvedBeneficiaryName = benefDoc.data()!.name || ''
+        }
+      } catch {}
+    }
+
+    // Fetch service name from the request
+    if (!resolvedServiceName) {
+      try {
+        const reqData = requestDoc.data()!
+        if (reqData.serviceId) {
+          const serviceDoc = await firestore.collection('services').doc(reqData.serviceId).get()
+          if (serviceDoc.exists) {
+            resolvedServiceName = serviceDoc.data()!.name || ''
+          }
+        }
+      } catch {}
+    }
+
     // Build the enhanced rating document
     const ratingData: Record<string, any> = {
       requestId,
       nurseId,
       beneficiaryId,
-      beneficiaryName: beneficiaryName || '',
-      nurseName: nurseName || '',
-      serviceName: serviceName || '',
+      beneficiaryName: resolvedBeneficiaryName,
+      nurseName: resolvedNurseName,
+      serviceName: resolvedServiceName,
       rating: overallRating,
       overallRating,
       criteria: criteria || null,

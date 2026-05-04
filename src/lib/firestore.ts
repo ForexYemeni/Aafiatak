@@ -388,6 +388,15 @@ export async function createServiceRequest(data: {
   paymentMethod?: string | null
   notes?: string | null
   address?: string | null
+  serviceIds?: string[]
+  services?: Array<{ id: string; name: string; price: number }>
+  isMultiService?: boolean
+  couponCode?: string | null
+  requestFavoriteNurse?: boolean | null
+  dynamicPrice?: number | null
+  pricingBreakdown?: Record<string, any> | null
+  commission?: Record<string, any> | null
+  paymentStatus?: string
 }) {
   checkFirebase()
   const docRef = await firestore.collection('serviceRequests').add({

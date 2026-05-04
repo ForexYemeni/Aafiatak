@@ -8,7 +8,7 @@ import {
   Filter, RefreshCw, Calendar, Tag, AlertTriangle,
   Copy, Check, Award, Zap, Share2, MessageCircle, Star, Send,
   Siren, ChevronDown, ChevronUp, Shield, Gift, TrendingUp, Sparkles, Navigation,
-  Flag, Search, Camera, DollarSign, Clock, Eye, FileText, Upload, ImagePlus, Thermometer, Handshake, Mic, Wallet, Stethoscope
+  Flag, Search, Camera, DollarSign, Clock, Eye, FileText, Upload, ImagePlus, Thermometer, Handshake, Mic, Wallet, Stethoscope, Building
 } from 'lucide-react'
 import { useAppStore, formatPrice, getStatusLabel, getStatusColor } from '@/lib/store'
 import { openInMaps, getGPSLocation, searchLocation, extractCoordinates, getDisplayLocation, getMapEmbedUrl, getDirectionsUrl } from '@/lib/location-utils'
@@ -285,10 +285,11 @@ export default function BeneficiaryDashboard() {
   // Payment enhanced state
   const [dynamicPricing, setDynamicPricing] = useState<any>(null)
   const [paymentFilter, setPaymentFilter] = useState<string>('all')
+  const [selectedServices, setSelectedServices] = useState<any[]>([])
 
   // Payment flow state
   const [paymentDialog, setPaymentDialog] = useState(false)
-  const [paymentForm, setPaymentForm] = useState({ method: 'cash', cardNumber: '', cardExpiry: '', cardCvv: '', walletId: '' })
+  const [paymentForm, setPaymentForm] = useState({ method: 'wallet-deposit', transactionRef: '', senderName: '', senderPhone: '', exchangeName: '', walletType: '' })
   const [paymentSubmitting, setPaymentSubmitting] = useState(false)
   const [lastCreatedRequestId, setLastCreatedRequestId] = useState<string>('')
   const [paymentTransactions, setPaymentTransactions] = useState<any[]>([])
@@ -457,7 +458,7 @@ export default function BeneficiaryDashboard() {
 
   // Request service handler
   const handleRequestService = async () => {
-    if (!selectedService) return
+    if (!selectedService && selectedServices.length === 0) return
     if (!requestForm.address.trim()) {
       toast({ title: 'خطأ', description: 'يرجى إدخال العنوان', variant: 'destructive' })
       return
@@ -469,14 +470,18 @@ export default function BeneficiaryDashboard() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           beneficiaryId: beneficiaryUser?.id,
-          serviceId: selectedService.id,
+          serviceId: selectedServices.length > 0 ? selectedServices[0].id : selectedService?.id,
+          serviceIds: selectedServices.length > 0 ? selectedServices.map((s: any) => s.id) : [selectedService?.id],
+          services: selectedServices.length > 0 ? selectedServices.map((s: any) => ({ id: s.id, name: s.name, price: s.price })) : selectedService ? [{ id: selectedService.id, name: selectedService.name, price: selectedService.price }] : [],
+          isMultiService: selectedServices.length > 1,
           paymentMethod: requestForm.paymentMethod || null,
           notes: requestForm.notes || null,
           address: requestForm.address || null,
           couponCode: validCoupon?.id || null,
           requestFavoriteNurse: requestFavoriteNurse || null,
           dynamicPrice: dynamicPricing?.totalPrice || null,
-          pricingBreakdown: dynamicPricing ? { base: dynamicPricing.basePrice, distanceFee: dynamicPricing.distanceFee, timeFee: dynamicPricing.timeFee } : null,
+          pricingBreakdown: dynamicPricing ? { base: dynamicPricing.basePrice, distanceFee: dynamicPricing.pricing?.distanceSurcharge || 0, timeFee: dynamicPricing.pricing?.timeFee || 0, fridayFee: dynamicPricing.pricing?.fridayFee || 0 } : null,
+          commission: dynamicPricing?.commission || null,
         }),
       })
       const data = await res.json()
@@ -494,15 +499,16 @@ export default function BeneficiaryDashboard() {
         } catch {}
         toast({ title: 'تم إرسال الطلب بنجاح', description: 'سيتم مراجعة طلبك من قبل الإدارة' })
         // If payment method is card or wallet, open payment dialog
-        if (requestForm.paymentMethod === 'card' || requestForm.paymentMethod === 'wallet') {
+        if (requestForm.paymentMethod && requestForm.paymentMethod !== 'cash') {
           setLastCreatedRequestId(data.id || data.requestId || '')
-          setPaymentForm(prev => ({ ...prev, method: requestForm.paymentMethod === 'card' ? 'card' : 'wallet' }))
+          setPaymentForm(prev => ({ ...prev, method: requestForm.paymentMethod }))
           setRequestDialog(false)
           setPaymentDialog(true)
         } else {
           setRequestDialog(false)
         }
         setSelectedService(null)
+        setSelectedServices([])
         setRequestForm({ paymentMethod: '', notes: '', address: '', couponCode: '' })
         setValidCoupon(null)
         setCouponError('')
@@ -976,9 +982,11 @@ export default function BeneficiaryDashboard() {
   }
 
   // ===== DYNAMIC PRICING HANDLER =====
-  const fetchDynamicPricing = async (serviceId: string, address: string) => {
+  const fetchDynamicPricing = async (serviceIds: string[], address: string) => {
     try {
-      const res = await fetch(`/api/dynamic-pricing?serviceId=${serviceId}&address=${encodeURIComponent(address)}`)
+      const now = new Date()
+      const coords = extractCoordinates(address)
+      const res = await fetch(`/api/dynamic-pricing?serviceIds=${serviceIds.join(',')}&time=${now.getHours()}&dayOfWeek=${now.getDay()}&distanceKm=${coords ? '' : '0'}`)
       if (res.ok) {
         const data = await res.json()
         setDynamicPricing(data)
@@ -997,15 +1005,20 @@ export default function BeneficiaryDashboard() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           requestId: lastCreatedRequestId,
-          amount,
-          method: paymentForm.method,
           beneficiaryId: beneficiaryUser?.id,
+          amount: dynamicPricing?.totalPrice || selectedService?.price || 0,
+          method: paymentForm.method,
+          paymentMethod: paymentForm.method,
+          transactionRef: paymentForm.transactionRef || undefined,
+          senderName: paymentForm.senderName || undefined,
+          senderPhone: paymentForm.senderPhone || undefined,
+          exchangeName: paymentForm.exchangeName || undefined,
         }),
       })
       if (res.ok) {
         toast({ title: 'تم الدفع بنجاح', description: 'تمت معالجة الدفع بنجاح' })
         setPaymentDialog(false)
-        setPaymentForm({ method: 'cash', cardNumber: '', cardExpiry: '', cardCvv: '', walletId: '' })
+        setPaymentForm({ method: 'wallet-deposit', transactionRef: '', senderName: '', senderPhone: '', exchangeName: '', walletType: '' })
         setLastCreatedRequestId('')
         fetchData()
       } else {
@@ -1023,7 +1036,7 @@ export default function BeneficiaryDashboard() {
   const handlePayForRequest = (req: any) => {
     setLastCreatedRequestId(req.id)
     setSelectedService(req.service || { id: req.serviceId, name: req.service?.name || 'خدمة', price: req.price || req.service?.price || 0 })
-    setPaymentForm({ method: 'cash', cardNumber: '', cardExpiry: '', cardCvv: '', walletId: '' })
+    setPaymentForm({ method: 'wallet-deposit', transactionRef: '', senderName: '', senderPhone: '', exchangeName: '', walletType: '' })
     setPaymentDialog(true)
   }
 
@@ -1221,11 +1234,14 @@ export default function BeneficiaryDashboard() {
 
   // Calculate discounted price
   const getDiscountedPrice = () => {
-    if (!selectedService) return 0
+    if (!selectedService && selectedServices.length === 0) return 0
+    const basePrice = selectedServices.length > 0
+      ? selectedServices.reduce((sum: number, s: any) => sum + (s.price || 0), 0)
+      : (selectedService?.price || 0)
     if (validCoupon) {
-      return selectedService.price * (1 - validCoupon.discountPercent / 100)
+      return basePrice * (1 - validCoupon.discountPercent / 100)
     }
-    return selectedService.price
+    return basePrice
   }
 
   return (
@@ -1560,19 +1576,39 @@ export default function BeneficiaryDashboard() {
                                   <span className="text-xl font-black text-emerald-600">{formatPrice(service.price)}</span>
                                   <Button
                                     size="sm"
-                                    className="bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white hover:scale-[1.02] active:scale-[0.98] hover:shadow-lg hover:shadow-violet-500/25 transition-all duration-200"
+                                    className={`hover:scale-[1.02] active:scale-[0.98] hover:shadow-lg transition-all duration-200 ${
+                                      selectedServices.find((s: any) => s.id === service.id)
+                                        ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-md shadow-emerald-500/25'
+                                        : 'bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white hover:shadow-violet-500/25'
+                                    }`}
                                     onClick={() => {
                                       setSelectedService(service)
+                                      setSelectedServices(prev => {
+                                        const exists = prev.find((s: any) => s.id === service.id)
+                                        if (exists) return prev.filter((s: any) => s.id !== service.id)
+                                        return [...prev, service]
+                                      })
+                                      // Fetch pricing for all selected services
+                                      const newSelection = selectedServices.find((s: any) => s.id === service.id)
+                                        ? selectedServices.filter((s: any) => s.id !== service.id)
+                                        : [...selectedServices, service]
                                       setRequestForm({ paymentMethod: '', notes: '', address: beneficiaryUser?.location || '', couponCode: '' })
                                       setValidCoupon(null)
                                       setCouponError('')
                                       setDynamicPricing(null)
                                       setRequestFavoriteNurse(false)
                                       setRequestDialog(true)
+                                      if (newSelection.length > 0) {
+                                        fetchDynamicPricing(newSelection.map((s: any) => s.id), beneficiaryUser?.location || '')
+                                      }
                                     }}
                                   >
-                                    <Plus className="w-4 h-4 ml-1" />
-                                    طلب
+                                    {selectedServices.find((s: any) => s.id === service.id) ? (
+                                      <Check className="w-4 h-4 ml-1" />
+                                    ) : (
+                                      <Plus className="w-4 h-4 ml-1" />
+                                    )}
+                                    {selectedServices.find((s: any) => s.id === service.id) ? 'مختار' : 'طلب'}
                                   </Button>
                                 </div>
                               </CardContent>
@@ -1996,7 +2032,7 @@ export default function BeneficiaryDashboard() {
                                         <h3 className="font-semibold text-base">{txn.serviceName || 'خدمة'}</h3>
                                         <p className="text-xs text-muted-foreground mt-1">{formatDate(txn.createdAt)}</p>
                                         <p className="text-xs text-muted-foreground mt-0.5">
-                                          طريقة الدفع: {txn.method === 'cash' ? 'نقدي' : txn.method === 'card' ? 'بطاقة' : txn.method === 'wallet' ? 'محفظة إلكترونية' : txn.method === 'transfer' ? 'تحويل بنكي' : txn.method}
+                                          طريقة الدفع: {txn.method === 'cash' ? 'نقدي' : txn.method === 'wallet-deposit' ? 'إيداع محفظة' : txn.method === 'exchange-transfer' ? 'تحويل صراف' : txn.method === 'bank-transfer' ? 'تحويل بنكي' : txn.method === 'card' ? 'بطاقة' : txn.method === 'wallet' ? 'محفظة إلكترونية' : txn.method === 'transfer' ? 'تحويل بنكي' : txn.method}
                                         </p>
                                       </div>
                                       <div className="text-left">
@@ -3011,82 +3047,99 @@ export default function BeneficiaryDashboard() {
               </Label>
               <div className="grid grid-cols-2 gap-2">
                 {[
+                  { key: 'wallet-deposit', label: 'إيداع محفظة', icon: Wallet },
+                  { key: 'exchange-transfer', label: 'تحويل صراف', icon: Send },
+                  { key: 'bank-transfer', label: 'تحويل بنكي', icon: Building },
                   { key: 'cash', label: 'نقدي', icon: DollarSign },
-                  { key: 'card', label: 'بطاقة', icon: CreditCard },
-                  { key: 'wallet', label: 'محفظة إلكترونية', icon: Wallet },
-                  { key: 'transfer', label: 'تحويل بنكي', icon: Send },
-                ].map(m => (
+                ].map(({ key, label, icon: Icon }) => (
                   <button
-                    key={m.key}
-                    onClick={() => setPaymentForm(prev => ({ ...prev, method: m.key }))}
-                    className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-medium transition-all duration-200 ${
-                      paymentForm.method === m.key
-                        ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-md'
-                        : 'bg-gray-50 text-gray-600 border border-gray-200 hover:border-emerald-300'
+                    key={key}
+                    onClick={() => setPaymentForm(prev => ({ ...prev, method: key }))}
+                    className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${
+                      paymentForm.method === key
+                        ? 'border-amber-400 bg-amber-50 shadow-md'
+                        : 'border-gray-200 hover:border-amber-200'
                     }`}
                   >
-                    <m.icon className="w-4 h-4" />
-                    {m.label}
+                    <Icon className={`w-6 h-6 ${paymentForm.method === key ? 'text-amber-600' : 'text-gray-400'}`} />
+                    <span className={`text-xs font-medium ${paymentForm.method === key ? 'text-amber-700' : 'text-gray-500'}`}>{label}</span>
                   </button>
                 ))}
               </div>
             </div>
 
-            {/* Card Inputs */}
-            {paymentForm.method === 'card' && (
-              <div className="space-y-3 p-3 rounded-xl bg-gray-50 border border-gray-100">
-                <div className="space-y-1.5">
-                  <Label className="text-xs">رقم البطاقة</Label>
-                  <Input
-                    value={paymentForm.cardNumber}
-                    onChange={(e) => setPaymentForm(prev => ({ ...prev, cardNumber: e.target.value }))}
-                    placeholder="0000 0000 0000 0000"
-                    className="rounded-xl text-sm"
-                    dir="ltr"
-                    maxLength={19}
-                  />
+            {/* Wallet Deposit Fields */}
+            {paymentForm.method === 'wallet-deposit' && (
+              <>
+                <div>
+                  <Label className="text-sm font-medium">نوع المحفظة</Label>
+                  <Select value={paymentForm.walletType} onValueChange={v => setPaymentForm(prev => ({ ...prev, walletType: v }))}>
+                    <SelectTrigger className="rounded-xl mt-1"><SelectValue placeholder="اختر نوع المحفظة" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="zain-cash">زين كاش</SelectItem>
+                      <SelectItem value="hala-cash">هلا كاش</SelectItem>
+                      <SelectItem value="mtn-momo">إم تي إن موبايل موني</SelectItem>
+                      <SelectItem value="y-cash">واي كاش</SelectItem>
+                      <SelectItem value="flous">فلوس</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">تاريخ الانتهاء</Label>
-                    <Input
-                      value={paymentForm.cardExpiry}
-                      onChange={(e) => setPaymentForm(prev => ({ ...prev, cardExpiry: e.target.value }))}
-                      placeholder="MM/YY"
-                      className="rounded-xl text-sm"
-                      dir="ltr"
-                      maxLength={5}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">CVV</Label>
-                    <Input
-                      value={paymentForm.cardCvv}
-                      onChange={(e) => setPaymentForm(prev => ({ ...prev, cardCvv: e.target.value }))}
-                      placeholder="123"
-                      className="rounded-xl text-sm"
-                      dir="ltr"
-                      maxLength={4}
-                      type="password"
-                    />
-                  </div>
+                <div>
+                  <Label className="text-sm font-medium">رقم المرسل *</Label>
+                  <Input value={paymentForm.senderPhone} onChange={e => setPaymentForm(prev => ({ ...prev, senderPhone: e.target.value }))} placeholder="رقم هاتف المرسل" className="rounded-xl mt-1" />
                 </div>
-              </div>
+                <div>
+                  <Label className="text-sm font-medium">رقم العملية / المرجع *</Label>
+                  <Input value={paymentForm.transactionRef} onChange={e => setPaymentForm(prev => ({ ...prev, transactionRef: e.target.value }))} placeholder="رقم إيصال التحويل" className="rounded-xl mt-1" />
+                </div>
+              </>
             )}
 
-            {/* Wallet Input */}
-            {paymentForm.method === 'wallet' && (
-              <div className="space-y-3 p-3 rounded-xl bg-gray-50 border border-gray-100">
-                <div className="space-y-1.5">
-                  <Label className="text-xs">معرف المحفظة</Label>
-                  <Input
-                    value={paymentForm.walletId}
-                    onChange={(e) => setPaymentForm(prev => ({ ...prev, walletId: e.target.value }))}
-                    placeholder="أدخل معرف المحفظة الإلكترونية"
-                    className="rounded-xl text-sm"
-                    dir="ltr"
-                  />
+            {/* Exchange Transfer Fields */}
+            {paymentForm.method === 'exchange-transfer' && (
+              <>
+                <div>
+                  <Label className="text-sm font-medium">اسم الصراف *</Label>
+                  <Input value={paymentForm.exchangeName} onChange={e => setPaymentForm(prev => ({ ...prev, exchangeName: e.target.value }))} placeholder="اسم الصراف أو المحل" className="rounded-xl mt-1" />
                 </div>
+                <div>
+                  <Label className="text-sm font-medium">اسم المرسل *</Label>
+                  <Input value={paymentForm.senderName} onChange={e => setPaymentForm(prev => ({ ...prev, senderName: e.target.value }))} placeholder="اسم المرسل" className="rounded-xl mt-1" />
+                </div>
+                <div>
+                  <Label className="text-sm font-medium">رقم هاتف المرسل *</Label>
+                  <Input value={paymentForm.senderPhone} onChange={e => setPaymentForm(prev => ({ ...prev, senderPhone: e.target.value }))} placeholder="رقم هاتف المرسل" className="rounded-xl mt-1" />
+                </div>
+                <div>
+                  <Label className="text-sm font-medium">رقم العملية / المرجع *</Label>
+                  <Input value={paymentForm.transactionRef} onChange={e => setPaymentForm(prev => ({ ...prev, transactionRef: e.target.value }))} placeholder="رقم إيصال التحويل" className="rounded-xl mt-1" />
+                </div>
+              </>
+            )}
+
+            {/* Bank Transfer Fields */}
+            {paymentForm.method === 'bank-transfer' && (
+              <>
+                <div>
+                  <Label className="text-sm font-medium">اسم المرسل *</Label>
+                  <Input value={paymentForm.senderName} onChange={e => setPaymentForm(prev => ({ ...prev, senderName: e.target.value }))} placeholder="اسم صاحب الحساب" className="rounded-xl mt-1" />
+                </div>
+                <div>
+                  <Label className="text-sm font-medium">رقم هاتف المرسل</Label>
+                  <Input value={paymentForm.senderPhone} onChange={e => setPaymentForm(prev => ({ ...prev, senderPhone: e.target.value }))} placeholder="رقم هاتف المرسل" className="rounded-xl mt-1" />
+                </div>
+                <div>
+                  <Label className="text-sm font-medium">رقم العملية / المرجع *</Label>
+                  <Input value={paymentForm.transactionRef} onChange={e => setPaymentForm(prev => ({ ...prev, transactionRef: e.target.value }))} placeholder="رقم إيصال التحويل البنكي" className="rounded-xl mt-1" />
+                </div>
+              </>
+            )}
+
+            {/* Cash - no additional fields needed */}
+            {paymentForm.method === 'cash' && (
+              <div className="p-4 bg-amber-50 rounded-xl text-center">
+                <p className="text-amber-700 text-sm">سيتم الدفع نقداً عند وصول الممرض</p>
+                <p className="text-amber-600 text-xs mt-1">يرجى تجهيز المبلغ المطلوب</p>
               </div>
             )}
 
@@ -3401,6 +3454,49 @@ export default function BeneficiaryDashboard() {
           </div>
 
           <div className="p-6 space-y-4">
+            {/* Selected Services Summary */}
+            {selectedServices.length > 0 && (
+              <div className="p-3 bg-violet-50 rounded-xl border border-violet-100">
+                <p className="text-sm font-bold text-violet-700 mb-2">الخدمات المختارة ({selectedServices.length})</p>
+                {selectedServices.map((s: any) => (
+                  <div key={s.id} className="flex items-center justify-between text-sm">
+                    <span className="text-gray-700">{s.name}</span>
+                    <span className="text-violet-600 font-medium">{s.price} ر.ي</span>
+                  </div>
+                ))}
+                {dynamicPricing && (
+                  <div className="border-t border-violet-200 mt-2 pt-2 space-y-1">
+                    <div className="flex justify-between text-xs text-gray-500">
+                      <span>المجموع الأساسي</span>
+                      <span>{dynamicPricing.pricing?.basePrice || dynamicPricing.basePrice} ر.ي</span>
+                    </div>
+                    {dynamicPricing.pricing?.timeFee > 0 && (
+                      <div className="flex justify-between text-xs text-amber-600">
+                        <span>{dynamicPricing.pricing?.timeLabel || 'رسوم الوقت'}</span>
+                        <span>+{dynamicPricing.pricing.timeFee} ر.ي</span>
+                      </div>
+                    )}
+                    {dynamicPricing.pricing?.fridayFee > 0 && (
+                      <div className="flex justify-between text-xs text-amber-600">
+                        <span>{dynamicPricing.pricing?.fridayLabel || 'رسوم الجمعة'}</span>
+                        <span>+{dynamicPricing.pricing.fridayFee} ر.ي</span>
+                      </div>
+                    )}
+                    {dynamicPricing.pricing?.distanceSurcharge > 0 && (
+                      <div className="flex justify-between text-xs text-amber-600">
+                        <span>رسوم المسافة ({dynamicPricing.pricing.distanceKm?.toFixed(1)} كم)</span>
+                        <span>+{dynamicPricing.pricing.distanceSurcharge} ر.ي</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between text-sm font-bold text-violet-700 pt-1 border-t border-violet-200">
+                      <span>الإجمالي</span>
+                      <span>{dynamicPricing.totalPrice} ر.ي</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Address Field */}
             <div className="space-y-2">
               <Label className="text-sm font-medium">
@@ -3416,8 +3512,10 @@ export default function BeneficiaryDashboard() {
                       if (e.target.value.length >= 3) {
                         searchLocation(e.target.value).then(results => setRequestLocationSearchResults(results))
                         // Fetch dynamic pricing when service and address are available
-                        if (selectedService?.id) {
-                          fetchDynamicPricing(selectedService.id, e.target.value)
+                        if (selectedServices.length > 0) {
+                          fetchDynamicPricing(selectedServices.map((s: any) => s.id), e.target.value)
+                        } else if (selectedService?.id) {
+                          fetchDynamicPricing([selectedService.id], e.target.value)
                         }
                       } else {
                         setRequestLocationSearchResults([])
@@ -3491,10 +3589,10 @@ export default function BeneficiaryDashboard() {
                   <SelectValue placeholder="اختر طريقة الدفع" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="wallet-deposit">إيداع عبر محفظة</SelectItem>
+                  <SelectItem value="exchange-transfer">تحويل عبر صراف</SelectItem>
+                  <SelectItem value="bank-transfer">تحويل بنكي</SelectItem>
                   <SelectItem value="cash">نقدي عند الاستلام</SelectItem>
-                  <SelectItem value="card">بطاقة</SelectItem>
-                  <SelectItem value="wallet">محفظة إلكترونية</SelectItem>
-                  <SelectItem value="transfer">تحويل بنكي</SelectItem>
                 </SelectContent>
               </Select>
             </div>
