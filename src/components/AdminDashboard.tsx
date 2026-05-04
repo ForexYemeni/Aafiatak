@@ -120,7 +120,17 @@ export default function AdminDashboard() {
   // Payment form
   const [paymentDialog, setPaymentDialog] = useState(false)
   const [editingPayment, setEditingPayment] = useState<any>(null)
-  const [paymentForm, setPaymentForm] = useState({ name: '', accountInfo: '', isActive: true })
+  const [paymentForm, setPaymentForm] = useState({
+    type: 'wallet-deposit',
+    name: '',
+    accountName: '',
+    accountNumber: '',
+    bankName: '',
+    exchangeName: '',
+    walletType: '',
+    instructions: '',
+    isActive: true,
+  })
 
   // Assign nurse / approve request dialog
   const [approveDialog, setApproveDialog] = useState(false)
@@ -472,12 +482,16 @@ export default function AdminDashboard() {
 
   // ─── Payment CRUD ───────────────────────────────────────────
   const handleSavePayment = async () => {
-    if (!paymentForm.name || !paymentForm.accountInfo) { toast({ title: 'خطأ', description: 'يرجى ملء جميع الحقول', variant: 'destructive' }); return }
+    if (!paymentForm.type || !paymentForm.name) { toast({ title: 'خطأ', description: 'يرجى اختيار النوع وإدخال الاسم', variant: 'destructive' }); return }
+    if (paymentForm.type === 'wallet-deposit' && !paymentForm.accountNumber) { toast({ title: 'خطأ', description: 'يرجى إدخال رقم المحفظة', variant: 'destructive' }); return }
+    if (paymentForm.type === 'exchange-transfer' && !paymentForm.exchangeName) { toast({ title: 'خطأ', description: 'يرجى إدخال اسم الصراف', variant: 'destructive' }); return }
+    if (paymentForm.type === 'bank-transfer' && !paymentForm.accountNumber) { toast({ title: 'خطأ', description: 'يرجى إدخال رقم الحساب البنكي', variant: 'destructive' }); return }
     try {
       const url = editingPayment ? `/api/admin/payments/${editingPayment.id}` : '/api/admin/payments'
       const method = editingPayment ? 'PUT' : 'POST'
       const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(paymentForm) })
-      if (res.ok) { toast({ title: editingPayment ? 'تم تحديث طريقة الدفع' : 'تم إضافة طريقة الدفع' }); setPaymentDialog(false); setEditingPayment(null); setPaymentForm({ name: '', accountInfo: '', isActive: true }); fetchData() }
+      if (res.ok) { toast({ title: editingPayment ? 'تم تحديث طريقة الدفع' : 'تم إضافة طريقة الدفع' }); setPaymentDialog(false); setEditingPayment(null); setPaymentForm({ type: 'wallet-deposit', name: '', accountName: '', accountNumber: '', bankName: '', exchangeName: '', walletType: '', instructions: '', isActive: true }); fetchData() }
+      else { const data = await res.json(); toast({ title: 'خطأ', description: data.error, variant: 'destructive' }) }
     } catch { toast({ title: 'خطأ', description: 'حدث خطأ', variant: 'destructive' }) }
   }
 
@@ -1425,7 +1439,7 @@ export default function AdminDashboard() {
                   <div className="space-y-6">
                     <div className="flex items-center justify-between">
                       <div><h1 className="text-2xl font-bold bg-gradient-to-l from-amber-600 via-orange-600 to-rose-600 bg-clip-text text-transparent">المدفوعات والمعاملات</h1><p className="text-gray-500 text-sm mt-1">إدارة طرق الدفع وتأكيد المعاملات</p></div>
-                      <Button className="bg-gradient-to-l from-amber-500 via-orange-500 to-rose-500 text-white shadow-lg shadow-amber-500/25" onClick={() => { setEditingPayment(null); setPaymentForm({ name: '', accountInfo: '', isActive: true }); setPaymentDialog(true) }}><Plus className="w-4 h-4 ml-2" />إضافة طريقة دفع</Button>
+                      <Button className="bg-gradient-to-l from-amber-500 via-orange-500 to-rose-500 text-white shadow-lg shadow-amber-500/25" onClick={() => { setEditingPayment(null); setPaymentForm({ type: 'wallet-deposit', name: '', accountName: '', accountNumber: '', bankName: '', exchangeName: '', walletType: '', instructions: '', isActive: true }); setPaymentDialog(true) }}><Plus className="w-4 h-4 ml-2" />إضافة طريقة دفع</Button>
                     </div>
 
                     {/* Pending Payments Section */}
@@ -1518,12 +1532,46 @@ export default function AdminDashboard() {
                             <Card className="border-0 shadow-lg hover:-translate-y-1 hover:shadow-xl transition-all duration-300">
                               <CardContent className="p-4">
                                 <div className="flex items-start justify-between mb-3">
-                                  <div className="flex items-center gap-2"><div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center shadow-md"><CreditCard className="w-5 h-5 text-white" /></div><p className="font-bold">{p.name}</p></div>
+                                  <div className="flex items-center gap-2">
+                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-md ${
+                                      p.type === 'wallet-deposit' ? 'bg-gradient-to-br from-blue-400 to-indigo-500' :
+                                      p.type === 'exchange-transfer' ? 'bg-gradient-to-br from-amber-400 to-orange-500' :
+                                      p.type === 'bank-transfer' ? 'bg-gradient-to-br from-emerald-400 to-teal-500' :
+                                      'bg-gradient-to-br from-gray-400 to-gray-500'
+                                    }`}>
+                                      {p.type === 'wallet-deposit' ? <Wallet className="w-5 h-5 text-white" /> :
+                                       p.type === 'exchange-transfer' ? <Send className="w-5 h-5 text-white" /> :
+                                       p.type === 'bank-transfer' ? <Building className="w-5 h-5 text-white" /> :
+                                       <DollarSign className="w-5 h-5 text-white" />}
+                                    </div>
+                                    <div>
+                                      <p className="font-bold text-sm">{p.name}</p>
+                                      <p className="text-xs text-gray-400">{
+                                        p.type === 'wallet-deposit' ? 'إيداع محفظة' :
+                                        p.type === 'exchange-transfer' ? 'تحويل صراف' :
+                                        p.type === 'bank-transfer' ? 'تحويل بنكي' :
+                                        p.type === 'cash' ? 'نقدي' : p.type
+                                      }</p>
+                                    </div>
+                                  </div>
                                   <Badge className={`${getStatusColor(p.isActive ? 'active' : 'suspended')} border text-xs`}>{p.isActive ? 'نشطة' : 'معطلة'}</Badge>
                                 </div>
-                                <p className="text-sm text-gray-500 mb-3">{p.accountInfo}</p>
+                                <div className="space-y-1 mb-3 text-sm">
+                                  {p.accountNumber && <p className="text-gray-600"><span className="text-gray-400">الرقم:</span> <span dir="ltr" className="font-mono">{p.accountNumber}</span></p>}
+                                  {p.accountName && <p className="text-gray-600"><span className="text-gray-400">الحساب:</span> {p.accountName}</p>}
+                                  {p.bankName && <p className="text-gray-600"><span className="text-gray-400">البنك:</span> {p.bankName}</p>}
+                                  {p.exchangeName && <p className="text-gray-600"><span className="text-gray-400">الصراف:</span> {p.exchangeName}</p>}
+                                  {p.walletType && <p className="text-gray-600"><span className="text-gray-400">المحفظة:</span> {
+                                    p.walletType === 'zain-cash' ? 'زين كاش' :
+                                    p.walletType === 'hala-cash' ? 'هلا كاش' :
+                                    p.walletType === 'mtn-momo' ? 'إم تي إن' :
+                                    p.walletType === 'y-cash' ? 'واي كاش' :
+                                    p.walletType === 'flous' ? 'فلوس' : p.walletType
+                                  }</p>}
+                                  {p.instructions && <p className="text-gray-400 text-xs italic">{p.instructions}</p>}
+                                </div>
                                 <div className="flex gap-2">
-                                  <Button size="sm" variant="outline" className="flex-1" onClick={() => { setEditingPayment(p); setPaymentForm({ name: p.name, accountInfo: p.accountInfo, isActive: p.isActive }); setPaymentDialog(true) }}><Pencil className="w-3.5 h-3.5 ml-1" />تعديل</Button>
+                                  <Button size="sm" variant="outline" className="flex-1" onClick={() => { setEditingPayment(p); setPaymentForm({ type: p.type || 'wallet-deposit', name: p.name || '', accountName: p.accountName || '', accountNumber: p.accountNumber || '', bankName: p.bankName || '', exchangeName: p.exchangeName || '', walletType: p.walletType || '', instructions: p.instructions || '', isActive: p.isActive }); setPaymentDialog(true) }}><Pencil className="w-3.5 h-3.5 ml-1" />تعديل</Button>
                                   <Button size="sm" variant="outline" className="text-red-500 hover:bg-red-50" onClick={() => handleDeletePayment(p.id)}><Trash2 className="w-3.5 h-3.5" /></Button>
                                 </div>
                               </CardContent>
@@ -1531,7 +1579,7 @@ export default function AdminDashboard() {
                           </motion.div>
                         ))}
                       </div>
-                      {payments.length === 0 && <div className="text-center py-8"><CreditCard className="w-12 h-12 text-gray-300 mx-auto mb-3" /><p className="text-gray-400">لا توجد طرق دفع</p></div>}
+                      {payments.length === 0 && <div className="text-center py-8"><CreditCard className="w-12 h-12 text-gray-300 mx-auto mb-3" /><p className="text-gray-400">لا توجد طرق دفع - أضف طرق الدفع لتظهر للمستفيدين</p></div>}
                     </div>
                   </div>
                 )}
@@ -2158,11 +2206,84 @@ export default function AdminDashboard() {
 
       {/* Payment Dialog */}
       <Dialog open={paymentDialog} onOpenChange={setPaymentDialog}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto" dir="rtl">
           <DialogHeader><DialogTitle>{editingPayment ? 'تعديل طريقة الدفع' : 'إضافة طريقة دفع'}</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
-            <div><Label>الاسم *</Label><Input value={paymentForm.name} onChange={e => setPaymentForm({ ...paymentForm, name: e.target.value })} className="border-amber-200 mt-1" /></div>
-            <div><Label>معلومات الحساب *</Label><Textarea value={paymentForm.accountInfo} onChange={e => setPaymentForm({ ...paymentForm, accountInfo: e.target.value })} className="border-amber-200 mt-1" /></div>
+            {/* Type Selection */}
+            <div>
+              <Label className="text-sm font-medium">نوع طريقة الدفع *</Label>
+              <div className="grid grid-cols-2 gap-2 mt-2">
+                {[
+                  { key: 'wallet-deposit', label: 'إيداع محفظة', icon: Wallet, color: 'from-blue-400 to-indigo-500' },
+                  { key: 'exchange-transfer', label: 'تحويل صراف', icon: Send, color: 'from-amber-400 to-orange-500' },
+                  { key: 'bank-transfer', label: 'تحويل بنكي', icon: Building, color: 'from-emerald-400 to-teal-500' },
+                  { key: 'cash', label: 'نقدي', icon: DollarSign, color: 'from-gray-400 to-gray-500' },
+                ].map(({ key, label, icon: Icon, color }) => (
+                  <button
+                    key={key}
+                    onClick={() => setPaymentForm(prev => ({ ...prev, type: key }))}
+                    className={`flex items-center gap-2 p-3 rounded-xl border-2 transition-all text-right ${
+                      paymentForm.type === key
+                        ? 'border-amber-400 bg-amber-50 shadow-md'
+                        : 'border-gray-200 hover:border-amber-200'
+                    }`}
+                  >
+                    <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${color} flex items-center justify-center`}>
+                      <Icon className="w-4 h-4 text-white" />
+                    </div>
+                    <span className={`text-sm font-medium ${paymentForm.type === key ? 'text-amber-700' : 'text-gray-500'}`}>{label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Name */}
+            <div><Label className="text-sm font-medium">الاسم المعروض *</Label><Input value={paymentForm.name} onChange={e => setPaymentForm({ ...paymentForm, name: e.target.value })} placeholder="مثال: زين كاش - حساب المنصة" className="border-amber-200 mt-1" /></div>
+
+            {/* Wallet-specific fields */}
+            {paymentForm.type === 'wallet-deposit' && (
+              <>
+                <div>
+                  <Label className="text-sm font-medium">نوع المحفظة *</Label>
+                  <Select value={paymentForm.walletType} onValueChange={v => setPaymentForm(prev => ({ ...prev, walletType: v }))}>
+                    <SelectTrigger className="border-amber-200 mt-1"><SelectValue placeholder="اختر نوع المحفظة" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="zain-cash">زين كاش</SelectItem>
+                      <SelectItem value="hala-cash">هلا كاش</SelectItem>
+                      <SelectItem value="mtn-momo">إم تي إن موبايل موني</SelectItem>
+                      <SelectItem value="y-cash">واي كاش</SelectItem>
+                      <SelectItem value="flous">فلوس</SelectItem>
+                      <SelectItem value="other">أخرى</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div><Label className="text-sm font-medium">رقم المحفظة *</Label><Input value={paymentForm.accountNumber} onChange={e => setPaymentForm({ ...paymentForm, accountNumber: e.target.value })} placeholder="رقم هاتف المحفظة" className="border-amber-200 mt-1" dir="ltr" /></div>
+                <div><Label className="text-sm font-medium">اسم صاحب المحفظة</Label><Input value={paymentForm.accountName} onChange={e => setPaymentForm({ ...paymentForm, accountName: e.target.value })} placeholder="الاسم المسجل في المحفظة" className="border-amber-200 mt-1" /></div>
+              </>
+            )}
+
+            {/* Exchange-specific fields */}
+            {paymentForm.type === 'exchange-transfer' && (
+              <>
+                <div><Label className="text-sm font-medium">اسم الصراف / المحل *</Label><Input value={paymentForm.exchangeName} onChange={e => setPaymentForm({ ...paymentForm, exchangeName: e.target.value })} placeholder="مثال: صراف النور" className="border-amber-200 mt-1" /></div>
+                <div><Label className="text-sm font-medium">رقم هاتف الصراف *</Label><Input value={paymentForm.accountNumber} onChange={e => setPaymentForm({ ...paymentForm, accountNumber: e.target.value })} placeholder="رقم هاتف الصراف" className="border-amber-200 mt-1" dir="ltr" /></div>
+                <div><Label className="text-sm font-medium">اسم صاحب الحساب</Label><Input value={paymentForm.accountName} onChange={e => setPaymentForm({ ...paymentForm, accountName: e.target.value })} placeholder="الاسم المسجل عند الصراف" className="border-amber-200 mt-1" /></div>
+              </>
+            )}
+
+            {/* Bank-specific fields */}
+            {paymentForm.type === 'bank-transfer' && (
+              <>
+                <div><Label className="text-sm font-medium">اسم البنك *</Label><Input value={paymentForm.bankName} onChange={e => setPaymentForm({ ...paymentForm, bankName: e.target.value })} placeholder="مثال: بنك اليمن والكويت" className="border-amber-200 mt-1" /></div>
+                <div><Label className="text-sm font-medium">رقم الحساب / IBAN *</Label><Input value={paymentForm.accountNumber} onChange={e => setPaymentForm({ ...paymentForm, accountNumber: e.target.value })} placeholder="رقم الحساب البنكي" className="border-amber-200 mt-1" dir="ltr" /></div>
+                <div><Label className="text-sm font-medium">اسم صاحب الحساب *</Label><Input value={paymentForm.accountName} onChange={e => setPaymentForm({ ...paymentForm, accountName: e.target.value })} placeholder="الاسم المسجل في البنك" className="border-amber-200 mt-1" /></div>
+              </>
+            )}
+
+            {/* Instructions */}
+            <div><Label className="text-sm font-medium">تعليمات الدفع (اختياري)</Label><Textarea value={paymentForm.instructions} onChange={e => setPaymentForm({ ...paymentForm, instructions: e.target.value })} placeholder="تعليمات إضافية للمستفيد مثل: يرجى إرسال إيصال التحويل عبر الواتساب" className="border-amber-200 mt-1" rows={2} /></div>
+
+            {/* Active toggle */}
             <div className="flex items-center justify-between p-3 bg-amber-50/50 rounded-xl"><Label>نشطة</Label><Switch checked={paymentForm.isActive} onCheckedChange={v => setPaymentForm({ ...paymentForm, isActive: v })} /></div>
           </div>
           <DialogFooter><Button variant="outline" onClick={() => setPaymentDialog(false)}>إلغاء</Button><Button className="bg-gradient-to-l from-amber-500 via-orange-500 to-rose-500 text-white" onClick={handleSavePayment}>{editingPayment ? 'تحديث' : 'إضافة'}</Button></DialogFooter>

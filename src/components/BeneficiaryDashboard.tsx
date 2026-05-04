@@ -286,10 +286,11 @@ export default function BeneficiaryDashboard() {
   const [dynamicPricing, setDynamicPricing] = useState<any>(null)
   const [paymentFilter, setPaymentFilter] = useState<string>('all')
   const [selectedServices, setSelectedServices] = useState<any[]>([])
+  const [availablePaymentMethods, setAvailablePaymentMethods] = useState<any[]>([])
 
   // Payment flow state
   const [paymentDialog, setPaymentDialog] = useState(false)
-  const [paymentForm, setPaymentForm] = useState({ method: 'wallet-deposit', transactionRef: '', senderName: '', senderPhone: '', exchangeName: '', walletType: '' })
+  const [paymentForm, setPaymentForm] = useState({ method: '', paymentMethodId: '', transactionRef: '', senderName: '', senderPhone: '', exchangeName: '', walletType: '' })
   const [paymentSubmitting, setPaymentSubmitting] = useState(false)
   const [lastCreatedRequestId, setLastCreatedRequestId] = useState<string>('')
   const [paymentTransactions, setPaymentTransactions] = useState<any[]>([])
@@ -503,6 +504,19 @@ export default function BeneficiaryDashboard() {
           setLastCreatedRequestId(data.id || data.requestId || '')
           setPaymentForm(prev => ({ ...prev, method: requestForm.paymentMethod }))
           setRequestDialog(false)
+          // Fetch admin payment methods before opening dialog
+          try {
+            const pmRes = await fetch('/api/payments/methods')
+            if (pmRes.ok) {
+              const pmData = await pmRes.json()
+              setAvailablePaymentMethods(Array.isArray(pmData) ? pmData : [])
+              // Auto-select first matching method
+              const matching = (Array.isArray(pmData) ? pmData : []).find((m: any) => m.type === requestForm.paymentMethod)
+              if (matching) {
+                setPaymentForm(prev => ({ ...prev, method: matching.type, paymentMethodId: matching.id }))
+              }
+            }
+          } catch {}
           setPaymentDialog(true)
         } else {
           setRequestDialog(false)
@@ -1018,7 +1032,7 @@ export default function BeneficiaryDashboard() {
       if (res.ok) {
         toast({ title: 'تم الدفع بنجاح', description: 'تمت معالجة الدفع بنجاح' })
         setPaymentDialog(false)
-        setPaymentForm({ method: 'wallet-deposit', transactionRef: '', senderName: '', senderPhone: '', exchangeName: '', walletType: '' })
+        setPaymentForm({ method: '', paymentMethodId: '', transactionRef: '', senderName: '', senderPhone: '', exchangeName: '', walletType: '' })
         setLastCreatedRequestId('')
         fetchData()
       } else {
@@ -1033,10 +1047,18 @@ export default function BeneficiaryDashboard() {
   }
 
   // ===== HANDLE PAY FOR EXISTING REQUEST =====
-  const handlePayForRequest = (req: any) => {
+  const handlePayForRequest = async (req: any) => {
     setLastCreatedRequestId(req.id)
     setSelectedService(req.service || { id: req.serviceId, name: req.service?.name || 'خدمة', price: req.price || req.service?.price || 0 })
-    setPaymentForm({ method: 'wallet-deposit', transactionRef: '', senderName: '', senderPhone: '', exchangeName: '', walletType: '' })
+    setPaymentForm({ method: '', paymentMethodId: '', transactionRef: '', senderName: '', senderPhone: '', exchangeName: '', walletType: '' })
+    // Fetch admin payment methods
+    try {
+      const pmRes = await fetch('/api/payments/methods')
+      if (pmRes.ok) {
+        const pmData = await pmRes.json()
+        setAvailablePaymentMethods(Array.isArray(pmData) ? pmData : [])
+      }
+    } catch {}
     setPaymentDialog(true)
   }
 
@@ -3039,113 +3061,143 @@ export default function BeneficiaryDashboard() {
               </div>
             </div>
 
-            {/* Payment Method Selection */}
+            {/* Payment Method Selection from Admin-added methods */}
             <div className="space-y-2">
               <Label className="text-sm font-medium">
                 <CreditCard className="w-3.5 h-3.5 inline ml-1" />
-                طريقة الدفع
+                اختر طريقة الدفع
               </Label>
-              <div className="grid grid-cols-2 gap-2">
-                {[
-                  { key: 'wallet-deposit', label: 'إيداع محفظة', icon: Wallet },
-                  { key: 'exchange-transfer', label: 'تحويل صراف', icon: Send },
-                  { key: 'bank-transfer', label: 'تحويل بنكي', icon: Building },
-                  { key: 'cash', label: 'نقدي', icon: DollarSign },
-                ].map(({ key, label, icon: Icon }) => (
+              {availablePaymentMethods.length > 0 ? (
+                <div className="space-y-2">
+                  {availablePaymentMethods.map((pm: any) => {
+                    const isSelected = paymentForm.paymentMethodId === pm.id
+                    const typeIcon = pm.type === 'wallet-deposit' ? Wallet : pm.type === 'exchange-transfer' ? Send : pm.type === 'bank-transfer' ? Building : DollarSign
+                    const typeColor = pm.type === 'wallet-deposit' ? 'from-blue-400 to-indigo-500' : pm.type === 'exchange-transfer' ? 'from-amber-400 to-orange-500' : pm.type === 'bank-transfer' ? 'from-emerald-400 to-teal-500' : 'from-gray-400 to-gray-500'
+                    const typeLabel = pm.type === 'wallet-deposit' ? 'محفظة' : pm.type === 'exchange-transfer' ? 'صراف' : pm.type === 'bank-transfer' ? 'بنكي' : 'نقدي'
+                    const Icon = typeIcon
+                    return (
+                      <button
+                        key={pm.id}
+                        onClick={() => setPaymentForm(prev => ({ ...prev, method: pm.type, paymentMethodId: pm.id }))}
+                        className={`w-full p-4 rounded-xl border-2 transition-all text-right ${
+                          isSelected
+                            ? 'border-emerald-400 bg-emerald-50 shadow-md'
+                            : 'border-gray-200 hover:border-emerald-200'
+                        }`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${typeColor} flex items-center justify-center shadow-md shrink-0`}>
+                            <Icon className="w-5 h-5 text-white" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between">
+                              <p className="font-bold text-sm">{pm.name}</p>
+                              <Badge className="bg-gray-100 text-gray-500 border-0 text-[10px] px-1.5">{typeLabel}</Badge>
+                            </div>
+                            {pm.walletType && (
+                              <p className="text-xs text-gray-500 mt-0.5">{
+                                pm.walletType === 'zain-cash' ? 'زين كاش' :
+                                pm.walletType === 'hala-cash' ? 'هلا كاش' :
+                                pm.walletType === 'mtn-momo' ? 'إم تي إن' :
+                                pm.walletType === 'y-cash' ? 'واي كاش' :
+                                pm.walletType === 'flous' ? 'فلوس' : pm.walletType
+                              }</p>
+                            )}
+                            {pm.accountNumber && (
+                              <p className="text-xs text-gray-600 mt-1 font-mono" dir="ltr">{pm.accountNumber}</p>
+                            )}
+                            {pm.accountName && (
+                              <p className="text-xs text-gray-500">{pm.accountName}</p>
+                            )}
+                            {pm.bankName && (
+                              <p className="text-xs text-gray-500">{pm.bankName}</p>
+                            )}
+                            {pm.exchangeName && (
+                              <p className="text-xs text-gray-500">صراف: {pm.exchangeName}</p>
+                            )}
+                            {pm.instructions && (
+                              <p className="text-xs text-amber-600 mt-1 italic">{pm.instructions}</p>
+                            )}
+                          </div>
+                        </div>
+                      </button>
+                    )
+                  })}
+
+                  {/* Cash option always available */}
                   <button
-                    key={key}
-                    onClick={() => setPaymentForm(prev => ({ ...prev, method: key }))}
-                    className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${
-                      paymentForm.method === key
-                        ? 'border-amber-400 bg-amber-50 shadow-md'
-                        : 'border-gray-200 hover:border-amber-200'
+                    onClick={() => setPaymentForm(prev => ({ ...prev, method: 'cash', paymentMethodId: 'cash' }))}
+                    className={`w-full p-4 rounded-xl border-2 transition-all text-right ${
+                      paymentForm.method === 'cash'
+                        ? 'border-emerald-400 bg-emerald-50 shadow-md'
+                        : 'border-gray-200 hover:border-emerald-200'
                     }`}
                   >
-                    <Icon className={`w-6 h-6 ${paymentForm.method === key ? 'text-amber-600' : 'text-gray-400'}`} />
-                    <span className={`text-xs font-medium ${paymentForm.method === key ? 'text-amber-700' : 'text-gray-500'}`}>{label}</span>
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-gray-400 to-gray-500 flex items-center justify-center shadow-md shrink-0">
+                        <DollarSign className="w-5 h-5 text-white" />
+                      </div>
+                      <div>
+                        <p className="font-bold text-sm">نقدي عند الاستلام</p>
+                        <p className="text-xs text-gray-500">سيتم الدفع نقداً عند وصول الممرض</p>
+                      </div>
+                    </div>
                   </button>
-                ))}
-              </div>
+                </div>
+              ) : (
+                <div className="p-4 bg-amber-50 rounded-xl text-center">
+                  <CreditCard className="w-8 h-8 text-amber-400 mx-auto mb-2" />
+                  <p className="text-amber-700 text-sm font-medium">لا توجد طرق دفع إلكترونية متاحة حالياً</p>
+                  <p className="text-amber-600 text-xs mt-1">يمكنك الدفع نقداً عند الاستلام</p>
+                  <button
+                    onClick={() => setPaymentForm(prev => ({ ...prev, method: 'cash', paymentMethodId: 'cash' }))}
+                    className="mt-3 px-4 py-2 bg-amber-500 text-white rounded-xl text-sm hover:bg-amber-600 transition-colors"
+                  >
+                    الدفع نقداً
+                  </button>
+                </div>
+              )}
             </div>
 
-            {/* Wallet Deposit Fields */}
-            {paymentForm.method === 'wallet-deposit' && (
-              <>
-                <div>
-                  <Label className="text-sm font-medium">نوع المحفظة</Label>
-                  <Select value={paymentForm.walletType} onValueChange={v => setPaymentForm(prev => ({ ...prev, walletType: v }))}>
-                    <SelectTrigger className="rounded-xl mt-1"><SelectValue placeholder="اختر نوع المحفظة" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="zain-cash">زين كاش</SelectItem>
-                      <SelectItem value="hala-cash">هلا كاش</SelectItem>
-                      <SelectItem value="mtn-momo">إم تي إن موبايل موني</SelectItem>
-                      <SelectItem value="y-cash">واي كاش</SelectItem>
-                      <SelectItem value="flous">فلوس</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label className="text-sm font-medium">رقم المرسل *</Label>
-                  <Input value={paymentForm.senderPhone} onChange={e => setPaymentForm(prev => ({ ...prev, senderPhone: e.target.value }))} placeholder="رقم هاتف المرسل" className="rounded-xl mt-1" />
-                </div>
-                <div>
-                  <Label className="text-sm font-medium">رقم العملية / المرجع *</Label>
-                  <Input value={paymentForm.transactionRef} onChange={e => setPaymentForm(prev => ({ ...prev, transactionRef: e.target.value }))} placeholder="رقم إيصال التحويل" className="rounded-xl mt-1" />
-                </div>
-              </>
-            )}
+            {/* Payment proof fields */}
+            {paymentForm.method && paymentForm.method !== 'cash' && (
+              <div className="space-y-3 p-4 bg-gray-50 rounded-xl border">
+                <p className="text-sm font-bold text-gray-700">أدخل بيانات التحويل</p>
 
-            {/* Exchange Transfer Fields */}
-            {paymentForm.method === 'exchange-transfer' && (
-              <>
-                <div>
-                  <Label className="text-sm font-medium">اسم الصراف *</Label>
-                  <Input value={paymentForm.exchangeName} onChange={e => setPaymentForm(prev => ({ ...prev, exchangeName: e.target.value }))} placeholder="اسم الصراف أو المحل" className="rounded-xl mt-1" />
-                </div>
-                <div>
-                  <Label className="text-sm font-medium">اسم المرسل *</Label>
-                  <Input value={paymentForm.senderName} onChange={e => setPaymentForm(prev => ({ ...prev, senderName: e.target.value }))} placeholder="اسم المرسل" className="rounded-xl mt-1" />
-                </div>
+                {/* Sender name for exchange/bank */}
+                {(paymentForm.method === 'exchange-transfer' || paymentForm.method === 'bank-transfer') && (
+                  <div>
+                    <Label className="text-sm font-medium">اسم المرسل *</Label>
+                    <Input value={paymentForm.senderName} onChange={e => setPaymentForm(prev => ({ ...prev, senderName: e.target.value }))} placeholder="اسم المرسل" className="rounded-xl mt-1" />
+                  </div>
+                )}
+
+                {/* Sender phone */}
                 <div>
                   <Label className="text-sm font-medium">رقم هاتف المرسل *</Label>
-                  <Input value={paymentForm.senderPhone} onChange={e => setPaymentForm(prev => ({ ...prev, senderPhone: e.target.value }))} placeholder="رقم هاتف المرسل" className="rounded-xl mt-1" />
+                  <Input value={paymentForm.senderPhone} onChange={e => setPaymentForm(prev => ({ ...prev, senderPhone: e.target.value }))} placeholder="رقم هاتف المرسل" className="rounded-xl mt-1" dir="ltr" />
                 </div>
+
+                {/* Transaction reference */}
                 <div>
                   <Label className="text-sm font-medium">رقم العملية / المرجع *</Label>
-                  <Input value={paymentForm.transactionRef} onChange={e => setPaymentForm(prev => ({ ...prev, transactionRef: e.target.value }))} placeholder="رقم إيصال التحويل" className="rounded-xl mt-1" />
+                  <Input value={paymentForm.transactionRef} onChange={e => setPaymentForm(prev => ({ ...prev, transactionRef: e.target.value }))} placeholder="رقم إيصال التحويل" className="rounded-xl mt-1" dir="ltr" />
                 </div>
-              </>
+
+                <p className="text-xs text-amber-600">⚠️ سيتم مراجعة الدفع من قبل الإدارة قبل تنفيذ الطلب</p>
+              </div>
             )}
 
-            {/* Bank Transfer Fields */}
-            {paymentForm.method === 'bank-transfer' && (
-              <>
-                <div>
-                  <Label className="text-sm font-medium">اسم المرسل *</Label>
-                  <Input value={paymentForm.senderName} onChange={e => setPaymentForm(prev => ({ ...prev, senderName: e.target.value }))} placeholder="اسم صاحب الحساب" className="rounded-xl mt-1" />
-                </div>
-                <div>
-                  <Label className="text-sm font-medium">رقم هاتف المرسل</Label>
-                  <Input value={paymentForm.senderPhone} onChange={e => setPaymentForm(prev => ({ ...prev, senderPhone: e.target.value }))} placeholder="رقم هاتف المرسل" className="rounded-xl mt-1" />
-                </div>
-                <div>
-                  <Label className="text-sm font-medium">رقم العملية / المرجع *</Label>
-                  <Input value={paymentForm.transactionRef} onChange={e => setPaymentForm(prev => ({ ...prev, transactionRef: e.target.value }))} placeholder="رقم إيصال التحويل البنكي" className="rounded-xl mt-1" />
-                </div>
-              </>
-            )}
-
-            {/* Cash - no additional fields needed */}
             {paymentForm.method === 'cash' && (
               <div className="p-4 bg-amber-50 rounded-xl text-center">
                 <p className="text-amber-700 text-sm">سيتم الدفع نقداً عند وصول الممرض</p>
-                <p className="text-amber-600 text-xs mt-1">يرجى تجهيز المبلغ المطلوب</p>
+                <p className="text-amber-600 text-xs mt-1">يرجى تجهيز المبلغ المطلوب: <strong>{formatPrice(dynamicPricing?.totalPrice || selectedService?.price || 0)}</strong></p>
               </div>
             )}
 
             <Button
               onClick={handleProcessPayment}
-              disabled={paymentSubmitting}
+              disabled={paymentSubmitting || !paymentForm.method}
               className="w-full bg-gradient-to-r from-emerald-500 to-teal-500 text-white hover:shadow-lg rounded-xl"
             >
               {paymentSubmitting ? (

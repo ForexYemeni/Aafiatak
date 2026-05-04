@@ -1,32 +1,78 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getAllPaymentMethods, createPaymentMethod } from '@/lib/firestore'
+import { firestore, admin, firebaseInitialized, initializationError } from '@/lib/firebase-admin'
+
+function checkFirebase() {
+  if (!firebaseInitialized || !firestore) {
+    throw new Error(initializationError || 'Firebase غير مهيأ')
+  }
+}
 
 export async function GET() {
   try {
-    const payments = await getAllPaymentMethods()
+    checkFirebase()
+    const snapshot = await firestore.collection('paymentMethods').orderBy('createdAt', 'desc').get()
+    const payments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
     return NextResponse.json(payments)
-  } catch (error) {
+  } catch (error: any) {
+    console.error('Get payment methods error:', error.message)
     return NextResponse.json({ error: 'حدث خطأ في الخادم' }, { status: 500 })
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
+    checkFirebase()
     const body = await request.json()
-    const { name, accountInfo, isActive } = body
+    const {
+      type,           // 'wallet-deposit' | 'exchange-transfer' | 'bank-transfer' | 'cash'
+      name,           // Display name
+      accountName,    // Name on account
+      accountNumber,  // Account/phone number
+      bankName,       // Bank name (for bank-transfer)
+      exchangeName,   // Exchange shop name (for exchange-transfer)
+      walletType,     // 'zain-cash' | 'hala-cash' | 'mtn-momo' | 'y-cash' | 'flous' | 'other'
+      instructions,   // Payment instructions for beneficiary
+      isActive,
+    } = body
 
-    if (!name || !accountInfo) {
-      return NextResponse.json({ error: 'الاسم ومعلومات الحساب مطلوبان' }, { status: 400 })
+    if (!type || !name) {
+      return NextResponse.json({ error: 'النوع والاسم مطلوبان' }, { status: 400 })
     }
 
-    const payment = await createPaymentMethod({
-      name,
-      accountInfo,
-      isActive: isActive !== undefined ? isActive : true,
-    })
+    const validTypes = ['wallet-deposit', 'exchange-transfer', 'bank-transfer', 'cash']
+    if (!validTypes.includes(type)) {
+      return NextResponse.json({ error: 'نوع طريقة الدفع غير صالح' }, { status: 400 })
+    }
 
-    return NextResponse.json(payment)
-  } catch (error) {
+    // Validate required fields per type
+    if (type === 'wallet-deposit' && !accountNumber) {
+      return NextResponse.json({ error: 'رقم المحفظة مطلوب لطريقة الإيداع عبر محفظة' }, { status: 400 })
+    }
+    if (type === 'exchange-transfer' && !exchangeName) {
+      return NextResponse.json({ error: 'اسم الصراف مطلوب لطريقة التحويل عبر صراف' }, { status: 400 })
+    }
+    if (type === 'bank-transfer' && !accountNumber) {
+      return NextResponse.json({ error: 'رقم الحساب البنكي مطلوب' }, { status: 400 })
+    }
+
+    const paymentData = {
+      type,
+      name,
+      accountName: accountName || '',
+      accountNumber: accountNumber || '',
+      bankName: bankName || '',
+      exchangeName: exchangeName || '',
+      walletType: walletType || '',
+      instructions: instructions || '',
+      isActive: isActive !== undefined ? isActive : true,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }
+
+    const docRef = await firestore.collection('paymentMethods').add(paymentData)
+    return NextResponse.json({ id: docRef.id, ...paymentData })
+  } catch (error: any) {
+    console.error('Create payment method error:', error.message)
     return NextResponse.json({ error: 'حدث خطأ في الخادم' }, { status: 500 })
   }
 }

@@ -1,29 +1,42 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getPaymentMethodById, updatePaymentMethod, deletePaymentMethod } from '@/lib/firestore'
+import { firestore, admin, firebaseInitialized, initializationError } from '@/lib/firebase-admin'
+
+function checkFirebase() {
+  if (!firebaseInitialized || !firestore) {
+    throw new Error(initializationError || 'Firebase غير مهيأ')
+  }
+}
 
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    checkFirebase()
     const { id } = await params
     const body = await request.json()
-    const { name, accountInfo, isActive } = body
 
-    const existing = await getPaymentMethodById(id)
-    if (!existing) {
+    const existing = await firestore.collection('paymentMethods').doc(id).get()
+    if (!existing.exists) {
       return NextResponse.json({ error: 'طريقة الدفع غير موجودة' }, { status: 404 })
     }
 
-    const updateData: Record<string, any> = {}
-    if (name !== undefined) updateData.name = name
-    if (accountInfo !== undefined) updateData.accountInfo = accountInfo
-    if (isActive !== undefined) updateData.isActive = isActive
+    const updateData: Record<string, any> = { updatedAt: admin.firestore.FieldValue.serverTimestamp() }
 
-    const payment = await updatePaymentMethod(id, updateData)
+    // Only update fields that are provided
+    const allowedFields = ['type', 'name', 'accountName', 'accountNumber', 'bankName', 'exchangeName', 'walletType', 'instructions', 'isActive']
+    for (const field of allowedFields) {
+      if (body[field] !== undefined) {
+        updateData[field] = body[field]
+      }
+    }
 
-    return NextResponse.json(payment)
-  } catch (error) {
+    await firestore.collection('paymentMethods').doc(id).update(updateData)
+
+    const updated = await firestore.collection('paymentMethods').doc(id).get()
+    return NextResponse.json({ id: updated.id, ...updated.data() })
+  } catch (error: any) {
+    console.error('Update payment method error:', error.message)
     return NextResponse.json({ error: 'حدث خطأ في الخادم' }, { status: 500 })
   }
 }
@@ -33,16 +46,18 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    checkFirebase()
     const { id } = await params
 
-    const existing = await getPaymentMethodById(id)
-    if (!existing) {
+    const existing = await firestore.collection('paymentMethods').doc(id).get()
+    if (!existing.exists) {
       return NextResponse.json({ error: 'طريقة الدفع غير موجودة' }, { status: 404 })
     }
 
-    await deletePaymentMethod(id)
+    await firestore.collection('paymentMethods').doc(id).delete()
     return NextResponse.json({ message: 'تم حذف طريقة الدفع بنجاح' })
-  } catch (error) {
+  } catch (error: any) {
+    console.error('Delete payment method error:', error.message)
     return NextResponse.json({ error: 'حدث خطأ في الخادم' }, { status: 500 })
   }
 }
