@@ -1389,16 +1389,42 @@ export default function NurseDashboard() {
                 <Label htmlFor="location" className="text-xs text-gray-400 font-medium mb-2 block">
                   عنوانك الفعلي
                 </Label>
-                <Input
-                  id="location"
-                  value={locationValue}
-                  onChange={e => setLocationValue(e.target.value)}
-                  placeholder="يرجى إدخال عنوانك الفعلي بدقة"
-                  className="bg-white/80 border-blue-200/50 focus:border-blue-400 rounded-xl"
-                />
-                <p className="text-[11px] text-gray-400 mt-2 flex items-center gap-1">
-                  <Info className="w-3 h-3" />
-                  يرجى إدخال عنوانك الفعلي بدقة ليسهل الوصول إليك من قبل المستفيدين
+                <div className="flex gap-2">
+                  <Input
+                    id="location"
+                    value={locationValue}
+                    onChange={e => setLocationValue(e.target.value)}
+                    placeholder="سيتم تحديد موقعك تلقائياً أو أدخل العنوان يدوياً"
+                    className="bg-white/80 border-blue-200/50 focus:border-blue-400 rounded-xl flex-1"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="shrink-0 rounded-xl border-blue-200 text-blue-600 hover:bg-blue-50"
+                    onClick={() => {
+                      if (navigator.geolocation) {
+                        navigator.geolocation.getCurrentPosition(
+                          (pos) => {
+                            const { latitude, longitude } = pos.coords
+                            setLocationValue(`${latitude.toFixed(6)}, ${longitude.toFixed(6)}`)
+                            toast({ title: 'تم تحديد الموقع', description: `خط العرض: ${latitude.toFixed(4)}, خط الطول: ${longitude.toFixed(4)}` })
+                          },
+                          (err) => {
+                            toast({ title: 'خطأ في تحديد الموقع', description: 'يرجى السماح بالوصول إلى الموقع أو إدخاله يدوياً', variant: 'destructive' })
+                          },
+                          { enableHighAccuracy: true, timeout: 10000 }
+                        )
+                      } else {
+                        toast({ title: 'غير مدعوم', description: 'متصفحك لا يدعم تحديد الموقع', variant: 'destructive' })
+                      }
+                    }}
+                  >
+                    <Navigation className="w-4 h-4" />
+                  </Button>
+                </div>
+                <p className="text-[11px] text-blue-500 mt-2 flex items-center gap-1">
+                  <Navigation className="w-3 h-3" />
+                  اضغط على زر الموقع لتحديد موقعك تلقائياً عبر GPS أو أدخل العنوان يدوياً
                 </p>
                 <Button
                   onClick={handleSaveLocation}

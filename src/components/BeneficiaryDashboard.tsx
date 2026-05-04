@@ -7,7 +7,7 @@ import {
   ShoppingBag, User, Menu, X, Bell, MapPin, Phone, Home, HelpCircle,
   Filter, RefreshCw, Calendar, Tag, AlertTriangle,
   Copy, Check, Award, Zap, Share2, MessageCircle, Star, Send,
-  Siren, ChevronDown, ChevronUp, Shield, Gift, TrendingUp, Sparkles
+  Siren, ChevronDown, ChevronUp, Shield, Gift, TrendingUp, Sparkles, Navigation
 } from 'lucide-react'
 import { useAppStore, formatPrice, getStatusLabel, getStatusColor } from '@/lib/store'
 import { Button } from '@/components/ui/button'
@@ -1326,15 +1326,41 @@ export default function BeneficiaryDashboard() {
                             <MapPin className="w-3.5 h-3.5 inline ml-1" />
                             الموقع / العنوان
                           </Label>
-                          <Input
-                            value={profileLocation}
-                            onChange={(e) => setProfileLocation(e.target.value)}
-                            placeholder="أدخل عنوانك الفعلي"
-                            className="rounded-xl border-violet-200 focus:border-violet-400 focus:ring-violet-200"
-                          />
-                          <p className="text-xs text-amber-600 flex items-center gap-1">
-                            <AlertTriangle className="w-3 h-3" />
-                            يرجى إدخال عنوانك الفعلي بدقة
+                          <div className="flex gap-2">
+                            <Input
+                              value={profileLocation}
+                              onChange={(e) => setProfileLocation(e.target.value)}
+                              placeholder="سيتم تحديد موقعك تلقائياً أو أدخل العنوان يدوياً"
+                              className="rounded-xl border-violet-200 focus:border-violet-400 focus:ring-violet-200 flex-1"
+                            />
+                            <Button
+                              type="button"
+                              variant="outline"
+                              className="shrink-0 rounded-xl border-violet-200 text-violet-600 hover:bg-violet-50"
+                              onClick={() => {
+                                if (navigator.geolocation) {
+                                  navigator.geolocation.getCurrentPosition(
+                                    (pos) => {
+                                      const { latitude, longitude } = pos.coords
+                                      setProfileLocation(`${latitude.toFixed(6)}, ${longitude.toFixed(6)}`)
+                                      toast({ title: 'تم تحديد الموقع', description: `خط العرض: ${latitude.toFixed(4)}, خط الطول: ${longitude.toFixed(4)}` })
+                                    },
+                                    (err) => {
+                                      toast({ title: 'خطأ في تحديد الموقع', description: 'يرجى السماح بالوصول إلى الموقع أو إدخاله يدوياً', variant: 'destructive' })
+                                    },
+                                    { enableHighAccuracy: true, timeout: 10000 }
+                                  )
+                                } else {
+                                  toast({ title: 'غير مدعوم', description: 'متصفحك لا يدعم تحديد الموقع', variant: 'destructive' })
+                                }
+                              }}
+                            >
+                              <Navigation className="w-4 h-4" />
+                            </Button>
+                          </div>
+                          <p className="text-xs text-violet-600 flex items-center gap-1">
+                            <MapPin className="w-3 h-3" />
+                            اضغط على زر الموقع لتحديد موقعك تلقائياً عبر GPS أو أدخل العنوان يدوياً
                           </p>
                         </div>
 
@@ -1830,12 +1856,38 @@ export default function BeneficiaryDashboard() {
                 <MapPin className="w-3.5 h-3.5 inline ml-1" />
                 العنوان
               </Label>
-              <Input
-                value={emergencyForm.address}
-                onChange={(e) => setEmergencyForm(prev => ({ ...prev, address: e.target.value }))}
-                placeholder="أدخل عنوانك الحالي"
-                className="rounded-xl"
-              />
+              <div className="flex gap-2">
+                <Input
+                  value={emergencyForm.address}
+                  onChange={(e) => setEmergencyForm(prev => ({ ...prev, address: e.target.value }))}
+                  placeholder="سيتم تحديد موقعك تلقائياً أو أدخل العنوان يدوياً"
+                  className="rounded-xl flex-1"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="shrink-0 rounded-xl"
+                  onClick={() => {
+                    if (navigator.geolocation) {
+                      navigator.geolocation.getCurrentPosition(
+                        (pos) => {
+                          const { latitude, longitude } = pos.coords
+                          setEmergencyForm(prev => ({ ...prev, address: `${latitude.toFixed(6)}, ${longitude.toFixed(6)}` }))
+                          toast({ title: 'تم تحديد الموقع', description: `خط العرض: ${latitude.toFixed(4)}, خط الطول: ${longitude.toFixed(4)}` })
+                        },
+                        (err) => {
+                          toast({ title: 'خطأ في تحديد الموقع', description: 'يرجى السماح بالوصول إلى الموقع أو إدخاله يدوياً', variant: 'destructive' })
+                        },
+                        { enableHighAccuracy: true, timeout: 10000 }
+                      )
+                    } else {
+                      toast({ title: 'غير مدعوم', description: 'متصفحك لا يدعم تحديد الموقع', variant: 'destructive' })
+                    }
+                  }}
+                >
+                  <Navigation className="w-4 h-4" />
+                </Button>
+              </div>
             </div>
 
             {/* Notes Field */}
@@ -1912,12 +1964,38 @@ export default function BeneficiaryDashboard() {
                 <MapPin className="w-3.5 h-3.5 inline ml-1" />
                 العنوان
               </Label>
-              <Input
-                value={requestForm.address}
-                onChange={(e) => setRequestForm(prev => ({ ...prev, address: e.target.value }))}
-                placeholder="أدخل عنوانك"
-                className="rounded-xl"
-              />
+              <div className="flex gap-2">
+                <Input
+                  value={requestForm.address}
+                  onChange={(e) => setRequestForm(prev => ({ ...prev, address: e.target.value }))}
+                  placeholder="سيتم تحديد موقعك تلقائياً أو أدخل العنوان يدوياً"
+                  className="rounded-xl flex-1"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="shrink-0 rounded-xl"
+                  onClick={() => {
+                    if (navigator.geolocation) {
+                      navigator.geolocation.getCurrentPosition(
+                        (pos) => {
+                          const { latitude, longitude } = pos.coords
+                          setRequestForm(prev => ({ ...prev, address: `${latitude.toFixed(6)}, ${longitude.toFixed(6)}` }))
+                          toast({ title: 'تم تحديد الموقع', description: `خط العرض: ${latitude.toFixed(4)}, خط الطول: ${longitude.toFixed(4)}` })
+                        },
+                        (err) => {
+                          toast({ title: 'خطأ في تحديد الموقع', description: 'يرجى السماح بالوصول إلى الموقع أو إدخاله يدوياً', variant: 'destructive' })
+                        },
+                        { enableHighAccuracy: true, timeout: 10000 }
+                      )
+                    } else {
+                      toast({ title: 'غير مدعوم', description: 'متصفحك لا يدعم تحديد الموقع', variant: 'destructive' })
+                    }
+                  }}
+                >
+                  <Navigation className="w-4 h-4" />
+                </Button>
+              </div>
             </div>
 
             {/* Payment Method */}

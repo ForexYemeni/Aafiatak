@@ -336,14 +336,26 @@ export default function AdminDashboard() {
     if (approveMode === 'assign') {
       if (!selectedNurseId) { toast({ title: 'خطأ', description: 'يرجى اختيار ممرض', variant: 'destructive' }); return }
       try {
-        const res = await fetch('/api/admin/assign-nurse', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ requestId: selectedRequest.id, nurseId: selectedNurseId }) })
-        if (res.ok) { toast({ title: 'تم تعيين الممرض بنجاح' }); logActivity('nurse_assign', 'تم تعيين ممرض لطلب', { requestId: selectedRequest.id, nurseId: selectedNurseId }); setApproveDialog(false); fetchData() }
-        else { const data = await res.json(); toast({ title: 'خطأ', description: data.error, variant: 'destructive' }) }
+        if ((selectedRequest as any)?.isEmergency) {
+          // Assign nurse to emergency request
+          const res = await fetch('/api/admin/emergency', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: selectedRequest.id, nurseId: selectedNurseId, status: 'in_progress' }) })
+          if (res.ok) { toast({ title: 'تم تعيين الممرض لطلب الطوارئ' }); logActivity('nurse_assign_emergency', 'تم تعيين ممرض لطلب طوارئ', { requestId: selectedRequest.id, nurseId: selectedNurseId }); setApproveDialog(false); fetchData() }
+          else { const data = await res.json(); toast({ title: 'خطأ', description: data.error, variant: 'destructive' }) }
+        } else {
+          const res = await fetch('/api/admin/assign-nurse', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ requestId: selectedRequest.id, nurseId: selectedNurseId }) })
+          if (res.ok) { toast({ title: 'تم تعيين الممرض بنجاح' }); logActivity('nurse_assign', 'تم تعيين ممرض لطلب', { requestId: selectedRequest.id, nurseId: selectedNurseId }); setApproveDialog(false); fetchData() }
+          else { const data = await res.json(); toast({ title: 'خطأ', description: data.error, variant: 'destructive' }) }
+        }
       } catch { toast({ title: 'خطأ', description: 'حدث خطأ', variant: 'destructive' }) }
     } else {
       try {
-        const res = await fetch(`/api/admin/requests/${selectedRequest.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'in_progress', adminNotes: 'تم التنفيذ من قبل الإدارة' }) })
-        if (res.ok) { toast({ title: 'تم تنفيذ الطلب مباشرة' }); logActivity('request_direct_execute', 'تم تنفيذ طلب مباشرة من الإدارة', { requestId: selectedRequest.id }); setApproveDialog(false); fetchData() }
+        if ((selectedRequest as any)?.isEmergency) {
+          const res = await fetch('/api/admin/emergency', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: selectedRequest.id, status: 'in_progress' }) })
+          if (res.ok) { toast({ title: 'تم بدء معالجة طلب الطوارئ' }); logActivity('emergency_direct_execute', 'تم بدء معالجة طلب طوارئ مباشرة', { requestId: selectedRequest.id }); setApproveDialog(false); fetchData() }
+        } else {
+          const res = await fetch(`/api/admin/requests/${selectedRequest.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'in_progress', adminNotes: 'تم التنفيذ من قبل الإدارة' }) })
+          if (res.ok) { toast({ title: 'تم تنفيذ الطلب مباشرة' }); logActivity('request_direct_execute', 'تم تنفيذ طلب مباشرة من الإدارة', { requestId: selectedRequest.id }); setApproveDialog(false); fetchData() }
+        }
       } catch { toast({ title: 'خطأ', description: 'حدث خطأ', variant: 'destructive' }) }
     }
   }
@@ -510,7 +522,7 @@ export default function AdminDashboard() {
 
   // ─── Tabs definition ───────────────────────────────────────
   const tabs: { key: Tab; label: string; icon: any; badge?: number }[] = [
-    { key: 'dashboard', label: 'الرئيسية', icon: LayoutDashboard, badge: emergencyRequests.length || undefined },
+    { key: 'dashboard', label: 'الرئيسية', icon: LayoutDashboard, badge: emergencyRequests.filter((e: any) => e.status === 'pending').length || undefined },
     { key: 'services', label: 'الخدمات', icon: Wrench },
     { key: 'nurses', label: 'الممرضين', icon: Users },
     { key: 'beneficiaries', label: 'المستفيدين', icon: Heart },
@@ -612,8 +624,8 @@ export default function AdminDashboard() {
           <span className="font-bold bg-gradient-to-l from-amber-600 via-orange-600 to-rose-600 bg-clip-text text-transparent">عافيتك</span>
         </div>
         <div className="flex items-center gap-2">
-          {emergencyRequests.length > 0 && (
-            <Button variant="ghost" size="sm" className="relative"><AlertTriangle className="w-4 h-4 text-red-500" /><span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center">{emergencyRequests.length}</span></Button>
+          {emergencyRequests.filter((e: any) => e.status === 'pending').length > 0 && (
+            <Button variant="ghost" size="sm" className="relative" onClick={() => setActiveTab('emergency')}><AlertTriangle className="w-4 h-4 text-red-500" /><span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center">{emergencyRequests.filter((e: any) => e.status === 'pending').length}</span></Button>
           )}
           <Button variant="ghost" size="sm" onClick={handleLogout}><LogOut className="w-4 h-4 text-red-500" /></Button>
           <Button variant="ghost" size="sm" onClick={() => setMobileMenuOpen(true)}><Menu className="w-5 h-5" /></Button>
@@ -642,13 +654,13 @@ export default function AdminDashboard() {
                     </div>
 
                     {/* Emergency Badge */}
-                    {emergencyRequests.length > 0 && (
+                    {emergencyRequests.filter((e: any) => e.status === 'pending').length > 0 && (
                       <motion.div variants={cardVariants} initial="hidden" animate="visible">
                         <Card className="border-0 shadow-lg shadow-red-500/20 bg-gradient-to-l from-red-500 to-orange-500 text-white overflow-hidden relative">
                           <CardContent className="p-4 flex items-center gap-3">
                             <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center animate-pulse"><AlertTriangle className="w-5 h-5 text-white" /></div>
-                            <div className="flex-1"><p className="font-bold text-lg">{emergencyRequests.length} طلب طوارئ</p><p className="text-red-100 text-xs">طلبات تتطلب اهتمام فوري</p></div>
-                            <Button size="sm" variant="secondary" className="bg-white/20 hover:bg-white/30 text-white border-0" onClick={() => setActiveTab('requests')}>عرض التفاصيل</Button>
+                            <div className="flex-1"><p className="font-bold text-lg">{emergencyRequests.filter((e: any) => e.status === 'pending').length} طلب طوارئ</p><p className="text-red-100 text-xs">طلبات تتطلب اهتمام فوري</p></div>
+                            <Button size="sm" variant="secondary" className="bg-white/20 hover:bg-white/30 text-white border-0" onClick={() => setActiveTab('emergency')}>عرض التفاصيل</Button>
                           </CardContent>
                         </Card>
                       </motion.div>
@@ -1070,12 +1082,14 @@ export default function AdminDashboard() {
                                       <p className="text-gray-600"><span className="font-medium">المستفيد:</span> {req.beneficiaryName || 'غير معروف'}</p>
                                       {req.address && <p className="text-gray-600"><span className="font-medium">العنوان:</span> {req.address}</p>}
                                       {req.notes && <p className="text-gray-500"><span className="font-medium">ملاحظات:</span> {req.notes}</p>}
+                                      {req.nurseName && <p className="text-blue-600"><span className="font-medium">الممرض المعين:</span> {req.nurseName}</p>}
                                       <p className="text-gray-400 text-xs">{formatDateTime(req.createdAt)}</p>
                                     </div>
                                   </div>
                                   <div className="flex flex-col gap-2 shrink-0">
                                     {req.status === 'pending' && (
                                       <>
+                                        <Button size="sm" className="bg-gradient-to-l from-purple-500 to-indigo-500 text-white shadow-lg shadow-purple-500/25" onClick={() => { setSelectedRequest(req); setApproveMode('assign'); setSelectedNurseId(''); setApproveDialog(true) }}><UserPlus className="w-3.5 h-3.5 ml-1" />تعيين ممرض</Button>
                                         <Button size="sm" className="bg-gradient-to-l from-blue-500 to-indigo-500 text-white shadow-lg shadow-blue-500/25" onClick={async () => {
                                           await fetch('/api/admin/emergency', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: req.id, status: 'in_progress' }) })
                                           toast({ title: 'تم بدء المعالجة' })
@@ -1456,7 +1470,7 @@ export default function AdminDashboard() {
             <div><Label>الوصف *</Label><Textarea value={serviceForm.description} onChange={e => setServiceForm({ ...serviceForm, description: e.target.value })} className="border-amber-200 mt-1" /></div>
             <div className="grid grid-cols-2 gap-4">
               <div><Label>السعر *</Label><Input type="number" value={serviceForm.price} onChange={e => setServiceForm({ ...serviceForm, price: e.target.value })} className="border-amber-200 mt-1" /></div>
-              <div><Label>الفئة</Label><Input value={serviceForm.category} onChange={e => setServiceForm({ ...serviceForm, category: e.target.value })} className="border-amber-200 mt-1" /></div>
+              <div><Label>الفئة</Label><Select value={serviceForm.category} onValueChange={v => setServiceForm({ ...serviceForm, category: v })}><SelectTrigger className="border-amber-200 mt-1"><SelectValue placeholder="اختر الفئة" /></SelectTrigger><SelectContent><SelectItem value="تمريض منزلي">تمريض منزلي</SelectItem><SelectItem value="رعاية المسنين">رعاية المسنين</SelectItem><SelectItem value="رعاية الأم والطفل">رعاية الأم والطفل</SelectItem><SelectItem value="علاج طبيعي">علاج طبيعي</SelectItem><SelectItem value="إسعافات أولية">إسعافات أولية</SelectItem><SelectItem value="حقن ومحاليل">حقن ومحاليل</SelectItem><SelectItem value="فحوصات مخبرية">فحوصات مخبرية</SelectItem><SelectItem value="قياسات حيوية">قياسات حيوية</SelectItem><SelectItem value="عناية بالجروح">عناية بالجروح</SelectItem><SelectItem value="رعاية نفسية">رعاية نفسية</SelectItem><SelectItem value="عام">عام</SelectItem></SelectContent></Select></div>
             </div>
             <div className="flex items-center justify-between p-3 bg-amber-50/50 rounded-xl"><Label>خدمة نشطة</Label><Switch checked={serviceForm.isActive} onCheckedChange={v => setServiceForm({ ...serviceForm, isActive: v })} /></div>
           </div>

@@ -4,7 +4,7 @@ import { useState, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Shield, Stethoscope, Heart, Loader2, UserPlus, Eye, EyeOff,
-  CheckCircle, Sparkles, ArrowRight
+  CheckCircle, Sparkles, ArrowRight, Navigation, MapPin
 } from 'lucide-react'
 import { useAppStore } from '@/lib/store'
 import { Button } from '@/components/ui/button'
@@ -88,7 +88,7 @@ export default function LandingPage() {
   const [registerSuccess, setRegisterSuccess] = useState(false)
 
   // ─── Login forms ───
-  const [adminForm, setAdminForm] = useState({ username: '', password: '' })
+  const [adminForm, setAdminForm] = useState({ phone: '', password: '' })
   const [nurseLoginForm, setNurseLoginForm] = useState({ phone: '', password: '' })
   const [beneficiaryLoginForm, setBeneficiaryLoginForm] = useState({ phone: '', password: '' })
 
@@ -115,7 +115,7 @@ export default function LandingPage() {
   // ═══════════════════════════════════════════
 
   const handleAdminLogin = async () => {
-    if (!adminForm.username || !adminForm.password) {
+    if (!adminForm.phone || !adminForm.password) {
       toast({ title: 'خطأ', description: 'يرجى ملء جميع الحقول', variant: 'destructive' })
       return
     }
@@ -461,14 +461,15 @@ export default function LandingPage() {
                       {loginRole === 'admin' && (
                         <>
                           <div className="space-y-2">
-                            <Label className="text-sm font-semibold text-slate-700">اسم المستخدم</Label>
+                            <Label className="text-sm font-semibold text-slate-700">رقم الهاتف</Label>
                             <Input
-                              value={adminForm.username}
-                              onChange={e => setAdminForm(f => ({ ...f, username: e.target.value }))}
+                              value={adminForm.phone}
+                              onChange={e => setAdminForm(f => ({ ...f, phone: e.target.value }))}
                               onKeyDown={handleLoginKeyDown}
-                              placeholder="أدخل اسم المستخدم"
+                              placeholder="أدخل رقم الهاتف"
                               className="h-12 bg-white/60 backdrop-blur-sm border-amber-200/50 focus:border-amber-400 focus:ring-amber-400/20 transition-all duration-300"
                               disabled={loading}
+                              dir="ltr"
                             />
                           </div>
                           <div className="space-y-2">
@@ -758,15 +759,45 @@ export default function LandingPage() {
                               />
                             </div>
                             <div className="space-y-2">
-                              <Label className="text-sm font-semibold text-slate-700">الموقع *</Label>
-                              <Input
-                                value={beneficiaryRegForm.location}
-                                onChange={e => setBeneficiaryRegForm(f => ({ ...f, location: e.target.value }))}
-                                onKeyDown={handleRegisterKeyDown}
-                                placeholder="المدينة / المنطقة"
-                                className="h-12 bg-white/60 backdrop-blur-sm border-violet-200/50 focus:border-violet-400 focus:ring-violet-400/20 transition-all duration-300"
-                                disabled={loading}
-                              />
+                              <Label className="text-sm font-semibold text-slate-700">
+                                <MapPin className="w-3.5 h-3.5 inline ml-1" />
+                                الموقع *
+                              </Label>
+                              <div className="flex gap-2">
+                                <Input
+                                  value={beneficiaryRegForm.location}
+                                  onChange={e => setBeneficiaryRegForm(f => ({ ...f, location: e.target.value }))}
+                                  onKeyDown={handleRegisterKeyDown}
+                                  placeholder="سيتم تحديد موقعك تلقائياً أو أدخل العنوان يدوياً"
+                                  className="h-12 bg-white/60 backdrop-blur-sm border-violet-200/50 focus:border-violet-400 focus:ring-violet-400/20 transition-all duration-300 flex-1"
+                                  disabled={loading}
+                                />
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  className="shrink-0 h-12 rounded-xl border-violet-200 text-violet-600 hover:bg-violet-50"
+                                  disabled={loading}
+                                  onClick={() => {
+                                    if (navigator.geolocation) {
+                                      navigator.geolocation.getCurrentPosition(
+                                        (pos) => {
+                                          const { latitude, longitude } = pos.coords
+                                          setBeneficiaryRegForm(f => ({ ...f, location: `${latitude.toFixed(6)}, ${longitude.toFixed(6)}` }))
+                                          toast({ title: 'تم تحديد الموقع', description: `خط العرض: ${latitude.toFixed(4)}, خط الطول: ${longitude.toFixed(4)}` })
+                                        },
+                                        (err) => {
+                                          toast({ title: 'خطأ في تحديد الموقع', description: 'يرجى السماح بالوصول إلى الموقع أو إدخاله يدوياً', variant: 'destructive' })
+                                        },
+                                        { enableHighAccuracy: true, timeout: 10000 }
+                                      )
+                                    } else {
+                                      toast({ title: 'غير مدعوم', description: 'متصفحك لا يدعم تحديد الموقع', variant: 'destructive' })
+                                    }
+                                  }}
+                                >
+                                  <Navigation className="w-4 h-4" />
+                                </Button>
+                              </div>
                             </div>
                             <div className="space-y-2">
                               <Label className="text-sm font-semibold text-slate-700">كلمة المرور *</Label>

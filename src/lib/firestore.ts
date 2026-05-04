@@ -35,8 +35,16 @@ export async function getFirstAdmin() {
   return docToObject(snapshot.docs[0])
 }
 
+export async function getAdminByPhone(phone: string) {
+  checkFirebase()
+  const snapshot = await firestore.collection('admins').where('phone', '==', phone).limit(1).get()
+  if (snapshot.empty) return null
+  return docToObject(snapshot.docs[0])
+}
+
 export async function createAdmin(data: {
   username: string
+  phone?: string
   password: string
   name: string
   mustChangePassword: boolean
@@ -44,10 +52,11 @@ export async function createAdmin(data: {
   checkFirebase()
   const docRef = await firestore.collection('admins').add({
     ...data,
+    phone: data.phone || data.username,
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   })
-  return { id: docRef.id, ...data }
+  return { id: docRef.id, ...data, phone: data.phone || data.username }
 }
 
 export async function updateAdmin(id: string, data: Record<string, any>) {
@@ -1180,4 +1189,36 @@ export async function updateEmergencyRequest(id: string, data: Record<string, an
   })
   const doc = await firestore.collection('emergencyRequests').doc(id).get()
   return docToObject(doc)
+}
+
+export async function getEmergencyRequestById(id: string) {
+  checkFirebase()
+  const doc = await firestore.collection('emergencyRequests').doc(id).get()
+  if (!doc.exists) return null
+  return docToObject(doc)
+}
+
+// ==================== EMERGENCY ASSIGNMENTS ====================
+
+export async function createEmergencyAssignment(data: {
+  emergencyRequestId: string
+  nurseId: string
+  status: string
+}) {
+  checkFirebase()
+  const docRef = await firestore.collection('emergencyAssignments').add({
+    ...data,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  })
+
+  // Fetch the nurse for the response
+  const nurseDoc = await firestore.collection('nurses').doc(data.nurseId).get()
+  return {
+    id: docRef.id,
+    ...data,
+    nurse: nurseDoc.exists
+      ? { id: nurseDoc.id, firstName: nurseDoc.data()!.firstName, lastName: nurseDoc.data()!.lastName }
+      : null,
+  }
 }
