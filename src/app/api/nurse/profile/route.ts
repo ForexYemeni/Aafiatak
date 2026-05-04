@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json()
-    const { nurseId, firstName, secondName, thirdName, lastName, phone, location } = body
+    const { nurseId, location } = body
 
     if (!nurseId) {
       return NextResponse.json({ error: 'معرف الممرض مطلوب' }, { status: 400 })
@@ -39,13 +39,13 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'الممرض غير موجود' }, { status: 404 })
     }
 
+    // Only allow updating location field
     const updateData: Record<string, string> = {}
-    if (firstName !== undefined) updateData.firstName = firstName
-    if (secondName !== undefined) updateData.secondName = secondName
-    if (thirdName !== undefined) updateData.thirdName = thirdName
-    if (lastName !== undefined) updateData.lastName = lastName
-    if (phone !== undefined) updateData.phone = phone
     if (location !== undefined) updateData.location = location
+
+    if (Object.keys(updateData).length === 0) {
+      return NextResponse.json({ error: 'لا توجد بيانات للتحديث' }, { status: 400 })
+    }
 
     const updated = await updateNurse(nurseId, updateData)
 

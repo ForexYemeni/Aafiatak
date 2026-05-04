@@ -1,32 +1,36 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { firestore, firebaseInitialized } from '@/lib/firebase-admin'
+import { updateAdmin, getAdminById } from '@/lib/firestore'
 
 export async function PUT(request: NextRequest) {
   try {
-    if (!firebaseInitialized || !firestore) {
-      return NextResponse.json({ error: 'Firebase غير متصل' }, { status: 500 })
-    }
-
     const body = await request.json()
-    const { adminId, name } = body
+    const { adminId, name, phone, email } = body
 
-    if (!adminId || !name) {
-      return NextResponse.json({ error: 'جميع الحقول مطلوبة' }, { status: 400 })
+    if (!adminId) {
+      return NextResponse.json({ error: 'معرف المسؤول مطلوب' }, { status: 400 })
     }
 
-    await firestore.collection('admins').doc(adminId).update({
-      name,
-      updatedAt: new Date().toISOString(),
-    })
+    const updateData: Record<string, any> = {}
+    if (name !== undefined) updateData.name = name
+    if (phone !== undefined) updateData.phone = phone
+    if (email !== undefined) updateData.email = email
 
-    const doc = await firestore.collection('admins').doc(adminId).get()
-    const data = doc.data()!
+    if (Object.keys(updateData).length === 0) {
+      return NextResponse.json({ error: 'لا توجد بيانات للتحديث' }, { status: 400 })
+    }
+
+    const admin = await updateAdmin(adminId, updateData)
+
+    // Remove password from response
+    const { password, ...safeAdmin } = admin as any
 
     return NextResponse.json({
-      id: doc.id,
-      username: data.username,
-      name: data.name,
-      mustChangePassword: data.mustChangePassword === true,
+      id: safeAdmin.id,
+      username: safeAdmin.username,
+      name: safeAdmin.name,
+      phone: safeAdmin.phone || '',
+      email: safeAdmin.email || '',
+      mustChangePassword: safeAdmin.mustChangePassword === true,
     })
   } catch (error: any) {
     console.error('Update admin profile error:', error.message)

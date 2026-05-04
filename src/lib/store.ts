@@ -14,6 +14,8 @@ interface AdminUser {
   id: string
   username: string
   name: string
+  phone?: string
+  role?: string
   mustChangePassword?: boolean
 }
 
@@ -74,6 +76,7 @@ export function getStatusLabel(status: string): string {
     new: 'جديد',
     active: 'نشط',
     suspended: 'معلّق',
+    blocked: 'محظور',
   }
   return map[status] || status
 }
@@ -90,6 +93,7 @@ export function getStatusColor(status: string): string {
     new: 'bg-cyan-100 text-cyan-800 border-cyan-300',
     active: 'bg-green-100 text-green-800 border-green-300',
     suspended: 'bg-amber-100 text-amber-800 border-amber-300',
+    blocked: 'bg-red-200 text-red-900 border-red-400',
   }
   return map[status] || 'bg-gray-100 text-gray-800 border-gray-300'
 }

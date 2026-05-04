@@ -5,7 +5,8 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Stethoscope, ClipboardList, User, LogOut, Loader2, Play, CheckCircle,
   Menu, X, Phone, MapPin, Clock, HelpCircle, Bell, Activity,
-  Calendar, Star, Filter, MessageSquare, ChevronDown, ChevronUp
+  Calendar, Star, Filter, MessageSquare, ChevronDown, ChevronUp,
+  Mail, Shield, Award, Navigation, Info, Sparkles
 } from 'lucide-react'
 import { useAppStore, formatPrice, getStatusLabel, getStatusColor } from '@/lib/store'
 import { Button } from '@/components/ui/button'
@@ -22,6 +23,65 @@ import { useToast } from '@/hooks/use-toast'
 import ChatSystem from '@/components/ChatSystem'
 import Image from 'next/image'
 
+// ==================== Date Helpers ====================
+
+function formatDate(timestamp: any): string {
+  if (!timestamp) return 'غير محدد'
+  try {
+    let date: Date
+    if (typeof timestamp === 'object' && timestamp !== null && 'seconds' in timestamp) {
+      date = new Date(timestamp.seconds * 1000)
+    } else if (typeof timestamp === 'string') {
+      date = new Date(timestamp)
+    } else {
+      return 'غير محدد'
+    }
+    if (isNaN(date.getTime())) return 'غير محدد'
+    return date.toLocaleDateString('ar-YE', { year: 'numeric', month: 'long', day: 'numeric' })
+  } catch {
+    return 'غير محدد'
+  }
+}
+
+function formatDateTime(timestamp: any): string {
+  if (!timestamp) return 'غير محدد'
+  try {
+    let date: Date
+    if (typeof timestamp === 'object' && timestamp !== null && 'seconds' in timestamp) {
+      date = new Date(timestamp.seconds * 1000)
+    } else if (typeof timestamp === 'string') {
+      date = new Date(timestamp)
+    } else {
+      return 'غير محدد'
+    }
+    if (isNaN(date.getTime())) return 'غير محدد'
+    return date.toLocaleDateString('ar-YE', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+  } catch {
+    return 'غير محدد'
+  }
+}
+
+function getDateKey(timestamp: any): string {
+  if (!timestamp) return ''
+  try {
+    let date: Date
+    if (typeof timestamp === 'object' && timestamp !== null && 'seconds' in timestamp) {
+      date = new Date(timestamp.seconds * 1000)
+    } else if (typeof timestamp === 'string') {
+      date = new Date(timestamp)
+    } else {
+      return ''
+    }
+    if (isNaN(date.getTime())) return ''
+    const y = date.getFullYear()
+    const m = String(date.getMonth() + 1).padStart(2, '0')
+    const d = String(date.getDate()).padStart(2, '0')
+    return `${y}-${m}-${d}`
+  } catch {
+    return ''
+  }
+}
+
 // ==================== Types ====================
 
 type Tab = 'assignments' | 'schedule' | 'ratings' | 'profile' | 'notifications' | 'help'
@@ -32,8 +92,8 @@ interface Assignment {
   requestId: string
   status: string
   notes?: string
-  createdAt?: string
-  updatedAt?: string
+  createdAt?: any
+  updatedAt?: any
   request?: {
     id: string
     beneficiaryId: string
@@ -68,7 +128,7 @@ interface NurseProfile {
   licenseNumber: string
   licenseExpiryDate: string
   status: string
-  createdAt?: string
+  createdAt?: any
 }
 
 interface Notification {
@@ -77,16 +137,29 @@ interface Notification {
   message: string
   type: 'assignment' | 'status_change' | 'admin' | 'system'
   read: boolean
-  createdAt: string
+  createdAt: any
 }
 
 interface Rating {
   id: string
+  nurseId?: string
+  beneficiaryId?: string
   beneficiaryName: string
+  nurseName?: string
   rating: number
-  comment: string
-  serviceName: string
-  createdAt: string
+  comment?: string
+  serviceName?: string
+  requestId?: string
+  createdAt?: any
+}
+
+interface AdminSettings {
+  phone?: string
+  email?: string
+  emergencyPhone?: string
+  referralBonusPoints?: number
+  referralBonusPointsReceiver?: number
+  referralEnabled?: boolean
 }
 
 // ==================== Tab Configuration ====================
@@ -121,13 +194,18 @@ const faqItems = [
   },
   {
     question: 'كيف أتواصل مع الدعم الفني؟',
-    answer: 'يمكنك التواصل مع فريق الدعم الفني عبر رقم الهاتف: 777-000-000 أو من خلال البريد الإلكتروني: support@afiyatak.com. فريقنا متاح على مدار الساعة لمساعدتك.'
+    answer: 'يمكنك التواصل مع فريق الدعم الفني عبر أرقام الطوارئ أو البريد الإلكتروني الموضحة في قسم "المساعدة". فريقنا متاح على مدار الساعة لمساعدتك.'
   },
   {
     question: 'هل يمكنني تعديل معلوماتي الشخصية؟',
-    answer: 'نعم، يمكنك تعديل بعض المعلومات الشخصية مثل الاسم ورقم الهاتف والموقع من خلال قسم "الملف الشخصي". أما المعلومات المهنية مثل رقم المزاولة والرقم الوطني فلا يمكن تعديلها إلا من خلال الإدارة.'
+    answer: 'يمكنك تعديل موقعك فقط من خلال قسم "الملف الشخصي". أما المعلومات الأخرى مثل الاسم ورقم الهاتف والرقم الوطني ورقم المزاولة فلا يمكن تعديلها إلا من خلال الإدارة.'
   },
 ]
+
+// ==================== Arabic Day Names ====================
+
+const arabicDayNames = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت']
+const arabicDayShort = ['أحد', 'إثن', 'ثلا', 'أرب', 'خمي', 'جمع', 'سبت']
 
 // ==================== Floating Orbs Component ====================
 
@@ -179,49 +257,26 @@ export default function NurseDashboard() {
 
   // Chat state
   const [activeChatRequestId, setActiveChatRequestId] = useState<string | null>(null)
+  const [chatOtherPartyName, setChatOtherPartyName] = useState<string>('')
 
-  // Profile tab state
-  const [profileForm, setProfileForm] = useState({
-    firstName: '',
-    secondName: '',
-    thirdName: '',
-    lastName: '',
-    phone: '',
-    location: '',
-  })
+  // Profile tab state - only location
+  const [locationValue, setLocationValue] = useState('')
   const [profileSaving, setProfileSaving] = useState(false)
 
-  // Notifications tab state (mock)
+  // Ratings state - fetch from API
+  const [ratings, setRatings] = useState<Rating[]>([])
+  const [ratingsLoading, setRatingsLoading] = useState(false)
+
+  // Notifications state
   const [notifications, setNotifications] = useState<Notification[]>([])
   const notifTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Ratings (mock data)
-  const [ratings] = useState<Rating[]>([
-    {
-      id: '1',
-      beneficiaryName: 'أحمد محمد',
-      rating: 5,
-      comment: 'خدمة ممتازة وممرض محترف جداً',
-      serviceName: 'التمريض المنزلي',
-      createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-    },
-    {
-      id: '2',
-      beneficiaryName: 'فاطمة علي',
-      rating: 4,
-      comment: 'خدمة جيدة والتزام بالمواعيد',
-      serviceName: 'قياس الضغط',
-      createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-    },
-    {
-      id: '3',
-      beneficiaryName: 'خالد حسن',
-      rating: 5,
-      comment: 'رعاية ممتازة واهتمام بالتفاصيل',
-      serviceName: 'العناية بالجروح',
-      createdAt: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString(),
-    },
-  ])
+  // Help tab - admin settings
+  const [adminSettings, setAdminSettings] = useState<AdminSettings | null>(null)
+  const [settingsLoading, setSettingsLoading] = useState(false)
+
+  // Schedule state
+  const [selectedScheduleDate, setSelectedScheduleDate] = useState<string>('')
 
   const nurseId = (user as any)?.id
   const nurseName = `${(user as any)?.firstName || ''} ${(user as any)?.lastName || ''}`
@@ -255,14 +310,7 @@ export default function NurseDashboard() {
       if (res.ok) {
         const data = await res.json()
         setProfile(data)
-        setProfileForm({
-          firstName: data.firstName || '',
-          secondName: data.secondName || '',
-          thirdName: data.thirdName || '',
-          lastName: data.lastName || '',
-          phone: data.phone || '',
-          location: data.location || '',
-        })
+        setLocationValue(data.location || '')
       } else {
         setProfile(null)
         toast({ title: 'خطأ', description: 'فشل تحميل الملف الشخصي', variant: 'destructive' })
@@ -275,16 +323,47 @@ export default function NurseDashboard() {
     }
   }, [nurseId, toast])
 
-  // Build notifications from assignments (mock) - using functional update to preserve read state
+  const fetchRatings = useCallback(async () => {
+    if (!nurseId) return
+    setRatingsLoading(true)
+    try {
+      const res = await fetch(`/api/nurse/ratings?nurseId=${nurseId}`)
+      if (res.ok) {
+        const data = await res.json()
+        setRatings(Array.isArray(data) ? data : [])
+      } else {
+        setRatings([])
+      }
+    } catch {
+      setRatings([])
+    } finally {
+      setRatingsLoading(false)
+    }
+  }, [nurseId])
+
+  const fetchAdminSettings = useCallback(async () => {
+    setSettingsLoading(true)
+    try {
+      const res = await fetch('/api/admin/settings')
+      if (res.ok) {
+        const data = await res.json()
+        setAdminSettings(data)
+      }
+    } catch {
+      // silently fail
+    } finally {
+      setSettingsLoading(false)
+    }
+  }, [])
+
+  // Build notifications from assignments
   useEffect(() => {
-    // Cleanup previous timeout if any
     if (notifTimeoutRef.current) {
       clearTimeout(notifTimeoutRef.current)
     }
 
     notifTimeoutRef.current = setTimeout(() => {
       setNotifications(prev => {
-        // Preserve read state from previous notifications
         const prevReadState: Record<string, boolean> = {}
         prev.forEach(n => {
           prevReadState[n.id] = n.read
@@ -323,7 +402,6 @@ export default function NurseDashboard() {
             })
           }
         })
-        // Add a system notification
         notifs.push({
           id: 'notif-system-1',
           title: 'مرحباً بك',
@@ -345,14 +423,16 @@ export default function NurseDashboard() {
 
   // Fetch data when tab changes
   useEffect(() => {
-    if (activeTab === 'assignments' || activeTab === 'schedule') {
+    if (activeTab === 'assignments' || activeTab === 'schedule' || activeTab === 'notifications') {
       fetchAssignments()
     } else if (activeTab === 'profile') {
       fetchProfile()
-    } else if (activeTab === 'notifications') {
-      fetchAssignments() // fetch assignments first, notifications are built from them via the effect above
+    } else if (activeTab === 'ratings') {
+      fetchRatings()
+    } else if (activeTab === 'help') {
+      fetchAdminSettings()
     }
-  }, [activeTab, fetchAssignments, fetchProfile])
+  }, [activeTab, fetchAssignments, fetchProfile, fetchRatings, fetchAdminSettings])
 
   // ==================== Handlers ====================
 
@@ -387,7 +467,6 @@ export default function NurseDashboard() {
     if (!selectedAssignment) return
     const assignmentId = selectedAssignment.id
     const notes = completionNotes
-    // Close dialog optimistically but keep reference for error handling
     setActionLoading(true)
     try {
       const body: Record<string, string> = { status: 'completed' }
@@ -414,16 +493,16 @@ export default function NurseDashboard() {
     }
   }
 
-  const handleSaveProfile = async () => {
+  const handleSaveLocation = async () => {
     setProfileSaving(true)
     try {
       const res = await fetch('/api/nurse/profile', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nurseId, ...profileForm }),
+        body: JSON.stringify({ nurseId, location: locationValue }),
       })
       if (res.ok) {
-        toast({ title: 'تم التحديث', description: 'تم تحديث الملف الشخصي بنجاح' })
+        toast({ title: 'تم التحديث', description: 'تم تحديث الموقع بنجاح' })
         fetchProfile()
       } else {
         const data = await res.json()
@@ -446,6 +525,11 @@ export default function NurseDashboard() {
     setMobileMenuOpen(false)
   }
 
+  const handleOpenChat = (requestId: string, beneficiaryName?: string) => {
+    setActiveChatRequestId(requestId)
+    setChatOtherPartyName(beneficiaryName || '')
+  }
+
   const markNotificationRead = (notifId: string) => {
     setNotifications(prev => prev.map(n => n.id === notifId ? { ...n, read: true } : n))
   }
@@ -463,15 +547,17 @@ export default function NurseDashboard() {
 
   const filteredAssignments = assignments.filter(a => {
     if (statusFilter === 'all') return true
-    if (statusFilter === 'assigned') return a.status === 'assigned'
-    if (statusFilter === 'in_progress') return a.status === 'in_progress'
-    if (statusFilter === 'completed') return a.status === 'completed'
-    return true
+    return a.status === statusFilter
   })
 
   const averageRating = ratings.length > 0
     ? ratings.reduce((sum, r) => sum + r.rating, 0) / ratings.length
     : 0
+
+  const ratingDistribution = [5, 4, 3, 2, 1].map(star => ({
+    star,
+    count: ratings.filter(r => r.rating === star).length,
+  }))
 
   // ==================== Sidebar Component ====================
 
@@ -544,20 +630,6 @@ export default function NurseDashboard() {
 
   // ==================== Skeleton Loaders ====================
 
-  const StatsSkeleton = () => (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-      {[1, 2, 3, 4].map(i => (
-        <Card key={i} className="border-0 shadow-lg shadow-blue-500/5 bg-white/70 backdrop-blur-sm">
-          <CardContent className="p-4 text-center">
-            <Skeleton className="w-6 h-6 mx-auto mb-2 rounded" />
-            <Skeleton className="w-8 h-8 mx-auto mb-1 rounded" />
-            <Skeleton className="w-16 h-3 mx-auto rounded" />
-          </CardContent>
-        </Card>
-      ))}
-    </div>
-  )
-
   const CardSkeleton = () => (
     <Card className="border-0 shadow-lg shadow-blue-500/5 bg-white/70 backdrop-blur-sm">
       <CardContent className="p-5">
@@ -598,11 +670,11 @@ export default function NurseDashboard() {
     }
   }
 
-  // ==================== Tab Content ====================
+  // ==================== Assignments Tab ====================
 
   const AssignmentsTab = () => (
     <div className="space-y-6">
-      {/* Stats Cards - Different gradients with glow */}
+      {/* Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0 }}>
           <Card className="border-0 shadow-lg shadow-blue-500/15 hover:shadow-xl hover:shadow-blue-500/20 hover:-translate-y-1 transition-all duration-300 bg-gradient-to-br from-blue-50 to-indigo-50">
@@ -762,6 +834,13 @@ export default function NurseDashboard() {
                                 <span className="text-emerald-600 font-bold">{formatPrice(assignment.request.service.price)}</span>
                               </div>
                             )}
+                            {assignment.createdAt && (
+                              <div className="flex items-center gap-1.5">
+                                <Clock className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                                <span className="font-medium text-gray-700">تاريخ التعيين:</span>
+                                <span className="text-gray-500">{formatDate(assignment.createdAt)}</span>
+                              </div>
+                            )}
                           </div>
 
                           {/* Notes */}
@@ -784,7 +863,7 @@ export default function NurseDashboard() {
                             </div>
                           )}
 
-                          {/* Assignment Notes (from nurse) */}
+                          {/* Assignment Notes */}
                           {assignment.notes && (
                             <div className="mt-2 bg-gradient-to-l from-blue-50 to-indigo-50/50 rounded-xl p-2.5 text-sm ring-1 ring-blue-200/30">
                               <div className="flex items-center gap-1.5 mb-1">
@@ -834,7 +913,7 @@ export default function NurseDashboard() {
                               size="sm"
                               variant="outline"
                               className="text-blue-600 hover:text-white hover:bg-gradient-to-l hover:from-cyan-500 hover:to-blue-600 border-blue-200 hover:border-transparent hover:shadow-lg hover:shadow-blue-500/25 hover:scale-[1.02] active:scale-[0.98] transition-all duration-300"
-                              onClick={() => setActiveChatRequestId(assignment.requestId)}
+                              onClick={() => handleOpenChat(assignment.requestId, assignment.request?.beneficiary?.name)}
                             >
                               <MessageSquare className="w-4 h-4 ml-1" />
                               محادثة
@@ -853,37 +932,51 @@ export default function NurseDashboard() {
     </div>
   )
 
+  // ==================== Schedule Tab ====================
+
   const ScheduleTab = () => {
-    // Group assignments by date
-    const groupedByDate: Record<string, Assignment[]> = {}
-    assignments.forEach(a => {
-      const dateKey = a.createdAt
-        ? new Date(a.createdAt).toLocaleDateString('ar-YE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
-        : 'تاريخ غير محدد'
-      if (!groupedByDate[dateKey]) groupedByDate[dateKey] = []
-      groupedByDate[dateKey].push(a)
-    })
-
-    // Weekly view data
     const today = new Date()
+    const todayKey = getDateKey(today)
+
+    // Initialize selected date to today if not set
+    const activeDateKey = selectedScheduleDate || todayKey
+
+    // Build week days (Sunday = 0 to Saturday = 6)
+    const startOfWeek = new Date(today)
+    startOfWeek.setDate(today.getDate() - today.getDay()) // Go to Sunday
+
     const weekDays = Array.from({ length: 7 }, (_, i) => {
-      const date = new Date(today)
-      date.setDate(today.getDate() - today.getDay() + i)
-      const dayName = date.toLocaleDateString('ar-YE', { weekday: 'short' })
-      const dateStr = date.toISOString().split('T')[0]
-      const hasTasks = assignments.some(a => {
-        if (!a.createdAt) return false
-        return new Date(a.createdAt).toISOString().split('T')[0] === dateStr
-      })
+      const date = new Date(startOfWeek)
+      date.setDate(startOfWeek.getDate() + i)
+      const dateKey = getDateKey(date)
+      const dayIndex = date.getDay()
+
+      // Get assignments for this day
       const dayAssignments = assignments.filter(a => {
-        if (!a.createdAt) return false
-        return new Date(a.createdAt).toISOString().split('T')[0] === dateStr
+        const assignDateKey = getDateKey(a.createdAt)
+        return assignDateKey === dateKey
       })
-      const isToday = date.toDateString() === today.toDateString()
-      return { date, dayName, dateStr, hasTasks, isToday, dayAssignments }
+
+      const isToday = dateKey === todayKey
+      const hasAssignments = dayAssignments.length > 0
+
+      // Status dots for the day
+      const statusDots: string[] = []
+      dayAssignments.forEach(a => {
+        if (a.status === 'assigned' && !statusDots.includes('assigned')) statusDots.push('assigned')
+        if (a.status === 'in_progress' && !statusDots.includes('in_progress')) statusDots.push('in_progress')
+        if (a.status === 'completed' && !statusDots.includes('completed')) statusDots.push('completed')
+      })
+
+      return { date, dateKey, dayIndex, dayName: arabicDayNames[dayIndex], dayShort: arabicDayShort[dayIndex], dayNumber: date.getDate(), isToday, hasAssignments, dayAssignments, statusDots }
     })
 
-    const statusColorMap: Record<string, string> = {
+    // Get assignments for selected date
+    const selectedDayAssignments = assignments.filter(a => {
+      return getDateKey(a.createdAt) === activeDateKey
+    })
+
+    const statusDotColor: Record<string, string> = {
       assigned: 'bg-purple-400',
       in_progress: 'bg-orange-400',
       completed: 'bg-emerald-400',
@@ -896,528 +989,642 @@ export default function NurseDashboard() {
           <p className="text-gray-500 text-sm mt-1">عرض المهام حسب الأيام</p>
         </div>
 
-        {/* Weekly View Strip */}
-        <Card className="border-0 shadow-lg shadow-blue-500/5 bg-white/80 backdrop-blur-sm">
+        {/* Weekly Calendar Card */}
+        <Card className="border-0 shadow-lg shadow-blue-500/5 bg-white/80 backdrop-blur-xl">
           <CardContent className="p-4">
-            <div className="grid grid-cols-7 gap-2">
+            {/* Month/Year Header */}
+            <div className="text-center mb-4">
+              <h3 className="text-lg font-bold text-gray-800">
+                {today.toLocaleDateString('ar-YE', { month: 'long', year: 'numeric' })}
+              </h3>
+            </div>
+
+            {/* Day Columns */}
+            <div className="grid grid-cols-7 gap-1 sm:gap-2">
               {weekDays.map(day => (
-                <div
-                  key={day.dateStr}
-                  className={`flex flex-col items-center p-2 rounded-xl transition-all duration-300 ${
-                    day.isToday
-                      ? 'bg-gradient-to-b from-cyan-500/10 via-blue-500/10 to-indigo-500/10 ring-2 ring-blue-400/50 shadow-lg shadow-blue-500/15'
-                      : 'hover:bg-blue-50/50'
+                <motion.button
+                  key={day.dateKey}
+                  onClick={() => setSelectedScheduleDate(day.dateKey)}
+                  whileTap={{ scale: 0.95 }}
+                  className={`flex flex-col items-center p-2 sm:p-3 rounded-xl transition-all duration-300 cursor-pointer ${
+                    activeDateKey === day.dateKey
+                      ? day.isToday
+                        ? 'bg-gradient-to-b from-cyan-500 via-blue-500 to-indigo-500 text-white shadow-lg shadow-blue-500/30 ring-2 ring-blue-400/50'
+                        : 'bg-gradient-to-b from-cyan-500/10 via-blue-500/10 to-indigo-500/10 text-blue-700 shadow-lg shadow-blue-500/15 ring-1 ring-blue-200/50'
+                      : day.isToday
+                        ? 'bg-gradient-to-b from-cyan-50 via-blue-50 to-indigo-50 ring-2 ring-blue-300/50 text-blue-700'
+                        : 'hover:bg-blue-50/50 text-gray-600'
                   }`}
                 >
-                  <span className={`text-xs font-bold ${day.isToday ? 'text-blue-700' : 'text-gray-400'}`}>
-                    {day.dayName}
+                  <span className={`text-[10px] sm:text-xs font-bold mb-1 ${activeDateKey === day.dateKey && day.isToday ? 'text-white/80' : ''}`}>
+                    {day.dayShort}
                   </span>
-                  <span className={`text-lg font-bold mt-1 ${day.isToday ? 'bg-gradient-to-l from-cyan-600 to-blue-600 bg-clip-text text-transparent' : 'text-gray-700'}`}>
-                    {day.date.getDate().toLocaleString('ar-YE')}
+                  <span className={`text-sm sm:text-lg font-bold mb-1 ${activeDateKey === day.dateKey && day.isToday ? 'text-white' : ''}`}>
+                    {day.dayNumber}
                   </span>
-                  {day.hasTasks && (
-                    <div className="flex gap-0.5 mt-1">
-                      {day.dayAssignments.map(a => (
-                        <div
-                          key={a.id}
-                          className={`w-2 h-2 rounded-full shadow-sm ${statusColorMap[a.status] || 'bg-gray-400'}`}
-                          title={getStatusLabel(a.status)}
-                        />
+                  {/* Status dots */}
+                  {day.hasAssignments && (
+                    <div className="flex items-center gap-0.5 mt-0.5">
+                      {day.statusDots.map(status => (
+                        <span key={status} className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full ${activeDateKey === day.dateKey && day.isToday ? 'bg-white/80' : statusDotColor[status]}`} />
                       ))}
                     </div>
                   )}
-                </div>
+                  {/* Assignment count badge */}
+                  {day.hasAssignments && (
+                    <span className={`text-[9px] sm:text-[10px] font-bold mt-0.5 ${activeDateKey === day.dateKey && day.isToday ? 'text-white/70' : 'text-gray-400'}`}>
+                      {day.dayAssignments.length}
+                    </span>
+                  )}
+                </motion.button>
               ))}
             </div>
           </CardContent>
         </Card>
 
-        {/* Status Legend */}
-        <div className="flex items-center gap-4 flex-wrap">
-          <span className="text-xs text-gray-400 font-medium">دليل الحالات:</span>
-          <div className="flex items-center gap-1.5">
-            <div className="w-2.5 h-2.5 rounded-full bg-purple-400 shadow-sm shadow-purple-400/50" />
-            <span className="text-xs font-medium text-gray-600">معيّن</span>
+        {/* Selected Day Assignments */}
+        <div>
+          <div className="flex items-center gap-2 mb-4">
+            <Calendar className="w-5 h-5 text-blue-600" />
+            <h3 className="font-bold text-gray-800">
+              مهام يوم {weekDays.find(d => d.dateKey === activeDateKey)?.dayName || ''} - {weekDays.find(d => d.dateKey === activeDateKey)?.dayNumber || ''}
+            </h3>
           </div>
-          <div className="flex items-center gap-1.5">
-            <div className="w-2.5 h-2.5 rounded-full bg-orange-400 shadow-sm shadow-orange-400/50" />
-            <span className="text-xs font-medium text-gray-600">قيد التنفيذ</span>
+
+          {selectedDayAssignments.length === 0 ? (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="text-center py-12"
+            >
+              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-gray-100 to-slate-100 flex items-center justify-center mx-auto mb-3">
+                <Calendar className="w-8 h-8 text-gray-400" />
+              </div>
+              <p className="text-gray-500 font-bold">لا توجد مهام في هذا اليوم</p>
+              <p className="text-sm text-gray-400 mt-1">اختر يوماً آخر لعرض المهام</p>
+            </motion.div>
+          ) : (
+            <div className="space-y-3">
+              <AnimatePresence>
+                {selectedDayAssignments.map((assignment, index) => {
+                  const borderColor = assignment.status === 'assigned' ? 'border-r-purple-500' : assignment.status === 'in_progress' ? 'border-r-orange-500' : 'border-r-emerald-500'
+                  const statusBg = assignment.status === 'assigned' ? 'from-purple-50 to-violet-50' : assignment.status === 'in_progress' ? 'from-orange-50 to-amber-50' : 'from-emerald-50 to-teal-50'
+
+                  return (
+                    <motion.div
+                      key={assignment.id}
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: 20 }}
+                      transition={{ delay: index * 0.05 }}
+                    >
+                      <Card className={`border-0 shadow-lg bg-gradient-to-l ${statusBg} border-r-4 ${borderColor}`}>
+                        <CardContent className="p-4">
+                          <div className="flex items-center justify-between flex-wrap gap-3">
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shrink-0 shadow-md shadow-blue-500/20">
+                                <Stethoscope className="w-4 h-4 text-white" />
+                              </div>
+                              <div className="min-w-0">
+                                <h4 className="font-bold text-sm truncate text-gray-800">
+                                  {assignment.request?.service?.name || 'خدمة'}
+                                </h4>
+                                <div className="flex items-center gap-2 text-xs text-gray-500">
+                                  {assignment.request?.beneficiary?.name && (
+                                    <span>{assignment.request.beneficiary.name}</span>
+                                  )}
+                                  {formatDateTime(assignment.createdAt) !== 'غير محدد' && (
+                                    <>
+                                      <span>•</span>
+                                      <span>{formatDateTime(assignment.createdAt)}</span>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                            <Badge className={`${assignment.status === 'assigned' ? 'bg-gradient-to-l from-purple-100 to-violet-100 text-purple-700 border-purple-200' : assignment.status === 'in_progress' ? 'bg-gradient-to-l from-orange-100 to-amber-100 text-orange-700 border-orange-200' : 'bg-gradient-to-l from-emerald-100 to-teal-100 text-emerald-700 border-emerald-200'} text-xs border font-bold`}>
+                              {getStatusLabel(assignment.status)}
+                            </Badge>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </motion.div>
+                  )
+                })}
+              </AnimatePresence>
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  // ==================== Ratings Tab ====================
+
+  const RatingsTab = () => {
+    if (ratingsLoading) {
+      return (
+        <div className="space-y-6">
+          <div>
+            <Skeleton className="h-8 w-48 mb-2" />
+            <Skeleton className="h-4 w-64" />
           </div>
-          <div className="flex items-center gap-1.5">
-            <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-sm shadow-emerald-400/50" />
-            <span className="text-xs font-medium text-gray-600">مكتمل</span>
-          </div>
+          <Card className="border-0 shadow-lg bg-white/80 backdrop-blur-xl">
+            <CardContent className="p-6">
+              <div className="flex items-center gap-8">
+                <div className="text-center">
+                  <Skeleton className="w-20 h-20 rounded-full mx-auto mb-2" />
+                  <Skeleton className="w-16 h-4 mx-auto" />
+                </div>
+                <div className="flex-1 space-y-2">
+                  {[5, 4, 3, 2, 1].map(i => (
+                    <Skeleton key={i} className="h-4 w-full" />
+                  ))}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )
+    }
+
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold bg-gradient-to-l from-cyan-700 via-blue-700 to-indigo-700 bg-clip-text text-transparent">التقييمات</h1>
+          <p className="text-gray-500 text-sm mt-1">تقييمات المستفيدين لأدائك</p>
         </div>
 
-        {/* Grouped by Date - Timeline style */}
-        {assignmentsLoading ? (
-          <div className="space-y-4">
-            <CardSkeleton />
-            <CardSkeleton />
+        {ratings.length === 0 ? (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="text-center py-16"
+          >
+            <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-amber-100 to-orange-100 flex items-center justify-center mx-auto mb-4">
+              <Star className="w-10 h-10 text-amber-400" />
+            </div>
+            <p className="text-lg font-bold text-gray-600 mb-2">لا توجد تقييمات بعد</p>
+            <p className="text-sm text-gray-400">ستظهر التقييمات هنا بعد إكمال المهام وتقييمها من قبل المستفيدين</p>
+          </motion.div>
+        ) : (
+          <>
+            {/* Summary Card */}
+            <Card className="border-0 shadow-lg shadow-blue-500/5 bg-white/80 backdrop-blur-xl">
+              <CardContent className="p-6">
+                <div className="flex flex-col sm:flex-row items-center gap-6 sm:gap-8">
+                  {/* Average Rating */}
+                  <div className="text-center">
+                    <div className="w-24 h-24 rounded-full bg-gradient-to-br from-cyan-500 via-blue-500 to-indigo-500 flex items-center justify-center mx-auto mb-3 shadow-lg shadow-blue-500/25">
+                      <div className="text-center">
+                        <p className="text-3xl font-bold text-white">{averageRating.toFixed(1)}</p>
+                        <div className="flex items-center justify-center gap-0.5 mt-0.5">
+                          {renderStars(Math.round(averageRating), 'w-3 h-3')}
+                        </div>
+                      </div>
+                    </div>
+                    <p className="text-sm font-bold text-gray-700">{ratings.length} تقييم</p>
+                    <p className="text-xs text-gray-400">المتوسط العام</p>
+                  </div>
+
+                  {/* Distribution */}
+                  <div className="flex-1 w-full space-y-2">
+                    {ratingDistribution.map(({ star, count }) => {
+                      const percentage = ratings.length > 0 ? (count / ratings.length) * 100 : 0
+                      return (
+                        <div key={star} className="flex items-center gap-3">
+                          <span className="text-sm font-bold text-gray-600 w-8 text-left">{star}</span>
+                          <Star className="w-4 h-4 fill-amber-400 text-amber-400 shrink-0" />
+                          <div className="flex-1 h-3 bg-gray-100 rounded-full overflow-hidden">
+                            <motion.div
+                              initial={{ width: 0 }}
+                              animate={{ width: `${percentage}%` }}
+                              transition={{ duration: 0.8, ease: 'easeOut' }}
+                              className="h-full bg-gradient-to-l from-cyan-500 via-blue-500 to-indigo-500 rounded-full"
+                            />
+                          </div>
+                          <span className="text-sm font-bold text-gray-500 w-8 text-right">{count}</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Individual Ratings */}
+            <div className="space-y-3">
+              <AnimatePresence>
+                {ratings.map((rating, index) => (
+                  <motion.div
+                    key={rating.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -20 }}
+                    transition={{ delay: index * 0.05 }}
+                  >
+                    <Card className="border-0 shadow-lg shadow-blue-500/5 hover:shadow-xl hover:shadow-blue-500/10 transition-all duration-300 bg-white/80 backdrop-blur-sm border-r-4 border-r-amber-400">
+                      <CardContent className="p-5">
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-2">
+                              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shrink-0 shadow-md shadow-amber-500/20">
+                                <Star className="w-4 h-4 text-white fill-white" />
+                              </div>
+                              <div>
+                                <h4 className="font-bold text-sm text-gray-800">{rating.beneficiaryName || 'مستفيد'}</h4>
+                                {rating.serviceName && (
+                                  <p className="text-xs text-gray-400">{rating.serviceName}</p>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1 mb-2">
+                              {renderStars(rating.rating, 'w-4 h-4')}
+                              <span className="text-sm font-bold text-amber-600 mr-1">{rating.rating}/5</span>
+                            </div>
+                            {rating.comment && (
+                              <p className="text-sm text-gray-600 bg-gradient-to-l from-amber-50/50 to-orange-50/50 rounded-lg p-2.5 ring-1 ring-amber-200/20">
+                                {rating.comment}
+                              </p>
+                            )}
+                            {rating.createdAt && (
+                              <p className="text-xs text-gray-400 mt-2 flex items-center gap-1">
+                                <Clock className="w-3 h-3" />
+                                {formatDate(rating.createdAt)}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+            </div>
+          </>
+        )}
+      </div>
+    )
+  }
+
+  // ==================== Profile Tab ====================
+
+  const ProfileTab = () => {
+    if (profileLoading) {
+      return (
+        <div className="space-y-6">
+          <Skeleton className="h-8 w-48 mb-2" />
+          <Card className="border-0 shadow-lg bg-white/80 backdrop-blur-xl">
+            <CardContent className="p-6 space-y-4">
+              {[1, 2, 3, 4, 5].map(i => (
+                <Skeleton key={i} className="h-12 w-full" />
+              ))}
+            </CardContent>
+          </Card>
+        </div>
+      )
+    }
+
+    if (!profile) {
+      return (
+        <div className="text-center py-16">
+          <p className="text-gray-500">فشل تحميل الملف الشخصي</p>
+        </div>
+      )
+    }
+
+    const fullName = `${profile.firstName || ''} ${profile.secondName || ''} ${profile.thirdName || ''} ${profile.lastName || ''}`.trim()
+
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold bg-gradient-to-l from-cyan-700 via-blue-700 to-indigo-700 bg-clip-text text-transparent">الملف الشخصي</h1>
+          <p className="text-gray-500 text-sm mt-1">معلوماتك الشخصية والمهنية</p>
+        </div>
+
+        {/* Profile Header Card */}
+        <Card className="border-0 shadow-lg shadow-blue-500/5 bg-white/80 backdrop-blur-xl">
+          <CardContent className="p-6">
+            <div className="flex items-center gap-4 mb-6">
+              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-cyan-500 via-blue-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/25">
+                <Stethoscope className="w-8 h-8 text-white" />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-gray-800">{fullName}</h2>
+                <Badge className="mt-1 bg-gradient-to-l from-cyan-100 via-blue-100 to-indigo-100 text-blue-700 border-blue-200 border font-bold">
+                  {getStatusLabel(profile.status)}
+                </Badge>
+              </div>
+            </div>
+
+            <Separator className="mb-6" />
+
+            {/* Read-only fields */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+              <div className="bg-gradient-to-l from-slate-50 to-gray-50/50 rounded-xl p-3.5 ring-1 ring-gray-200/30">
+                <Label className="text-xs text-gray-400 font-medium flex items-center gap-1.5 mb-1">
+                  <User className="w-3.5 h-3.5" />
+                  الاسم الكامل
+                </Label>
+                <p className="text-sm font-bold text-gray-800">{fullName}</p>
+              </div>
+              <div className="bg-gradient-to-l from-slate-50 to-gray-50/50 rounded-xl p-3.5 ring-1 ring-gray-200/30">
+                <Label className="text-xs text-gray-400 font-medium flex items-center gap-1.5 mb-1">
+                  <Phone className="w-3.5 h-3.5" />
+                  رقم الهاتف
+                </Label>
+                <p className="text-sm font-bold text-gray-800" dir="ltr">{profile.phone}</p>
+              </div>
+              <div className="bg-gradient-to-l from-slate-50 to-gray-50/50 rounded-xl p-3.5 ring-1 ring-gray-200/30">
+                <Label className="text-xs text-gray-400 font-medium flex items-center gap-1.5 mb-1">
+                  <Shield className="w-3.5 h-3.5" />
+                  الرقم الوطني
+                </Label>
+                <p className="text-sm font-bold text-gray-800" dir="ltr">{profile.nationalId}</p>
+              </div>
+              <div className="bg-gradient-to-l from-slate-50 to-gray-50/50 rounded-xl p-3.5 ring-1 ring-gray-200/30">
+                <Label className="text-xs text-gray-400 font-medium flex items-center gap-1.5 mb-1">
+                  <Clock className="w-3.5 h-3.5" />
+                  تاريخ التسجيل
+                </Label>
+                <p className="text-sm font-bold text-gray-800">{formatDate(profile.createdAt)}</p>
+              </div>
+            </div>
+
+            {/* License Card */}
+            <Card className="border-0 shadow-md bg-gradient-to-l from-cyan-50 via-blue-50 to-indigo-50 ring-1 ring-blue-200/30 mb-6">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 via-blue-500 to-indigo-500 flex items-center justify-center shadow-md shadow-blue-500/20">
+                    <Award className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-gray-800">رخصة المزاولة</h3>
+                    <p className="text-xs text-gray-400">معلومات الترخيص المهني</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-xs text-gray-400">رقم المزاولة</Label>
+                    <p className="text-sm font-bold text-blue-700" dir="ltr">{profile.licenseNumber}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-gray-400">تاريخ الانتهاء</Label>
+                    <p className="text-sm font-bold text-blue-700">{formatDate(profile.licenseExpiryDate)}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Separator className="mb-6" />
+
+            {/* Editable Location Field */}
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <Navigation className="w-5 h-5 text-blue-600" />
+                <h3 className="font-bold text-gray-800">الموقع</h3>
+                <Badge className="bg-blue-100 text-blue-700 border-blue-200 border text-[10px]">قابل للتعديل</Badge>
+              </div>
+              <div className="bg-gradient-to-l from-cyan-50/50 via-blue-50/50 to-indigo-50/50 rounded-xl p-4 ring-1 ring-blue-200/30">
+                <Label htmlFor="location" className="text-xs text-gray-400 font-medium mb-2 block">
+                  عنوانك الفعلي
+                </Label>
+                <Input
+                  id="location"
+                  value={locationValue}
+                  onChange={e => setLocationValue(e.target.value)}
+                  placeholder="يرجى إدخال عنوانك الفعلي بدقة"
+                  className="bg-white/80 border-blue-200/50 focus:border-blue-400 rounded-xl"
+                />
+                <p className="text-[11px] text-gray-400 mt-2 flex items-center gap-1">
+                  <Info className="w-3 h-3" />
+                  يرجى إدخال عنوانك الفعلي بدقة ليسهل الوصول إليك من قبل المستفيدين
+                </p>
+                <Button
+                  onClick={handleSaveLocation}
+                  disabled={profileSaving || locationValue === profile.location}
+                  className="mt-3 bg-gradient-to-l from-cyan-500 via-blue-500 to-indigo-500 text-white hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-blue-500/25 transition-all duration-300 w-full sm:w-auto"
+                >
+                  {profileSaving ? (
+                    <>
+                      <Loader2 className="w-4 h-4 ml-1 animate-spin" />
+                      جاري التحديث...
+                    </>
+                  ) : (
+                    <>
+                      <MapPin className="w-4 h-4 ml-1" />
+                      تحديث الموقع
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  // ==================== Notifications Tab ====================
+
+  const NotificationsTab = () => {
+    const sortedNotifications = [...notifications].sort((a, b) => {
+      const dateA = a.createdAt ? new Date(typeof a.createdAt === 'object' && 'seconds' in a.createdAt ? a.createdAt.seconds * 1000 : a.createdAt as string).getTime() : 0
+      const dateB = b.createdAt ? new Date(typeof b.createdAt === 'object' && 'seconds' in b.createdAt ? b.createdAt.seconds * 1000 : b.createdAt as string).getTime() : 0
+      return dateB - dateA
+    })
+
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold bg-gradient-to-l from-cyan-700 via-blue-700 to-indigo-700 bg-clip-text text-transparent">الإشعارات</h1>
+            <p className="text-gray-500 text-sm mt-1">آخر التحديثات والمستجدات</p>
           </div>
-        ) : Object.keys(groupedByDate).length === 0 ? (
+          {unreadNotifications > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={markAllNotificationsRead}
+              className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-xl"
+            >
+              <CheckCircle className="w-4 h-4 ml-1" />
+              تحديد الكل كمقروء
+            </Button>
+          )}
+        </div>
+
+        {sortedNotifications.length === 0 ? (
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             className="text-center py-16"
           >
             <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center mx-auto mb-4">
-              <Calendar className="w-10 h-10 text-blue-400" />
+              <Bell className="w-10 h-10 text-blue-400" />
             </div>
-            <p className="text-lg font-bold text-gray-600 mb-2">لا توجد مهام في الجدول</p>
-            <p className="text-sm text-gray-400">سيتم عرض المهام هنا عند تعيينها لك</p>
+            <p className="text-lg font-bold text-gray-600 mb-2">لا توجد إشعارات</p>
+            <p className="text-sm text-gray-400">ستظهر الإشعارات هنا عند وجود تحديثات</p>
           </motion.div>
         ) : (
-          <div className="space-y-6">
-            {Object.entries(groupedByDate).map(([date, items]) => (
-              <div key={date}>
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center shadow-lg shadow-blue-500/20">
-                    <Clock className="w-4 h-4 text-white" />
-                  </div>
-                  <h3 className="font-bold text-sm text-gray-700">{date}</h3>
-                  <Badge className="bg-gradient-to-l from-blue-100 to-indigo-100 text-blue-700 border-blue-200 border text-xs font-bold">{items.length} مهمة</Badge>
-                </div>
-                <div className="grid gap-3 pr-4 border-r-2 border-blue-200/50 mr-4">
-                  {items.map(assignment => (
-                    <Card key={assignment.id} className="border-0 shadow-lg shadow-blue-500/5 bg-white/80 backdrop-blur-sm hover:shadow-xl hover:shadow-blue-500/10 transition-all duration-300">
-                      <CardContent className="p-4">
-                        <div className="flex items-center justify-between gap-4">
-                          <div className="flex items-center gap-3 min-w-0">
-                            <div className={`w-2.5 h-2.5 rounded-full shrink-0 shadow-sm ${statusColorMap[assignment.status] || 'bg-gray-400'}`} />
-                            <div className="min-w-0">
-                              <p className="font-bold text-sm truncate text-gray-800">
-                                {assignment.request?.service?.name || 'خدمة'}
-                              </p>
-                              <p className="text-xs text-gray-500">
-                                {assignment.request?.beneficiary?.name || 'مستفيد'}
-                              </p>
-                            </div>
-                          </div>
-                          <Badge className={`${assignment.status === 'assigned' ? 'bg-gradient-to-l from-purple-100 to-violet-100 text-purple-700 border-purple-200' : assignment.status === 'in_progress' ? 'bg-gradient-to-l from-orange-100 to-amber-100 text-orange-700 border-orange-200' : 'bg-gradient-to-l from-emerald-100 to-teal-100 text-emerald-700 border-emerald-200'} text-xs border font-bold`}>
-                            {getStatusLabel(assignment.status)}
-                          </Badge>
+          <div className="space-y-3">
+            <AnimatePresence>
+              {sortedNotifications.map((notif, index) => (
+                <motion.div
+                  key={notif.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  transition={{ delay: index * 0.04 }}
+                  onClick={() => markNotificationRead(notif.id)}
+                  className={`cursor-pointer ${!notif.read ? 'border-r-4' : ''}`}
+                >
+                  <Card className={`border-0 shadow-lg shadow-blue-500/5 hover:shadow-xl hover:shadow-blue-500/10 transition-all duration-300 ${
+                    !notif.read
+                      ? 'bg-gradient-to-l from-cyan-50/50 via-blue-50/50 to-indigo-50/50 border-r-blue-500'
+                      : 'bg-white/80 backdrop-blur-sm'
+                  }`}>
+                    <CardContent className="p-4">
+                      <div className="flex items-start gap-3">
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-md ${
+                          !notif.read
+                            ? 'bg-gradient-to-br from-cyan-500 via-blue-500 to-indigo-500 shadow-blue-500/20'
+                            : 'bg-gradient-to-br from-gray-100 to-slate-100 shadow-gray-200/20'
+                        }`}>
+                          {notif.read ? (
+                            <Bell className="w-5 h-5 text-gray-400" />
+                          ) : (
+                            (() => {
+                              switch (notif.type) {
+                                case 'assignment': return <ClipboardList className="w-5 h-5 text-white" />
+                                case 'status_change': return <Activity className="w-5 h-5 text-white" />
+                                default: return <Bell className="w-5 h-5 text-white" />
+                              }
+                            })()
+                          )}
                         </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              </div>
-            ))}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-2">
+                            <h4 className={`font-bold text-sm ${!notif.read ? 'text-gray-900' : 'text-gray-600'}`}>
+                              {notif.title}
+                            </h4>
+                            {!notif.read && (
+                              <span className="w-2.5 h-2.5 rounded-full bg-gradient-to-br from-cyan-500 to-blue-500 shrink-0 shadow-sm shadow-blue-500/30" />
+                            )}
+                          </div>
+                          <p className="text-sm text-gray-500 mt-0.5">{notif.message}</p>
+                          <p className="text-xs text-gray-400 mt-1.5 flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            {formatDateTime(notif.createdAt)}
+                          </p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              ))}
+            </AnimatePresence>
           </div>
         )}
       </div>
     )
   }
 
-  const RatingsTab = () => (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold bg-gradient-to-l from-cyan-700 via-blue-700 to-indigo-700 bg-clip-text text-transparent">التقييمات</h1>
-        <p className="text-gray-500 text-sm mt-1">تقييمات المستفيدين لخدماتك</p>
-      </div>
-
-      {/* Average Rating Card - Glass effect with amber gradient */}
-      <Card className="border-0 shadow-xl shadow-amber-500/10 bg-white/80 backdrop-blur-sm overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-amber-50/80 via-orange-50/40 to-yellow-50/60" />
-        <CardContent className="p-6 text-center relative">
-          <div className="flex items-center justify-center gap-1 mb-2">
-            {Array.from({ length: 5 }, (_, i) => (
-              <Star
-                key={i}
-                className={`w-8 h-8 ${i < Math.round(averageRating) ? 'fill-amber-400 text-amber-400 drop-shadow-md' : 'text-gray-300'}`}
-              />
-            ))}
-          </div>
-          <p className="text-4xl font-black bg-gradient-to-l from-amber-600 to-orange-600 bg-clip-text text-transparent mb-1">{averageRating.toFixed(1)}</p>
-          <p className="text-sm text-gray-500">
-            متوسط التقييم من {ratings.length.toLocaleString('ar-YE')} تقييم
-          </p>
-          <div className="flex items-center justify-center gap-4 mt-4">
-            {[5, 4, 3, 2, 1].map(star => {
-              const count = ratings.filter(r => r.rating === star).length
-              const pct = ratings.length > 0 ? (count / ratings.length) * 100 : 0
-              return (
-                <div key={star} className="flex items-center gap-1 text-xs">
-                  <span className="font-bold text-gray-600">{star}</span>
-                  <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
-                  <div className="w-16 h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                    <div className="h-full bg-gradient-to-l from-amber-400 to-orange-400 rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
-                  </div>
-                  <span className="text-gray-400 font-medium">{count}</span>
-                </div>
-              )
-            })}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Individual Ratings */}
-      {ratings.length === 0 ? (
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="text-center py-16"
-        >
-          <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-amber-100 to-orange-100 flex items-center justify-center mx-auto mb-4">
-            <Star className="w-10 h-10 text-amber-400" />
-          </div>
-          <p className="text-lg font-bold text-gray-600 mb-2">لا توجد تقييمات بعد</p>
-          <p className="text-sm text-gray-400">ستظهر تقييمات المستفيدين هنا عند إكمال المهام</p>
-        </motion.div>
-      ) : (
-        <div className="space-y-4">
-          {ratings.map((rating, index) => (
-            <motion.div
-              key={rating.id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.1 }}
-            >
-              <Card className="border-0 shadow-lg shadow-blue-500/5 bg-white/80 backdrop-blur-sm hover:shadow-xl hover:shadow-blue-500/10 transition-all duration-300">
-                <CardContent className="p-5">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex items-start gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shrink-0 shadow-lg shadow-amber-500/20">
-                        <User className="w-5 h-5 text-white" />
-                      </div>
-                      <div>
-                        <p className="font-bold text-gray-800">{rating.beneficiaryName}</p>
-                        <p className="text-xs text-gray-500 font-medium">{rating.serviceName}</p>
-                        <div className="flex items-center gap-1 mt-1">
-                          {renderStars(rating.rating, 'w-3.5 h-3.5')}
-                        </div>
-                        {rating.comment && (
-                          <p className="text-sm text-gray-600 mt-2 leading-relaxed">{rating.comment}</p>
-                        )}
-                      </div>
-                    </div>
-                    <span className="text-xs text-gray-400 shrink-0 font-medium">
-                      {new Date(rating.createdAt).toLocaleDateString('ar-YE')}
-                    </span>
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-
-  const ProfileTab = () => (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold bg-gradient-to-l from-cyan-700 via-blue-700 to-indigo-700 bg-clip-text text-transparent">الملف الشخصي</h1>
-        <p className="text-gray-500 text-sm mt-1">معلوماتك المهنية والشخصية</p>
-      </div>
-
-      {profileLoading ? (
-        <Card className="border-0 shadow-lg shadow-blue-500/5 bg-white/80 backdrop-blur-sm">
-          <CardContent className="p-6">
-            <div className="flex items-center gap-4 mb-6">
-              <Skeleton className="w-16 h-16 rounded-full" />
-              <div className="space-y-2">
-                <Skeleton className="w-40 h-6 rounded" />
-                <Skeleton className="w-20 h-5 rounded-full" />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              {[1, 2, 3, 4, 5, 6].map(i => (
-                <Skeleton key={i} className="h-16 rounded-xl" />
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      ) : profile ? (
-        <>
-          {/* Profile Header */}
-          <Card className="border-0 shadow-lg shadow-blue-500/5 bg-white/80 backdrop-blur-sm overflow-hidden">
-            <CardContent className="p-6">
-              <div className="flex items-center gap-4 mb-6">
-                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-cyan-500 via-blue-500 to-indigo-500 flex items-center justify-center shadow-xl shadow-blue-500/25 ring-4 ring-blue-100">
-                  <span className="text-2xl font-bold text-white">{profile.firstName?.charAt(0)}</span>
-                </div>
-                <div>
-                  <h3 className="text-xl font-bold text-gray-800">
-                    {profile.firstName} {profile.secondName} {profile.thirdName} {profile.lastName}
-                  </h3>
-                  <Badge className={`${getStatusColor(profile.status)} font-bold`}>{getStatusLabel(profile.status)}</Badge>
-                </div>
-              </div>
-
-              {/* License Info Card - Gradient border */}
-              <div className="rounded-2xl p-[2px] bg-gradient-to-l from-cyan-500 via-blue-500 to-indigo-500 mb-6">
-                <div className="bg-white rounded-[14px] p-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                    <div className="flex items-center gap-3 p-2.5 bg-gradient-to-l from-cyan-50/50 to-blue-50/50 rounded-xl">
-                      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center shadow-md shadow-blue-500/20">
-                        <Stethoscope className="w-4 h-4 text-white" />
-                      </div>
-                      <div>
-                        <p className="text-gray-400 text-xs font-medium">رقم المزاولة</p>
-                        <p className="font-bold text-gray-800">{profile.licenseNumber}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3 p-2.5 bg-gradient-to-l from-indigo-50/50 to-blue-50/50 rounded-xl">
-                      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-blue-500 flex items-center justify-center shadow-md shadow-indigo-500/20">
-                        <Clock className="w-4 h-4 text-white" />
-                      </div>
-                      <div>
-                        <p className="text-gray-400 text-xs font-medium">انتهاء المزاولة</p>
-                        <p className="font-bold text-gray-800">{profile.licenseExpiryDate}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3 p-2.5 bg-gradient-to-l from-blue-50/50 to-cyan-50/50 rounded-xl">
-                      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center shadow-md shadow-cyan-500/20">
-                        <User className="w-4 h-4 text-white" />
-                      </div>
-                      <div>
-                        <p className="text-gray-400 text-xs font-medium">الرقم الوطني</p>
-                        <p className="font-bold text-gray-800">{profile.nationalId}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3 p-2.5 bg-gradient-to-l from-cyan-50/50 to-indigo-50/50 rounded-xl">
-                      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500 to-indigo-500 flex items-center justify-center shadow-md shadow-indigo-500/20">
-                        <Clock className="w-4 h-4 text-white" />
-                      </div>
-                      <div>
-                        <p className="text-gray-400 text-xs font-medium">تاريخ التسجيل</p>
-                        <p className="font-bold text-gray-800">
-                          {profile.createdAt ? new Date(profile.createdAt).toLocaleDateString('ar-YE') : 'غير متوفر'}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <Separator className="mb-6 bg-gradient-to-l from-transparent via-blue-200/50 to-transparent" />
-
-              {/* Editable Form */}
-              <div>
-                <h4 className="font-bold mb-4 flex items-center gap-2 text-gray-800">
-                  <div className="w-6 h-6 rounded-md bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center">
-                    <User className="w-3.5 h-3.5 text-white" />
-                  </div>
-                  تعديل المعلومات الشخصية
-                </h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="firstName" className="text-gray-600 font-semibold text-sm">الاسم الأول</Label>
-                    <Input
-                      id="firstName"
-                      value={profileForm.firstName}
-                      onChange={e => setProfileForm(p => ({ ...p, firstName: e.target.value }))}
-                      className="rounded-xl bg-white/70 backdrop-blur-sm border-blue-200/50 focus:border-blue-400 focus:ring-blue-400/20 transition-all duration-300"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="secondName" className="text-gray-600 font-semibold text-sm">الاسم الثاني</Label>
-                    <Input
-                      id="secondName"
-                      value={profileForm.secondName}
-                      onChange={e => setProfileForm(p => ({ ...p, secondName: e.target.value }))}
-                      className="rounded-xl bg-white/70 backdrop-blur-sm border-blue-200/50 focus:border-blue-400 focus:ring-blue-400/20 transition-all duration-300"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="thirdName" className="text-gray-600 font-semibold text-sm">الاسم الثالث</Label>
-                    <Input
-                      id="thirdName"
-                      value={profileForm.thirdName}
-                      onChange={e => setProfileForm(p => ({ ...p, thirdName: e.target.value }))}
-                      className="rounded-xl bg-white/70 backdrop-blur-sm border-blue-200/50 focus:border-blue-400 focus:ring-blue-400/20 transition-all duration-300"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="lastName" className="text-gray-600 font-semibold text-sm">اللقب</Label>
-                    <Input
-                      id="lastName"
-                      value={profileForm.lastName}
-                      onChange={e => setProfileForm(p => ({ ...p, lastName: e.target.value }))}
-                      className="rounded-xl bg-white/70 backdrop-blur-sm border-blue-200/50 focus:border-blue-400 focus:ring-blue-400/20 transition-all duration-300"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="phone" className="text-gray-600 font-semibold text-sm">رقم الهاتف</Label>
-                    <Input
-                      id="phone"
-                      value={profileForm.phone}
-                      onChange={e => setProfileForm(p => ({ ...p, phone: e.target.value }))}
-                      className="rounded-xl bg-white/70 backdrop-blur-sm border-blue-200/50 focus:border-blue-400 focus:ring-blue-400/20 transition-all duration-300"
-                      dir="ltr"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="location" className="text-gray-600 font-semibold text-sm">الموقع</Label>
-                    <Input
-                      id="location"
-                      value={profileForm.location}
-                      onChange={e => setProfileForm(p => ({ ...p, location: e.target.value }))}
-                      className="rounded-xl bg-white/70 backdrop-blur-sm border-blue-200/50 focus:border-blue-400 focus:ring-blue-400/20 transition-all duration-300"
-                    />
-                  </div>
-                </div>
-                <div className="flex justify-end mt-6">
-                  <Button
-                    onClick={handleSaveProfile}
-                    disabled={profileSaving}
-                    className="bg-gradient-to-l from-cyan-500 via-blue-500 to-indigo-600 text-white hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-blue-500/25 transition-all duration-300 rounded-xl px-8"
-                  >
-                    {profileSaving ? <Loader2 className="w-4 h-4 ml-1 animate-spin" /> : <CheckCircle className="w-4 h-4 ml-1" />}
-                    حفظ التعديلات
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </>
-      ) : (
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="text-center py-16"
-        >
-          <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center mx-auto mb-4">
-            <User className="w-10 h-10 text-blue-400" />
-          </div>
-          <p className="text-lg font-bold text-gray-600 mb-2">فشل تحميل الملف الشخصي</p>
-          <Button
-            variant="outline"
-            onClick={fetchProfile}
-            className="mt-2 border-blue-200 text-blue-600 hover:text-white hover:bg-gradient-to-l hover:from-cyan-500 hover:to-blue-600 hover:border-transparent hover:shadow-lg hover:shadow-blue-500/25 transition-all duration-300"
-          >
-            إعادة المحاولة
-          </Button>
-        </motion.div>
-      )}
-    </div>
-  )
-
-  const NotificationsTab = () => (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold bg-gradient-to-l from-cyan-700 via-blue-700 to-indigo-700 bg-clip-text text-transparent">الإشعارات</h1>
-          <p className="text-gray-500 text-sm mt-1">آخر التحديثات والإشعارات</p>
-        </div>
-        {unreadNotifications > 0 && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={markAllNotificationsRead}
-            className="rounded-xl text-xs border-blue-200 text-blue-600 hover:text-white hover:bg-gradient-to-l hover:from-cyan-500 hover:to-blue-600 hover:border-transparent hover:shadow-lg hover:shadow-blue-500/25 transition-all duration-300"
-          >
-            تحديد الكل كمقروء
-          </Button>
-        )}
-      </div>
-
-      {assignmentsLoading ? (
-        <div className="space-y-3">
-          {[1, 2, 3].map(i => (
-            <Card key={i} className="border-0 shadow-lg shadow-blue-500/5 bg-white/80 backdrop-blur-sm">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-3">
-                  <Skeleton className="w-10 h-10 rounded-full" />
-                  <div className="flex-1 space-y-2">
-                    <Skeleton className="w-32 h-4 rounded" />
-                    <Skeleton className="w-48 h-3 rounded" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      ) : notifications.length === 0 ? (
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="text-center py-16"
-        >
-          <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center mx-auto mb-4">
-            <Bell className="w-10 h-10 text-blue-400" />
-          </div>
-          <p className="text-lg font-bold text-gray-600 mb-2">لا توجد إشعارات</p>
-          <p className="text-sm text-gray-400">ستظهر الإشعارات هنا عند توفر تحديثات</p>
-        </motion.div>
-      ) : (
-        <div className="space-y-3 max-h-[calc(100vh-280px)] overflow-y-auto">
-          {notifications.map((notif, index) => {
-            const notifBorderColor = notif.type === 'assignment' ? 'border-r-blue-500' : notif.type === 'status_change' ? 'border-r-emerald-500' : notif.type === 'admin' ? 'border-r-indigo-500' : 'border-r-gray-400'
-
-            return (
-              <motion.div
-                key={notif.id}
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: index * 0.05 }}
-              >
-                <Card
-                  className={`border-0 shadow-lg shadow-blue-500/5 cursor-pointer transition-all duration-300 hover:shadow-xl hover:shadow-blue-500/10 bg-white/80 backdrop-blur-sm border-r-4 ${notifBorderColor} ${
-                    !notif.read ? 'bg-gradient-to-l from-blue-50/80 to-indigo-50/50' : ''
-                  }`}
-                  onClick={() => markNotificationRead(notif.id)}
-                >
-                  <CardContent className="p-4">
-                    <div className="flex items-start gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-50 to-indigo-50 flex items-center justify-center shrink-0">
-                        {getNotificationIcon(notif.type)}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <h4 className="font-bold text-sm text-gray-800">{notif.title}</h4>
-                          {!notif.read && (
-                            <div className="w-2 h-2 rounded-full bg-gradient-to-l from-cyan-500 to-blue-600 shrink-0 shadow-md shadow-blue-500/30" />
-                          )}
-                        </div>
-                        <p className="text-sm text-gray-500 mt-0.5">{notif.message}</p>
-                        <p className="text-xs text-gray-400 mt-1 font-medium">
-                          {new Date(notif.createdAt).toLocaleDateString('ar-YE', {
-                            month: 'short',
-                            day: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
-                        </p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            )
-          })}
-        </div>
-      )}
-    </div>
-  )
+  // ==================== Help Tab ====================
 
   const HelpTab = () => (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold bg-gradient-to-l from-cyan-700 via-blue-700 to-indigo-700 bg-clip-text text-transparent">المساعدة والدعم</h1>
-        <p className="text-gray-500 text-sm mt-1">معلومات مهمة للممرضين</p>
+        <h1 className="text-2xl font-bold bg-gradient-to-l from-cyan-700 via-blue-700 to-indigo-700 bg-clip-text text-transparent">المساعدة</h1>
+        <p className="text-gray-500 text-sm mt-1">الأسئلة الشائعة ومعلومات التواصل</p>
       </div>
 
-      {/* FAQ Accordion */}
-      <Card className="border-0 shadow-lg shadow-blue-500/5 bg-white/80 backdrop-blur-sm overflow-hidden">
-        <CardContent className="p-0">
-          <div className="p-4 border-b bg-gradient-to-l from-blue-50/50 to-indigo-50/50">
-            <h3 className="font-bold flex items-center gap-2 text-gray-800">
-              <div className="w-6 h-6 rounded-md bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center">
-                <HelpCircle className="w-3.5 h-3.5 text-white" />
-              </div>
-              الأسئلة الشائعة
-            </h3>
+      {/* Contact Info Card */}
+      <Card className="border-0 shadow-lg shadow-blue-500/5 bg-white/80 backdrop-blur-xl">
+        <CardContent className="p-6">
+          <div className="flex items-center gap-3 mb-5">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 via-blue-500 to-indigo-500 flex items-center justify-center shadow-lg shadow-blue-500/25">
+              <Phone className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h3 className="font-bold text-gray-800">معلومات التواصل</h3>
+              <p className="text-xs text-gray-400">تواصل معنا في أي وقت</p>
+            </div>
           </div>
-          <Accordion type="single" collapsible className="px-4">
-            {faqItems.map((item, i) => (
-              <AccordionItem key={i} value={`faq-${i}`}>
-                <AccordionTrigger className="text-sm font-bold text-gray-700 text-right hover:no-underline hover:text-blue-700 transition-colors">
+
+          {settingsLoading ? (
+            <div className="space-y-3">
+              <Skeleton className="h-12 w-full rounded-xl" />
+              <Skeleton className="h-12 w-full rounded-xl" />
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {adminSettings?.emergencyPhone && (
+                <div className="flex items-center gap-3 p-3.5 bg-gradient-to-l from-red-50 to-rose-50/50 rounded-xl ring-1 ring-red-200/30">
+                  <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-red-500 to-rose-500 flex items-center justify-center shrink-0 shadow-md shadow-red-500/20">
+                    <Phone className="w-4 h-4 text-white" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-red-600">رقم الطوارئ</p>
+                    <p className="text-sm font-bold text-gray-800" dir="ltr">{adminSettings.emergencyPhone}</p>
+                  </div>
+                </div>
+              )}
+              {adminSettings?.phone && (
+                <div className="flex items-center gap-3 p-3.5 bg-gradient-to-l from-blue-50 to-cyan-50/50 rounded-xl ring-1 ring-blue-200/30">
+                  <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center shrink-0 shadow-md shadow-blue-500/20">
+                    <Phone className="w-4 h-4 text-white" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-blue-600">الهاتف</p>
+                    <p className="text-sm font-bold text-gray-800" dir="ltr">{adminSettings.phone}</p>
+                  </div>
+                </div>
+              )}
+              {adminSettings?.email && (
+                <div className="flex items-center gap-3 p-3.5 bg-gradient-to-l from-indigo-50 to-blue-50/50 rounded-xl ring-1 ring-indigo-200/30">
+                  <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-indigo-500 to-blue-500 flex items-center justify-center shrink-0 shadow-md shadow-indigo-500/20">
+                    <Mail className="w-4 h-4 text-white" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-indigo-600">البريد الإلكتروني</p>
+                    <p className="text-sm font-bold text-gray-800" dir="ltr">{adminSettings.email}</p>
+                  </div>
+                </div>
+              )}
+              {!adminSettings?.phone && !adminSettings?.email && !adminSettings?.emergencyPhone && (
+                <div className="text-center py-8">
+                  <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-2">
+                    <Phone className="w-6 h-6 text-gray-400" />
+                  </div>
+                  <p className="text-sm text-gray-400">لم يتم تعيين معلومات التواصل بعد</p>
+                </div>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* FAQ */}
+      <Card className="border-0 shadow-lg shadow-blue-500/5 bg-white/80 backdrop-blur-xl">
+        <CardContent className="p-6">
+          <div className="flex items-center gap-3 mb-5">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 via-blue-500 to-indigo-500 flex items-center justify-center shadow-lg shadow-blue-500/25">
+              <HelpCircle className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h3 className="font-bold text-gray-800">الأسئلة الشائعة</h3>
+              <p className="text-xs text-gray-400">إجابات على الأسئلة المتكررة</p>
+            </div>
+          </div>
+
+          <Accordion type="single" collapsible className="space-y-2">
+            {faqItems.map((item, index) => (
+              <AccordionItem key={index} value={`faq-${index}`} className="border-0 bg-gradient-to-l from-slate-50/50 to-gray-50/30 rounded-xl px-4 ring-1 ring-gray-200/20">
+                <AccordionTrigger className="text-sm font-bold text-gray-700 hover:text-blue-600 hover:no-underline text-right py-3.5">
                   {item.question}
                 </AccordionTrigger>
-                <AccordionContent className="text-sm text-gray-600 leading-relaxed">
+                <AccordionContent className="text-sm text-gray-500 leading-relaxed pb-4">
                   {item.answer}
                 </AccordionContent>
               </AccordionItem>
@@ -1425,192 +1632,202 @@ export default function NurseDashboard() {
           </Accordion>
         </CardContent>
       </Card>
-
-      {/* Contact Support */}
-      <Card className="border-0 shadow-xl shadow-blue-500/10 bg-white/80 backdrop-blur-sm overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-cyan-50/50 via-blue-50/40 to-indigo-50/50" />
-        <CardContent className="p-6 text-center relative">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center mx-auto mb-4 shadow-xl shadow-blue-500/25">
-            <Phone className="w-7 h-7 text-white" />
-          </div>
-          <h3 className="font-bold text-lg text-gray-800 mb-2">هل تحتاج مساعدة؟</h3>
-          <p className="text-sm text-gray-500 mb-4">
-            فريق الدعم الفني متاح على مدار الساعة لمساعدتك
-          </p>
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-            <Button
-              variant="outline"
-              className="rounded-xl gap-2 border-blue-200 text-blue-600 hover:text-white hover:bg-gradient-to-l hover:from-cyan-500 hover:to-blue-600 hover:border-transparent hover:shadow-lg hover:shadow-blue-500/25 hover:scale-[1.02] active:scale-[0.98] transition-all duration-300"
-            >
-              <Phone className="w-4 h-4" />
-              <span>777-000-000</span>
-            </Button>
-            <Button
-              variant="outline"
-              className="rounded-xl gap-2 border-indigo-200 text-indigo-600 hover:text-white hover:bg-gradient-to-l hover:from-blue-500 hover:to-indigo-600 hover:border-transparent hover:shadow-lg hover:shadow-indigo-500/25 hover:scale-[1.02] active:scale-[0.98] transition-all duration-300"
-            >
-              <MessageSquare className="w-4 h-4" />
-              <span>support@afiyatak.com</span>
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
     </div>
   )
+
+  // ==================== Tab Renderer ====================
+
+  const renderTabContent = () => {
+    switch (activeTab) {
+      case 'assignments': return <AssignmentsTab />
+      case 'schedule': return <ScheduleTab />
+      case 'ratings': return <RatingsTab />
+      case 'profile': return <ProfileTab />
+      case 'notifications': return <NotificationsTab />
+      case 'help': return <HelpTab />
+      default: return <AssignmentsTab />
+    }
+  }
 
   // ==================== Main Render ====================
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/20 to-indigo-50/10 flex relative" dir="rtl">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/30 relative" dir="rtl">
       <FloatingOrbs />
 
-      {/* Decorative mesh gradient */}
-      <div className="absolute inset-0 opacity-30 pointer-events-none"
-        style={{
-          backgroundImage: `
-            radial-gradient(at 80% 20%, rgba(6, 182, 212, 0.12) 0px, transparent 50%),
-            radial-gradient(at 20% 80%, rgba(99, 102, 241, 0.10) 0px, transparent 50%),
-            radial-gradient(at 50% 50%, rgba(59, 130, 246, 0.06) 0px, transparent 50%)
-          `
-        }}
-      />
+      {/* Mobile Header */}
+      <div className="md:hidden fixed top-0 left-0 right-0 z-40 bg-white/70 backdrop-blur-xl border-b border-white/20 shadow-lg">
+        <div className="flex items-center justify-between p-4">
+          <button
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 via-blue-500 to-indigo-500 text-white flex items-center justify-center shadow-lg shadow-blue-500/25"
+          >
+            {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+          </button>
+          <div className="flex items-center gap-2">
+            <Image src="/logo.png" alt="عافيتك" width={32} height={32} className="rounded-lg" />
+            <h1 className="text-lg font-bold bg-gradient-to-l from-cyan-700 via-blue-700 to-indigo-700 bg-clip-text text-transparent">عافيتك</h1>
+          </div>
+          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-blue-500/20">
+            <Stethoscope className="w-5 h-5 text-white" />
+          </div>
+        </div>
+      </div>
 
-      {/* Desktop Sidebar */}
-      <aside className="w-72 bg-white/90 backdrop-blur-xl border-l border-blue-100/50 shadow-xl shadow-blue-500/5 hidden lg:flex flex-col fixed right-0 top-0 bottom-0 z-40">
-        <SidebarContent />
-      </aside>
+      {/* Mobile Navigation Tabs */}
+      <div className="md:hidden fixed top-16 left-0 right-0 z-30 bg-white/70 backdrop-blur-xl border-b border-white/20">
+        <div className="flex items-center gap-1 p-2 overflow-x-auto">
+          {tabs.map(tab => {
+            const badgeCount =
+              tab.key === 'assignments' ? assignedCount :
+              tab.key === 'notifications' ? unreadNotifications : 0
 
-      {/* Mobile Menu Overlay */}
+            return (
+              <button
+                key={tab.key}
+                onClick={() => handleTabChange(tab.key)}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all duration-300 ${
+                  activeTab === tab.key
+                    ? 'bg-gradient-to-l from-cyan-500/10 via-blue-500/10 to-indigo-500/10 text-blue-700 shadow-md ring-1 ring-blue-200/50'
+                    : 'text-gray-400 hover:text-gray-600'
+                }`}
+              >
+                <tab.icon className="w-3.5 h-3.5" />
+                <span>{tab.label}</span>
+                {badgeCount > 0 && (
+                  <span className="bg-gradient-to-l from-cyan-500 to-blue-600 text-white text-[9px] min-w-[16px] h-4 flex items-center justify-center px-1 rounded-full font-bold">
+                    {badgeCount}
+                  </span>
+                )}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Mobile Sidebar Overlay */}
       <AnimatePresence>
         {mobileMenuOpen && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="lg:hidden fixed inset-0 bg-black/40 backdrop-blur-sm z-50"
+            className="md:hidden fixed inset-0 z-40 bg-black/50 backdrop-blur-sm"
             onClick={() => setMobileMenuOpen(false)}
-          />
+          >
+            <motion.div
+              initial={{ x: 300 }}
+              animate={{ x: 0 }}
+              exit={{ x: 300 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              className="absolute top-0 right-0 bottom-0 w-72 bg-white/70 backdrop-blur-xl shadow-2xl"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex flex-col h-full">
+                <SidebarContent />
+              </div>
+            </motion.div>
+          </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Mobile Sidebar */}
-      <div className={`lg:hidden fixed right-0 top-0 bottom-0 w-72 bg-white/95 backdrop-blur-xl z-50 transform transition-transform duration-300 shadow-2xl shadow-blue-500/10 ${mobileMenuOpen ? 'translate-x-0' : 'translate-x-full'}`}>
-        <SidebarContent />
-      </div>
-
-      {/* Mobile Header */}
-      <div className="lg:hidden fixed top-0 left-0 right-0 bg-white/90 backdrop-blur-xl border-b border-blue-100/50 z-40 px-4 py-3 flex items-center justify-between shadow-lg shadow-blue-500/5">
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shadow-md shadow-blue-500/20">
-            <Image src="/logo.png" alt="عافيتك" width={28} height={28} className="rounded-md" />
-          </div>
-          <span className="font-bold bg-gradient-to-l from-cyan-600 to-blue-600 bg-clip-text text-transparent">عافيتك</span>
+      {/* Desktop Layout */}
+      <div className="flex min-h-screen">
+        {/* Sidebar - Desktop */}
+        <div className="hidden md:flex md:w-72 lg:w-80 flex-col fixed top-0 right-0 bottom-0 z-10 bg-white/70 backdrop-blur-xl border-l border-white/20 shadow-xl">
+          <SidebarContent />
         </div>
-        <div className="flex items-center gap-1">
-          {unreadNotifications > 0 && (
-            <Button variant="ghost" size="sm" onClick={() => handleTabChange('notifications')} className="relative">
-              <Bell className="w-4 h-4 text-blue-600" />
-              <span className="absolute -top-0.5 -left-0.5 w-4 h-4 bg-gradient-to-l from-cyan-500 to-blue-600 text-white text-[10px] rounded-full flex items-center justify-center shadow-md shadow-blue-500/30 font-bold">
-                {unreadNotifications}
-              </span>
-            </Button>
-          )}
-          <Button variant="ghost" size="sm" onClick={handleLogout} className="hover:bg-red-50 transition-colors">
-            <LogOut className="w-4 h-4 text-red-500" />
-          </Button>
-          <Button variant="ghost" size="sm" onClick={() => setMobileMenuOpen(true)} className="hover:bg-blue-50 transition-colors">
-            <Menu className="w-5 h-5 text-blue-600" />
-          </Button>
-        </div>
-      </div>
 
-      {/* Main Content */}
-      <main className="flex-1 lg:mr-72 overflow-y-auto relative z-10">
-        <div className="p-4 md:p-8 max-w-5xl mx-auto pt-20 lg:pt-8 pb-24 lg:pb-8">
-          <AnimatePresence mode="wait">
+        {/* Main Content */}
+        <main className="flex-1 md:mr-72 lg:mr-80">
+          <div className="pt-28 md:pt-0 p-4 md:p-8 max-w-5xl mx-auto">
             <motion.div
               key={activeTab}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.2 }}
+              transition={{ duration: 0.3 }}
             >
-              {activeTab === 'assignments' && <AssignmentsTab />}
-              {activeTab === 'schedule' && <ScheduleTab />}
-              {activeTab === 'ratings' && <RatingsTab />}
-              {activeTab === 'profile' && <ProfileTab />}
-              {activeTab === 'notifications' && <NotificationsTab />}
-              {activeTab === 'help' && <HelpTab />}
+              {renderTabContent()}
             </motion.div>
-          </AnimatePresence>
-        </div>
-      </main>
 
-      {/* Complete Task Dialog */}
+            {/* Chat System */}
+            {activeChatRequestId && (
+              <ChatSystem
+                requestId={activeChatRequestId}
+                userId={nurseId}
+                userName={nurseName}
+                userType="nurse"
+                otherPartyName={chatOtherPartyName}
+              />
+            )}
+          </div>
+        </main>
+      </div>
+
+      {/* Complete Assignment Dialog */}
       <Dialog open={completeDialogOpen} onOpenChange={setCompleteDialogOpen}>
-        <DialogContent className="sm:max-w-md bg-white/95 backdrop-blur-xl border-blue-100/50" dir="rtl">
+        <DialogContent className="sm:max-w-md" dir="rtl">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-gray-800">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center shadow-md shadow-emerald-500/20">
+            <DialogTitle className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center">
                 <CheckCircle className="w-4 h-4 text-white" />
               </div>
               إكمال المهمة
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
-            {selectedAssignment && (
-              <div className="bg-gradient-to-l from-blue-50/80 to-indigo-50/50 rounded-xl p-3 ring-1 ring-blue-200/30">
-                <p className="font-bold text-sm text-gray-800">{selectedAssignment.request?.service?.name || 'خدمة'}</p>
-                <p className="text-xs text-gray-500">
-                  المستفيد: {selectedAssignment.request?.beneficiary?.name || 'غير محدد'}
-                </p>
-              </div>
-            )}
-            <div className="space-y-2">
-              <Label htmlFor="completionNotes" className="text-gray-600 font-semibold text-sm">ملاحظات التنفيذ (اختياري)</Label>
+            <p className="text-sm text-gray-600">
+              هل أنت متأكد من إكمال المهمة
+              <span className="font-bold text-gray-800"> {selectedAssignment?.request?.service?.name || 'الخدمة'} </span>
+              للمستفيد
+              <span className="font-bold text-gray-800"> {selectedAssignment?.request?.beneficiary?.name || ''}</span>
+              ؟
+            </p>
+            <div>
+              <Label htmlFor="completion-notes" className="text-sm font-medium text-gray-700 mb-2 block">
+                ملاحظات الإكمال (اختياري)
+              </Label>
               <Textarea
-                id="completionNotes"
-                placeholder="أضف ملاحظات حول تنفيذ المهمة..."
+                id="completion-notes"
                 value={completionNotes}
                 onChange={e => setCompletionNotes(e.target.value)}
-                className="rounded-xl bg-white/70 backdrop-blur-sm border-blue-200/50 focus:border-emerald-400 focus:ring-emerald-400/20 min-h-[100px] transition-all duration-300"
+                placeholder="أضف ملاحظات حول تنفيذ المهمة..."
+                className="bg-white/80 border-blue-200/50 focus:border-blue-400 rounded-xl min-h-[100px]"
               />
             </div>
           </div>
           <DialogFooter className="gap-2">
             <Button
-              variant="outline"
+              variant="ghost"
               onClick={() => {
                 setCompleteDialogOpen(false)
                 setCompletionNotes('')
                 setSelectedAssignment(null)
               }}
-              className="rounded-xl border-gray-200 hover:bg-gray-50 transition-all duration-300"
+              className="rounded-xl"
             >
               إلغاء
             </Button>
             <Button
               onClick={handleCompleteWithNotes}
               disabled={actionLoading}
-              className="bg-gradient-to-l from-emerald-500 to-teal-600 text-white hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-emerald-500/25 rounded-xl transition-all duration-300"
+              className="bg-gradient-to-l from-emerald-500 to-teal-600 text-white hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-emerald-500/25 transition-all duration-300 rounded-xl"
             >
-              {actionLoading ? <Loader2 className="w-4 h-4 ml-1 animate-spin" /> : <CheckCircle className="w-4 h-4 ml-1" />}
-              تأكيد الإكمال
+              {actionLoading ? (
+                <>
+                  <Loader2 className="w-4 h-4 ml-1 animate-spin" />
+                  جاري الإكمال...
+                </>
+              ) : (
+                <>
+                  <CheckCircle className="w-4 h-4 ml-1" />
+                  تأكيد الإكمال
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {/* ===== Chat System ===== */}
-      {activeChatRequestId && nurseId && (
-        <ChatSystem
-          requestId={activeChatRequestId}
-          userId={nurseId}
-          userName={nurseName}
-          userType="nurse"
-          otherPartyName={assignments.find(a => a.requestId === activeChatRequestId)?.request?.beneficiary?.name}
-        />
-      )}
     </div>
   )
 }

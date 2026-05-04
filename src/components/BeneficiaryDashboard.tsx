@@ -6,7 +6,8 @@ import {
   Heart, ClipboardList, CreditCard, LogOut, Loader2, Plus, XCircle,
   ShoppingBag, User, Menu, X, Bell, MapPin, Phone, Home, HelpCircle,
   Filter, RefreshCw, Calendar, Tag, AlertTriangle,
-  Copy, Check, Award, Zap, Share2, MessageCircle
+  Copy, Check, Award, Zap, Share2, MessageCircle, Star, Send,
+  Siren, ChevronDown, ChevronUp, Shield, Gift, TrendingUp, Sparkles
 } from 'lucide-react'
 import { useAppStore, formatPrice, getStatusLabel, getStatusColor } from '@/lib/store'
 import { Button } from '@/components/ui/button'
@@ -18,9 +19,48 @@ import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
+import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion'
+import { Progress } from '@/components/ui/progress'
 import { useToast } from '@/hooks/use-toast'
 import ChatSystem from '@/components/ChatSystem'
 import Image from 'next/image'
+
+// ===== Date Formatting Helpers =====
+function formatDate(timestamp: any): string {
+  if (!timestamp) return 'غير محدد'
+  try {
+    let date: Date
+    if (typeof timestamp === 'object' && timestamp !== null && 'seconds' in timestamp) {
+      date = new Date(timestamp.seconds * 1000)
+    } else if (typeof timestamp === 'string') {
+      date = new Date(timestamp)
+    } else {
+      return 'غير محدد'
+    }
+    if (isNaN(date.getTime())) return 'غير محدد'
+    return date.toLocaleDateString('ar-YE', { year: 'numeric', month: 'long', day: 'numeric' })
+  } catch {
+    return 'غير محدد'
+  }
+}
+
+function formatDateTime(timestamp: any): string {
+  if (!timestamp) return 'غير محدد'
+  try {
+    let date: Date
+    if (typeof timestamp === 'object' && timestamp !== null && 'seconds' in timestamp) {
+      date = new Date(timestamp.seconds * 1000)
+    } else if (typeof timestamp === 'string') {
+      date = new Date(timestamp)
+    } else {
+      return 'غير محدد'
+    }
+    if (isNaN(date.getTime())) return 'غير محدد'
+    return date.toLocaleDateString('ar-YE', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+  } catch {
+    return 'غير محدد'
+  }
+}
 
 type Tab = 'services' | 'requests' | 'payments' | 'profile' | 'notifications' | 'loyalty' | 'referral' | 'help'
 
@@ -32,6 +72,15 @@ interface Notification {
   read: boolean
   createdAt: string
   requestId?: string
+}
+
+interface AdminSettings {
+  phone?: string
+  email?: string
+  emergencyPhone?: string
+  referralBonusPoints?: number
+  referralBonusPointsReceiver?: number
+  referralEnabled?: boolean
 }
 
 const statusFilters = [
@@ -68,9 +117,23 @@ const faqItems = [
     q: 'متى يتم تعيين ممرض/ة لطلبي؟',
     a: 'بعد قبول الطلب من الإدارة، يتم تعيين ممرض/ة مؤهل/ة لتنفيذ الخدمة. ستظهر معلومات الممرض/ة المعين/ة في تفاصيل الطلب.'
   },
+  {
+    q: 'ما هو برنامج النقاط؟',
+    a: 'تحصل على نقاط عند كل طلب خدمة وعند استخدام كود إحالة. يمكنك استبدال النقاط بخصومات على الخدمات المستقبلية. الحد الأدنى للاستبدال 100 نقطة.'
+  },
 ]
 
-// Status left border color mapping
+// Emergency service types
+const emergencyServiceTypes = [
+  'تمريض منزلي عاجل',
+  'إسعافات أولية',
+  'حقن وريدي',
+  'قياس الضغط والسكر',
+  'عناية بالجروح',
+  'أخرى',
+]
+
+// Status right border color mapping (RTL)
 const statusBorderColor: Record<string, string> = {
   pending: 'border-r-4 border-r-amber-400',
   approved: 'border-r-4 border-r-emerald-400',
@@ -92,12 +155,20 @@ const statusGradientBadge: Record<string, string> = {
   rejected: 'bg-gradient-to-r from-red-500 to-rose-500 text-white',
 }
 
-// Notification left border color
+// Notification border color
 const notifBorderColor: Record<string, string> = {
   status_change: 'border-r-4 border-r-amber-400',
   assignment: 'border-r-4 border-r-violet-400',
   admin_message: 'border-r-4 border-r-blue-400',
   general: 'border-r-4 border-r-gray-300',
+}
+
+// Notification type icon color
+const notifIconBg: Record<string, string> = {
+  status_change: 'bg-amber-100 text-amber-600',
+  assignment: 'bg-violet-100 text-violet-600',
+  admin_message: 'bg-blue-100 text-blue-600',
+  general: 'bg-gray-100 text-gray-600',
 }
 
 export default function BeneficiaryDashboard() {
@@ -127,9 +198,6 @@ export default function BeneficiaryDashboard() {
   // Status filter for requests
   const [statusFilter, setStatusFilter] = useState<string>('all')
 
-  // Payment methods (for request dialog)
-  const [paymentMethods, setPaymentMethods] = useState<any[]>([])
-
   // Loyalty state
   const [loyaltyBalance, setLoyaltyBalance] = useState(0)
   const [loyaltyHistory, setLoyaltyHistory] = useState<any[]>([])
@@ -150,16 +218,38 @@ export default function BeneficiaryDashboard() {
 
   // Chat state
   const [activeChatRequestId, setActiveChatRequestId] = useState<string | null>(null)
+  const [activeChatNurseName, setActiveChatNurseName] = useState<string>('')
 
   // Notifications
   const [notifications, setNotifications] = useState<Notification[]>([])
 
-  // Profile edit
-  const [profileForm, setProfileForm] = useState({ name: '', phone: '', location: '' })
+  // Profile edit (only location)
+  const [profileLocation, setProfileLocation] = useState('')
   const [profileSaving, setProfileSaving] = useState(false)
   const [profileLoaded, setProfileLoaded] = useState(false)
+  const [profileData, setProfileData] = useState<any>(null)
+
+  // Rating state
+  const [ratingDialog, setRatingDialog] = useState(false)
+  const [ratingRequestId, setRatingRequestId] = useState<string>('')
+  const [ratingNurseId, setRatingNurseId] = useState<string>('')
+  const [ratingValue, setRatingValue] = useState(0)
+  const [ratingComment, setRatingComment] = useState('')
+  const [ratingSubmitting, setRatingSubmitting] = useState(false)
+  const [ratedRequests, setRatedRequests] = useState<Set<string>>(new Set())
+
+  // Admin settings
+  const [adminSettings, setAdminSettings] = useState<AdminSettings>({})
 
   const beneficiaryUser = user as { id: string; name: string; phone: string; location: string } | null
+
+  // Fetch admin settings on mount
+  useEffect(() => {
+    fetch('/api/admin/settings')
+      .then(res => res.ok ? res.json() : {})
+      .then(data => setAdminSettings(data))
+      .catch(() => {})
+  }, [])
 
   // Fetch data based on active tab
   const fetchData = useCallback(async () => {
@@ -188,25 +278,24 @@ export default function BeneficiaryDashboard() {
           setReferralCode(data.code || '')
           setReferralUses(data.uses || 0)
         }
+      } else if (activeTab === 'profile') {
+        const res = await fetch(`/api/beneficiary/profile?beneficiaryId=${beneficiaryUser?.id}`)
+        if (res.ok) {
+          const data = await res.json()
+          setProfileData(data)
+          setProfileLocation(data.location || beneficiaryUser?.location || '')
+        }
       }
     } catch {
       toast({ title: 'خطأ', description: 'فشل تحميل البيانات', variant: 'destructive' })
     } finally {
       setLoading(false)
     }
-  }, [activeTab, beneficiaryUser?.id, toast])
+  }, [activeTab, beneficiaryUser?.id, beneficiaryUser?.location, toast])
 
   useEffect(() => {
     fetchData()
   }, [fetchData])
-
-  // Fetch payment methods once for the request dialog
-  useEffect(() => {
-    fetch('/api/beneficiary/payments')
-      .then(res => res.ok ? res.json() : [])
-      .then(data => setPaymentMethods(data))
-      .catch(() => {})
-  }, [])
 
   // Generate notifications from requests
   useEffect(() => {
@@ -263,11 +352,7 @@ export default function BeneficiaryDashboard() {
   // Load profile data
   useEffect(() => {
     if (activeTab === 'profile' && beneficiaryUser && !profileLoaded) {
-      setProfileForm({
-        name: beneficiaryUser.name || '',
-        phone: beneficiaryUser.phone || '',
-        location: beneficiaryUser.location || '',
-      })
+      setProfileLocation(beneficiaryUser.location || '')
       setProfileLoaded(true)
     }
   }, [activeTab, beneficiaryUser, profileLoaded])
@@ -295,7 +380,6 @@ export default function BeneficiaryDashboard() {
       })
       const data = await res.json()
       if (res.ok) {
-        // Add loyalty points for the order
         try {
           await fetch('/api/loyalty', {
             method: 'POST',
@@ -345,11 +429,11 @@ export default function BeneficiaryDashboard() {
     }
   }
 
-  // Reorder handler (opens request dialog with same service)
+  // Reorder handler
   const handleReorder = (req: any) => {
     const service = req.service || { id: req.serviceId, name: 'خدمة', price: 0 }
     setSelectedService(service)
-    setRequestForm({ paymentMethod: req.paymentMethod || '', notes: '', address: req.address || '', couponCode: '' })
+    setRequestForm({ paymentMethod: req.paymentMethod || '', notes: '', address: req.address || beneficiaryUser?.location || '', couponCode: '' })
     setValidCoupon(null)
     setCouponError('')
     setRequestDialog(true)
@@ -469,7 +553,8 @@ export default function BeneficiaryDashboard() {
       })
       const data = await res.json()
       if (res.ok) {
-        toast({ title: 'تم تطبيق كود الإحالة!', description: 'حصلت على 25 نقطة مكافأة' })
+        const bonusPoints = adminSettings.referralBonusPointsReceiver || 25
+        toast({ title: 'تم تطبيق كود الإحالة!', description: `حصلت على ${bonusPoints} نقطة مكافأة` })
         setReferralInput('')
         fetchData()
       } else {
@@ -482,10 +567,10 @@ export default function BeneficiaryDashboard() {
     }
   }
 
-  // Save profile handler
+  // Save profile handler (location only)
   const handleSaveProfile = async () => {
-    if (!profileForm.name.trim()) {
-      toast({ title: 'خطأ', description: 'يرجى إدخال الاسم', variant: 'destructive' })
+    if (!profileLocation.trim()) {
+      toast({ title: 'خطأ', description: 'يرجى إدخال الموقع', variant: 'destructive' })
       return
     }
     setProfileSaving(true)
@@ -495,17 +580,14 @@ export default function BeneficiaryDashboard() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           beneficiaryId: beneficiaryUser?.id,
-          name: profileForm.name,
-          phone: profileForm.phone,
-          location: profileForm.location,
+          location: profileLocation,
         }),
       })
       const data = await res.json()
       if (res.ok) {
-        // Update store user
         const { setUser } = useAppStore.getState()
-        setUser({ ...beneficiaryUser!, name: data.name, phone: data.phone, location: data.location }, 'beneficiary')
-        toast({ title: 'تم حفظ التعديلات', description: 'تم تحديث بياناتك الشخصية بنجاح' })
+        setUser({ ...beneficiaryUser!, location: data.location || profileLocation }, 'beneficiary')
+        toast({ title: 'تم تحديث الموقع', description: 'تم تحديث موقعك بنجاح' })
       } else {
         toast({ title: 'خطأ', description: data.error, variant: 'destructive' })
       }
@@ -514,6 +596,51 @@ export default function BeneficiaryDashboard() {
     } finally {
       setProfileSaving(false)
     }
+  }
+
+  // Rating handler
+  const handleSubmitRating = async () => {
+    if (ratingValue < 1) {
+      toast({ title: 'خطأ', description: 'يرجى اختيار التقييم', variant: 'destructive' })
+      return
+    }
+    setRatingSubmitting(true)
+    try {
+      const res = await fetch('/api/beneficiary/ratings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          requestId: ratingRequestId,
+          nurseId: ratingNurseId,
+          beneficiaryId: beneficiaryUser?.id,
+          rating: ratingValue,
+          comment: ratingComment || undefined,
+        }),
+      })
+      if (res.ok) {
+        toast({ title: 'شكراً لتقييمك!', description: 'تم إرسال تقييمك بنجاح' })
+        setRatedRequests(prev => new Set(prev).add(ratingRequestId))
+        setRatingDialog(false)
+        setRatingValue(0)
+        setRatingComment('')
+      } else {
+        const data = await res.json()
+        toast({ title: 'خطأ', description: data.error, variant: 'destructive' })
+      }
+    } catch {
+      toast({ title: 'خطأ', description: 'حدث خطأ أثناء إرسال التقييم', variant: 'destructive' })
+    } finally {
+      setRatingSubmitting(false)
+    }
+  }
+
+  // Open rating dialog
+  const openRatingDialog = (requestId: string, nurseId: string) => {
+    setRatingRequestId(requestId)
+    setRatingNurseId(nurseId)
+    setRatingValue(0)
+    setRatingComment('')
+    setRatingDialog(true)
   }
 
   // Mark notification as read
@@ -543,22 +670,27 @@ export default function BeneficiaryDashboard() {
   const completedRequests = requests.filter(r => r.status === 'completed').length
   const unreadNotifications = notifications.filter(n => !n.read).length
 
-  // Filtered services
   const filteredServices = selectedCategory === 'all'
     ? services
     : services.filter(s => s.category === selectedCategory)
 
-  // Filtered requests
   const filteredRequests = statusFilter === 'all'
     ? requests
     : requests.filter(r => r.status === statusFilter)
 
-  // Payment history from completed requests
   const paymentHistory = requests.filter(r => r.status === 'completed')
 
   // Loyalty level calculation
   const loyaltyLevel = loyaltyBalance >= 1000 ? 'ذهبي' : loyaltyBalance >= 500 ? 'فضي' : 'برونزي'
-  const loyaltyProgress = Math.min((loyaltyBalance / 1000) * 100, 100)
+  const loyaltyNextLevel = loyaltyBalance >= 1000 ? 'ذهبي' : loyaltyBalance >= 500 ? 'ذهبي' : 'فضي'
+  const loyaltyNextThreshold = loyaltyBalance >= 1000 ? 1000 : loyaltyBalance >= 500 ? 1000 : 500
+  const loyaltyPrevThreshold = loyaltyBalance >= 1000 ? 500 : loyaltyBalance >= 500 ? 500 : 0
+  const loyaltyProgress = Math.min(((loyaltyBalance - loyaltyPrevThreshold) / (loyaltyNextThreshold - loyaltyPrevThreshold)) * 100, 100)
+  const loyaltyLevelGradient = loyaltyBalance >= 1000
+    ? 'from-yellow-400 via-amber-500 to-yellow-600'
+    : loyaltyBalance >= 500
+      ? 'from-gray-300 via-gray-400 to-gray-500'
+      : 'from-amber-600 via-orange-700 to-amber-800'
 
   const tabs: { key: Tab; label: string; icon: any; badge?: number }[] = [
     { key: 'services', label: 'الخدمات', icon: ShoppingBag },
@@ -583,6 +715,15 @@ export default function BeneficiaryDashboard() {
   const itemVariants = {
     hidden: { opacity: 0, y: 20 },
     visible: { opacity: 1, y: 0 }
+  }
+
+  // Calculate discounted price
+  const getDiscountedPrice = () => {
+    if (!selectedService) return 0
+    if (validCoupon) {
+      return selectedService.price * (1 - validCoupon.discountPercent / 100)
+    }
+    return selectedService.price
   }
 
   return (
@@ -672,7 +813,6 @@ export default function BeneficiaryDashboard() {
 
       {/* ===== Mobile Sidebar ===== */}
       <div className={`lg:hidden fixed right-0 top-0 bottom-0 w-80 bg-white/90 backdrop-blur-xl z-50 transform transition-transform duration-300 ease-in-out shadow-2xl ${mobileMenuOpen ? 'translate-x-0' : 'translate-x-full'}`}>
-        {/* Mobile Header */}
         <div className="p-4 bg-gradient-to-l from-violet-600 via-purple-600 to-fuchsia-600 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Image src="/logo.png" alt="عافيتك" width={28} height={28} className="rounded-lg" />
@@ -682,8 +822,6 @@ export default function BeneficiaryDashboard() {
             <X className="w-6 h-6" />
           </button>
         </div>
-
-        {/* Mobile Navigation */}
         <nav className="p-3 space-y-1">
           {tabs.map(tab => (
             <button
@@ -705,8 +843,6 @@ export default function BeneficiaryDashboard() {
             </button>
           ))}
         </nav>
-
-        {/* Mobile User Info & Logout */}
         <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-100/50 bg-white/80 backdrop-blur-sm">
           <div className="flex items-center gap-3 mb-3">
             <div className="w-9 h-9 rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center shadow-md shadow-violet-500/25">
@@ -750,7 +886,7 @@ export default function BeneficiaryDashboard() {
 
       {/* ===== Main Content ===== */}
       <main className="flex-1 lg:mr-72 overflow-y-auto relative z-10">
-        <div className="p-4 md:p-8 max-w-6xl mx-auto pt-20 lg:pt-8 pb-24 lg:pb-8">
+        <div className="p-4 md:p-8 max-w-6xl mx-auto pt-20 lg:pt-8 pb-40 lg:pb-8">
           <AnimatePresence mode="wait">
             {loading ? (
               <motion.div
@@ -870,7 +1006,9 @@ export default function BeneficiaryDashboard() {
                                     className="bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white hover:scale-[1.02] active:scale-[0.98] hover:shadow-lg hover:shadow-violet-500/25 transition-all duration-200"
                                     onClick={() => {
                                       setSelectedService(service)
-                                      setRequestForm({ paymentMethod: '', notes: '', address: '', couponCode: '' })
+                                      setRequestForm({ paymentMethod: '', notes: '', address: beneficiaryUser?.location || '', couponCode: '' })
+                                      setValidCoupon(null)
+                                      setCouponError('')
                                       setRequestDialog(true)
                                     }}
                                   >
@@ -902,11 +1040,10 @@ export default function BeneficiaryDashboard() {
                 {/* ===== REQUESTS TAB ===== */}
                 {activeTab === 'requests' && (
                   <div className="space-y-6">
-                    {/* Header */}
                     <div className="flex items-center justify-between flex-wrap gap-3">
                       <div>
                         <h1 className="text-2xl font-bold bg-gradient-to-l from-violet-700 to-fuchsia-600 bg-clip-text text-transparent">طلباتي</h1>
-                        <p className="text-muted-foreground text-sm mt-1">متابعة حالة طلبات الخدمات</p>
+                        <p className="text-muted-foreground text-sm mt-1">تتبع حالة طلباتك والحصول على التحديثات</p>
                       </div>
                       <Button variant="outline" size="sm" onClick={fetchData} className="gap-1.5 rounded-xl hover:scale-[1.02] active:scale-[0.98] transition-transform">
                         <RefreshCw className="w-3.5 h-3.5" />
@@ -916,26 +1053,137 @@ export default function BeneficiaryDashboard() {
 
                     {/* Status Filter */}
                     <div className="flex gap-2 flex-wrap">
-                      {statusFilters.map(filter => (
+                      {statusFilters.map(f => (
                         <button
-                          key={filter.key}
-                          onClick={() => setStatusFilter(filter.key)}
-                          className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] ${
-                            statusFilter === filter.key
+                          key={f.key}
+                          onClick={() => setStatusFilter(f.key)}
+                          className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200 ${
+                            statusFilter === f.key
                               ? 'bg-gradient-to-l from-violet-500 to-fuchsia-500 text-white shadow-md shadow-violet-500/25'
-                              : 'bg-white/80 backdrop-blur-sm text-gray-600 border border-gray-200 hover:border-violet-300 hover:text-violet-600'
+                              : 'bg-white/80 backdrop-blur-sm text-gray-600 border border-gray-200 hover:border-violet-300'
                           }`}
                         >
-                          {filter.label}
-                          {filter.key === 'all' && requests.length > 0 && (
-                            <span className="mr-1.5 text-xs opacity-80">({requests.length})</span>
-                          )}
+                          {f.label}
                         </button>
                       ))}
                     </div>
 
                     {/* Requests List */}
-                    {requests.length === 0 ? (
+                    {filteredRequests.length > 0 ? (
+                      <motion.div className="space-y-3" variants={containerVariants} initial="hidden" animate="visible">
+                        {filteredRequests.map((req, i) => {
+                          const nurseAssigned = req.assignment?.nurse
+                          const nurseId = req.assignment?.nurseId || req.assignment?.nurse?.id
+                          const isCompleted = req.status === 'completed'
+                          const canRate = isCompleted && nurseId && !ratedRequests.has(req.id)
+
+                          return (
+                            <motion.div key={req.id} variants={itemVariants}>
+                              <Card className={`border-0 bg-white/80 backdrop-blur-sm shadow-lg hover:shadow-xl transition-all duration-300 ${statusBorderColor[req.status] || ''}`}>
+                                <CardContent className="p-5">
+                                  <div className="flex items-start justify-between gap-3 mb-3">
+                                    <div className="flex-1 min-w-0">
+                                      <h3 className="font-semibold text-base truncate">{req.service?.name || 'خدمة'}</h3>
+                                      <p className="text-xs text-muted-foreground mt-1">
+                                        {formatDateTime(req.createdAt)}
+                                      </p>
+                                    </div>
+                                    <Badge className={`text-xs shrink-0 ${statusGradientBadge[req.status] || 'bg-gray-200 text-gray-700'} border-0`}>
+                                      {getStatusLabel(req.status)}
+                                    </Badge>
+                                  </div>
+
+                                  {req.address && (
+                                    <div className="flex items-center gap-1.5 text-sm text-muted-foreground mb-2">
+                                      <MapPin className="w-3.5 h-3.5 shrink-0" />
+                                      <span className="truncate">{req.address}</span>
+                                    </div>
+                                  )}
+
+                                  {req.paymentMethod && (
+                                    <div className="flex items-center gap-1.5 text-sm text-muted-foreground mb-2">
+                                      <CreditCard className="w-3.5 h-3.5 shrink-0" />
+                                      <span>{req.paymentMethod}</span>
+                                    </div>
+                                  )}
+
+                                  {nurseAssigned && (
+                                    <div className="mt-3 p-3 rounded-xl bg-gradient-to-l from-violet-50/50 to-fuchsia-50/50 border border-violet-100/50">
+                                      <p className="text-xs font-medium text-violet-600 mb-1">الممرض/ة المعين/ة</p>
+                                      <p className="text-sm font-semibold">{nurseAssigned.firstName} {nurseAssigned.lastName}</p>
+                                    </div>
+                                  )}
+
+                                  {req.notes && (
+                                    <div className="mt-2 text-sm text-muted-foreground">
+                                      <span className="font-medium">ملاحظات:</span> {req.notes}
+                                    </div>
+                                  )}
+
+                                  {req.price !== undefined && (
+                                    <div className="mt-2 text-sm font-semibold text-emerald-600">
+                                      {formatPrice(req.price || req.service?.price || 0)}
+                                    </div>
+                                  )}
+
+                                  {/* Action Buttons */}
+                                  <div className="flex items-center gap-2 mt-4 flex-wrap">
+                                    {req.status === 'pending' && (
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="text-red-600 border-red-200 hover:bg-red-50 rounded-xl text-xs"
+                                        onClick={() => handleCancelRequest(req.id)}
+                                      >
+                                        <XCircle className="w-3.5 h-3.5 ml-1" />
+                                        إلغاء
+                                      </Button>
+                                    )}
+
+                                    {req.status === 'completed' && (
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="rounded-xl text-xs border-violet-200 hover:bg-violet-50 text-violet-600"
+                                        onClick={() => handleReorder(req)}
+                                      >
+                                        <RefreshCw className="w-3.5 h-3.5 ml-1" />
+                                        إعادة الطلب
+                                      </Button>
+                                    )}
+
+                                    {nurseAssigned && (req.status === 'in_progress' || req.status === 'approved' || req.status === 'assigned') && (
+                                      <Button
+                                        size="sm"
+                                        className="bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white rounded-xl text-xs hover:shadow-md"
+                                        onClick={() => {
+                                          setActiveChatRequestId(req.id)
+                                          setActiveChatNurseName(`${nurseAssigned.firstName} ${nurseAssigned.lastName}`)
+                                        }}
+                                      >
+                                        <MessageCircle className="w-3.5 h-3.5 ml-1" />
+                                        محادثة
+                                      </Button>
+                                    )}
+
+                                    {canRate && (
+                                      <Button
+                                        size="sm"
+                                        className="bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl text-xs hover:shadow-md"
+                                        onClick={() => openRatingDialog(req.id, nurseId)}
+                                      >
+                                        <Star className="w-3.5 h-3.5 ml-1" />
+                                        تقييم الخدمة
+                                      </Button>
+                                    )}
+                                  </div>
+                                </CardContent>
+                              </Card>
+                            </motion.div>
+                          )
+                        })}
+                      </motion.div>
+                    ) : (
                       <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
@@ -944,157 +1192,8 @@ export default function BeneficiaryDashboard() {
                         <div className="w-20 h-20 bg-violet-50 rounded-full flex items-center justify-center mx-auto mb-4">
                           <ClipboardList className="w-10 h-10 text-violet-300" />
                         </div>
-                        <p className="text-muted-foreground text-lg font-medium">لم تقم بأي طلبات بعد</p>
-                        <p className="text-muted-foreground text-sm mt-1 mb-6">تصفح الخدمات المتاحة واطلب ما يناسبك</p>
-                        <Button
-                          className="bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white hover:scale-[1.02] active:scale-[0.98] hover:shadow-lg hover:shadow-violet-500/25 transition-all duration-200"
-                          onClick={() => setActiveTab('services')}
-                        >
-                          <ShoppingBag className="w-4 h-4 ml-2" />
-                          تصفح الخدمات
-                        </Button>
-                      </motion.div>
-                    ) : filteredRequests.length === 0 ? (
-                      <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="text-center py-16"
-                      >
-                        <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-3">
-                          <Filter className="w-8 h-8 text-gray-300" />
-                        </div>
-                        <p className="text-muted-foreground font-medium">لا توجد طلبات بهذه الحالة</p>
-                      </motion.div>
-                    ) : (
-                      <motion.div
-                        className="grid gap-4"
-                        variants={containerVariants}
-                        initial="hidden"
-                        animate="visible"
-                      >
-                        {filteredRequests.map(req => (
-                          <motion.div key={req.id} variants={itemVariants} whileHover={{ y: -2 }} transition={{ duration: 0.2 }}>
-                            <Card className={`border-0 bg-white/80 backdrop-blur-sm shadow-lg hover:shadow-xl transition-all duration-300 ${statusBorderColor[req.status] || ''}`}>
-                              <CardContent className="p-5">
-                                <div className="flex items-start justify-between flex-wrap gap-4">
-                                  <div className="flex-1 min-w-0">
-                                    {/* Service Name & Status */}
-                                    <div className="flex items-center gap-3 mb-4">
-                                      <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-violet-100 to-fuchsia-100 flex items-center justify-center shrink-0">
-                                        <ClipboardList className="w-5 h-5 text-violet-600" />
-                                      </div>
-                                      <div className="min-w-0">
-                                        <h3 className="font-semibold text-base truncate">{req.service?.name || 'خدمة محذوفة'}</h3>
-                                        <Badge className={`${statusGradientBadge[req.status] || getStatusColor(req.status)} text-xs mt-1 shadow-sm`}>
-                                          {getStatusLabel(req.status)}
-                                        </Badge>
-                                      </div>
-                                    </div>
-
-                                    {/* Details Grid */}
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-                                      {req.service?.price !== undefined && (
-                                        <div className="flex items-center gap-2 text-muted-foreground">
-                                          <CreditCard className="w-3.5 h-3.5 text-emerald-500" />
-                                          <span className="font-medium text-foreground ml-1">السعر:</span>
-                                          <span className="text-emerald-600 font-semibold">{formatPrice(req.service.price)}</span>
-                                        </div>
-                                      )}
-                                      {req.paymentMethod && (
-                                        <div className="flex items-center gap-2 text-muted-foreground">
-                                          <CreditCard className="w-3.5 h-3.5" />
-                                          <span className="font-medium text-foreground ml-1">طريقة الدفع:</span>
-                                          {req.paymentMethod}
-                                        </div>
-                                      )}
-                                      {req.address && (
-                                        <div className="flex items-center gap-2 text-muted-foreground">
-                                          <MapPin className="w-3.5 h-3.5 text-violet-400" />
-                                          <span className="font-medium text-foreground ml-1">العنوان:</span>
-                                          {req.address}
-                                        </div>
-                                      )}
-                                      <div className="flex items-center gap-2 text-muted-foreground">
-                                        <Calendar className="w-3.5 h-3.5" />
-                                        <span className="font-medium text-foreground ml-1">التاريخ:</span>
-                                        {new Date(req.createdAt).toLocaleDateString('ar-YE', {
-                                          year: 'numeric',
-                                          month: 'long',
-                                          day: 'numeric',
-                                        })}
-                                      </div>
-                                    </div>
-
-                                    {/* Notes */}
-                                    {req.notes && (
-                                      <div className="mt-3 bg-blue-50/80 rounded-xl p-3 text-sm">
-                                        <span className="font-medium text-blue-800">ملاحظاتك: </span>
-                                        <span className="text-blue-700">{req.notes}</span>
-                                      </div>
-                                    )}
-
-                                    {/* Admin Notes */}
-                                    {req.adminNotes && (
-                                      <div className="mt-3 bg-amber-50/80 rounded-xl p-3 text-sm">
-                                        <span className="font-medium text-amber-800">ملاحظات الإدارة: </span>
-                                        <span className="text-amber-700">{req.adminNotes}</span>
-                                      </div>
-                                    )}
-
-                                    {/* Assigned Nurse */}
-                                    {req.assignment?.nurse && (
-                                      <div className="mt-3 bg-violet-50/80 rounded-xl p-3 text-sm flex items-center gap-2">
-                                        <div className="w-7 h-7 rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center shrink-0 shadow-sm shadow-violet-500/25">
-                                          <User className="w-3.5 h-3.5 text-white" />
-                                        </div>
-                                        <div>
-                                          <span className="font-medium text-violet-800">الممرض/ة المعيّن/ة: </span>
-                                          <span className="text-violet-700">
-                                            {req.assignment.nurse.firstName} {req.assignment.nurse.lastName}
-                                          </span>
-                                        </div>
-                                      </div>
-                                    )}
-                                  </div>
-
-                                  {/* Action Buttons */}
-                                  <div className="flex flex-col gap-2 shrink-0">
-                                    {req.status === 'pending' && (
-                                      <Button
-                                        size="sm"
-                                        className="bg-gradient-to-r from-red-500 to-rose-500 text-white hover:scale-[1.02] active:scale-[0.98] hover:shadow-lg hover:shadow-red-500/25 transition-all duration-200"
-                                        onClick={() => handleCancelRequest(req.id)}
-                                      >
-                                        <XCircle className="w-4 h-4 ml-1" />
-                                        إلغاء
-                                      </Button>
-                                    )}
-                                    {req.status === 'completed' && (
-                                      <Button
-                                        size="sm"
-                                        className="bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white hover:scale-[1.02] active:scale-[0.98] hover:shadow-lg hover:shadow-violet-500/25 transition-all duration-200"
-                                        onClick={() => handleReorder(req)}
-                                      >
-                                        <RefreshCw className="w-4 h-4 ml-1" />
-                                        إعادة الطلب
-                                      </Button>
-                                    )}
-                                    {(req.status === 'approved' || req.status === 'in_progress') && req.assignment?.nurse && (
-                                      <Button
-                                        size="sm"
-                                        className="bg-gradient-to-r from-violet-500 to-purple-500 text-white hover:scale-[1.02] active:scale-[0.98] hover:shadow-lg hover:shadow-violet-500/25 transition-all duration-200"
-                                        onClick={() => setActiveChatRequestId(req.id)}
-                                      >
-                                        <MessageCircle className="w-4 h-4 ml-1" />
-                                        محادثة
-                                      </Button>
-                                    )}
-                                  </div>
-                                </div>
-                              </CardContent>
-                            </Card>
-                          </motion.div>
-                        ))}
+                        <p className="text-muted-foreground text-lg font-medium">لا توجد طلبات</p>
+                        <p className="text-muted-foreground text-sm mt-1">قم بطلب خدمة من قسم الخدمات</p>
                       </motion.div>
                     )}
                   </div>
@@ -1104,186 +1203,142 @@ export default function BeneficiaryDashboard() {
                 {activeTab === 'payments' && (
                   <div className="space-y-6">
                     <div>
-                      <h1 className="text-2xl font-bold bg-gradient-to-l from-violet-700 to-fuchsia-600 bg-clip-text text-transparent">المدفوعات</h1>
-                      <p className="text-muted-foreground text-sm mt-1">طرق الدفع المتاحة وسجل المدفوعات</p>
+                      <h1 className="text-2xl font-bold bg-gradient-to-l from-violet-700 to-fuchsia-600 bg-clip-text text-transparent">سجل المدفوعات</h1>
+                      <p className="text-muted-foreground text-sm mt-1">عرض سجل المدفوعات والمعاملات المالية</p>
                     </div>
 
-                    {/* Payment Methods Section */}
-                    <div>
-                      <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
-                        <CreditCard className="w-5 h-5 text-violet-600" />
-                        طرق الدفع المتاحة
-                      </h2>
-                      {payments.length === 0 ? (
-                        <div className="text-center py-10 bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg">
-                          <CreditCard className="w-10 h-10 text-gray-300 mx-auto mb-2" />
-                          <p className="text-muted-foreground text-sm">لا توجد طرق دفع متاحة حالياً</p>
-                        </div>
-                      ) : (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          {payments.map(payment => (
-                            <motion.div key={payment.id} whileHover={{ y: -4 }} transition={{ duration: 0.2 }}>
-                              <Card className="border-0 bg-white/80 backdrop-blur-sm shadow-lg hover:shadow-xl transition-all duration-300">
-                                <CardContent className="p-5">
-                                  <div className="flex items-center gap-3 mb-3">
-                                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-100 to-teal-100 flex items-center justify-center">
-                                      <CreditCard className="w-5 h-5 text-emerald-600" />
-                                    </div>
-                                    <h3 className="font-semibold">{payment.name}</h3>
+                    {paymentHistory.length > 0 ? (
+                      <motion.div className="space-y-3" variants={containerVariants} initial="hidden" animate="visible">
+                        {paymentHistory.map((req, i) => (
+                          <motion.div key={req.id} variants={itemVariants}>
+                            <Card className="border-0 bg-white/80 backdrop-blur-sm shadow-lg">
+                              <CardContent className="p-5">
+                                <div className="flex items-start justify-between gap-3">
+                                  <div className="flex-1 min-w-0">
+                                    <h3 className="font-semibold text-base">{req.service?.name || 'خدمة'}</h3>
+                                    <p className="text-xs text-muted-foreground mt-1">{formatDate(req.completedAt || req.updatedAt || req.createdAt)}</p>
+                                    {req.paymentMethod && (
+                                      <p className="text-xs text-muted-foreground mt-0.5">
+                                        طريقة الدفع: {req.paymentMethod}
+                                      </p>
+                                    )}
                                   </div>
-                                  <div className="bg-gray-50/80 rounded-xl p-3 text-sm">
-                                    <p className="text-muted-foreground leading-relaxed">{payment.accountInfo}</p>
-                                  </div>
-                                </CardContent>
-                              </Card>
-                            </motion.div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
-                    <Separator />
-
-                    {/* Payment History / Statements */}
-                    <div>
-                      <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
-                        <ClipboardList className="w-5 h-5 text-emerald-600" />
-                        سجل المدفوعات
-                      </h2>
-                      {paymentHistory.length === 0 ? (
-                        <div className="text-center py-10 bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg">
-                          <ClipboardList className="w-10 h-10 text-gray-300 mx-auto mb-2" />
-                          <p className="text-muted-foreground text-sm">لا توجد مدفوعات مكتملة بعد</p>
-                          <p className="text-muted-foreground text-xs mt-1">ستظهر هنا المدفوعات للخدمات المكتملة</p>
-                        </div>
-                      ) : (
-                        <div className="grid gap-3">
-                          {paymentHistory.map(req => (
-                            <Card key={req.id} className="border-0 bg-white/80 backdrop-blur-sm shadow-lg hover:shadow-xl transition-all duration-300 border-r-4 border-r-emerald-400">
-                              <CardContent className="p-4 flex items-center justify-between flex-wrap gap-3">
-                                <div className="flex items-center gap-3">
-                                  <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-emerald-100 to-teal-100 flex items-center justify-center">
-                                    <CreditCard className="w-4 h-4 text-emerald-600" />
-                                  </div>
-                                  <div>
-                                    <p className="font-medium text-sm">{req.service?.name || 'خدمة'}</p>
-                                    <p className="text-xs text-muted-foreground">
-                                      {req.paymentMethod || 'غير محددة'} • {new Date(req.createdAt).toLocaleDateString('ar-YE')}
-                                    </p>
+                                  <div className="text-left">
+                                    <span className="text-lg font-bold text-emerald-600">
+                                      {formatPrice(req.price || req.service?.price || 0)}
+                                    </span>
+                                    <Badge className="block mt-1 text-[10px] bg-gradient-to-r from-emerald-500 to-teal-500 text-white border-0">
+                                      مدفوع
+                                    </Badge>
                                   </div>
                                 </div>
-                                <span className="text-emerald-600 font-bold">{formatPrice(req.service?.price || 0)}</span>
                               </CardContent>
                             </Card>
-                          ))}
+                          </motion.div>
+                        ))}
+                      </motion.div>
+                    ) : (
+                      <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="text-center py-20"
+                      >
+                        <div className="w-20 h-20 bg-violet-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                          <CreditCard className="w-10 h-10 text-violet-300" />
                         </div>
-                      )}
-                    </div>
+                        <p className="text-muted-foreground text-lg font-medium">لا توجد مدفوعات</p>
+                        <p className="text-muted-foreground text-sm mt-1">ستظهر المدفوعات هنا بعد إكمال الخدمات</p>
+                      </motion.div>
+                    )}
                   </div>
                 )}
 
-                {/* ===== PROFILE TAB ===== */}
+                {/* ===== PROFILE TAB (Location Edit Only) ===== */}
                 {activeTab === 'profile' && (
                   <div className="space-y-6">
                     <div>
                       <h1 className="text-2xl font-bold bg-gradient-to-l from-violet-700 to-fuchsia-600 bg-clip-text text-transparent">الملف الشخصي</h1>
-                      <p className="text-muted-foreground text-sm mt-1">معلومات حسابك الشخصية</p>
+                      <p className="text-muted-foreground text-sm mt-1">عرض بياناتك الشخصية وتحديث الموقع</p>
                     </div>
 
-                    <Card className="border-0 bg-white/80 backdrop-blur-sm shadow-xl">
-                      <CardContent className="p-6">
-                        {/* Avatar & Name Header */}
-                        <div className="flex items-center gap-4 mb-6">
-                          <div className="w-16 h-16 rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center shadow-lg shadow-violet-500/25">
-                            <span className="text-2xl font-bold text-white">{beneficiaryUser?.name?.charAt(0) || '?'}</span>
+                    <Card className="border-0 bg-white/80 backdrop-blur-sm shadow-lg">
+                      <CardContent className="p-6 space-y-5">
+                        {/* Avatar Section */}
+                        <div className="flex items-center gap-4 pb-5 border-b border-gray-100">
+                          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center shadow-lg shadow-violet-500/25">
+                            <span className="text-white font-bold text-2xl">{beneficiaryUser?.name?.charAt(0) || '?'}</span>
                           </div>
                           <div>
-                            <h3 className="text-xl font-bold">{beneficiaryUser?.name}</h3>
-                            <div className="flex items-center gap-2 mt-1">
-                              <Badge className="bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white border-0 shadow-sm shadow-violet-500/20">مستفيد</Badge>
-                            </div>
+                            <h2 className="text-xl font-bold">{profileData?.name || beneficiaryUser?.name}</h2>
+                            <Badge className="mt-1 bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white border-0 text-xs">مستفيد</Badge>
                           </div>
                         </div>
 
-                        <Separator className="mb-6" />
-
-                        {/* Edit Form */}
-                        <div className="space-y-5">
-                          <div className="space-y-2">
-                            <Label htmlFor="profile-name" className="text-sm font-medium flex items-center gap-2">
-                              <User className="w-4 h-4 text-violet-500" />
-                              الاسم الكامل
-                            </Label>
-                            <Input
-                              id="profile-name"
-                              value={profileForm.name}
-                              onChange={e => setProfileForm(f => ({ ...f, name: e.target.value }))}
-                              placeholder="أدخل اسمك الكامل"
-                              className="rounded-xl border-violet-200 focus:border-violet-400 focus:ring-violet-400/20"
-                            />
+                        {/* Read-Only: Name */}
+                        <div className="space-y-2">
+                          <Label className="text-sm font-medium text-gray-500">
+                            <User className="w-3.5 h-3.5 inline ml-1" />
+                            الاسم
+                          </Label>
+                          <div className="p-3 rounded-xl bg-gray-50 border border-gray-100 text-gray-700">
+                            {profileData?.name || beneficiaryUser?.name || 'غير محدد'}
                           </div>
+                        </div>
 
-                          <div className="space-y-2">
-                            <Label htmlFor="profile-phone" className="text-sm font-medium flex items-center gap-2">
-                              <Phone className="w-4 h-4 text-violet-500" />
-                              رقم الهاتف
-                            </Label>
-                            <Input
-                              id="profile-phone"
-                              value={profileForm.phone}
-                              onChange={e => setProfileForm(f => ({ ...f, phone: e.target.value }))}
-                              placeholder="رقم الهاتف"
-                              className="rounded-xl border-violet-200 focus:border-violet-400 focus:ring-violet-400/20"
-                              dir="ltr"
-                            />
+                        {/* Read-Only: Phone */}
+                        <div className="space-y-2">
+                          <Label className="text-sm font-medium text-gray-500">
+                            <Phone className="w-3.5 h-3.5 inline ml-1" />
+                            رقم الهاتف
+                          </Label>
+                          <div className="p-3 rounded-xl bg-gray-50 border border-gray-100 text-gray-700" dir="ltr">
+                            {profileData?.phone || beneficiaryUser?.phone || 'غير محدد'}
                           </div>
+                        </div>
 
+                        {/* Editable: Location */}
+                        <div className="space-y-2">
+                          <Label className="text-sm font-medium text-violet-700">
+                            <MapPin className="w-3.5 h-3.5 inline ml-1" />
+                            الموقع / العنوان
+                          </Label>
+                          <Input
+                            value={profileLocation}
+                            onChange={(e) => setProfileLocation(e.target.value)}
+                            placeholder="أدخل عنوانك الفعلي"
+                            className="rounded-xl border-violet-200 focus:border-violet-400 focus:ring-violet-200"
+                          />
+                          <p className="text-xs text-amber-600 flex items-center gap-1">
+                            <AlertTriangle className="w-3 h-3" />
+                            يرجى إدخال عنوانك الفعلي بدقة
+                          </p>
+                        </div>
+
+                        {/* Referral Code (if available) */}
+                        {referralCode && (
                           <div className="space-y-2">
-                            <Label htmlFor="profile-location" className="text-sm font-medium flex items-center gap-2">
-                              <MapPin className="w-4 h-4 text-violet-500" />
-                              الموقع
+                            <Label className="text-sm font-medium text-gray-500">
+                              <Share2 className="w-3.5 h-3.5 inline ml-1" />
+                              كود الإحالة
                             </Label>
-                            <Input
-                              id="profile-location"
-                              value={profileForm.location}
-                              onChange={e => setProfileForm(f => ({ ...f, location: e.target.value }))}
-                              placeholder="المدينة / المنطقة"
-                              className="rounded-xl border-violet-200 focus:border-violet-400 focus:ring-violet-400/20"
-                            />
-                          </div>
-
-                          {/* Registration Date (Read-only) */}
-                          <div className="bg-gradient-to-l from-violet-50/80 to-fuchsia-50/80 rounded-xl p-4 border border-violet-100/50">
-                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                              <Calendar className="w-4 h-4 text-violet-500" />
-                              <span>تاريخ التسجيل:</span>
-                              <span className="font-medium text-foreground">
-                                {(user as any)?.createdAt
-                                  ? new Date((user as any).createdAt).toLocaleDateString('ar-YE', {
-                                      year: 'numeric',
-                                      month: 'long',
-                                      day: 'numeric',
-                                    })
-                                  : 'غير متوفر'}
-                              </span>
+                            <div className="p-3 rounded-xl bg-violet-50 border border-violet-100 text-violet-700 font-mono font-bold text-center tracking-wider">
+                              {referralCode}
                             </div>
                           </div>
+                        )}
 
-                          <Button
-                            className="w-full bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white hover:scale-[1.02] active:scale-[0.98] hover:shadow-lg hover:shadow-violet-500/25 rounded-xl h-11 transition-all duration-200"
-                            onClick={handleSaveProfile}
-                            disabled={profileSaving}
-                          >
-                            {profileSaving ? (
-                              <>
-                                <Loader2 className="w-4 h-4 ml-2 animate-spin" />
-                                جارٍ الحفظ...
-                              </>
-                            ) : (
-                              'حفظ التعديلات'
-                            )}
-                          </Button>
-                        </div>
+                        <Button
+                          onClick={handleSaveProfile}
+                          disabled={profileSaving}
+                          className="w-full bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white hover:shadow-lg hover:shadow-violet-500/25 rounded-xl hover:scale-[1.01] active:scale-[0.99] transition-all"
+                        >
+                          {profileSaving ? (
+                            <Loader2 className="w-4 h-4 animate-spin ml-2" />
+                          ) : (
+                            <MapPin className="w-4 h-4 ml-2" />
+                          )}
+                          تحديث الموقع
+                        </Button>
                       </CardContent>
                     </Card>
                   </div>
@@ -1295,22 +1350,50 @@ export default function BeneficiaryDashboard() {
                     <div className="flex items-center justify-between flex-wrap gap-3">
                       <div>
                         <h1 className="text-2xl font-bold bg-gradient-to-l from-violet-700 to-fuchsia-600 bg-clip-text text-transparent">الإشعارات</h1>
-                        <p className="text-muted-foreground text-sm mt-1">تحديثات الطلبات والرسائل</p>
+                        <p className="text-muted-foreground text-sm mt-1">
+                          {unreadNotifications > 0 ? `لديك ${unreadNotifications} إشعار جديد` : 'لا توجد إشعارات جديدة'}
+                        </p>
                       </div>
                       {unreadNotifications > 0 && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={markAllNotificationsRead}
-                          className="gap-1.5 rounded-xl hover:scale-[1.02] active:scale-[0.98] transition-transform"
-                        >
-                          <Bell className="w-3.5 h-3.5" />
-                          تحديد الكل كمقروء
+                        <Button variant="outline" size="sm" onClick={markAllNotificationsRead} className="rounded-xl text-xs">
+                          تعيين الكل كمقروء
                         </Button>
                       )}
                     </div>
 
-                    {notifications.length === 0 ? (
+                    {notifications.length > 0 ? (
+                      <motion.div className="space-y-3" variants={containerVariants} initial="hidden" animate="visible">
+                        {notifications.map((notif, i) => (
+                          <motion.div key={notif.id} variants={itemVariants}>
+                            <Card
+                              className={`border-0 bg-white/80 backdrop-blur-sm shadow-lg cursor-pointer transition-all duration-200 hover:shadow-xl ${notifBorderColor[notif.type] || ''} ${!notif.read ? 'ring-1 ring-violet-200/50' : ''}`}
+                              onClick={() => markNotificationRead(notif.id)}
+                            >
+                              <CardContent className="p-4">
+                                <div className="flex items-start gap-3">
+                                  <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${notifIconBg[notif.type] || 'bg-gray-100 text-gray-600'}`}>
+                                    {notif.type === 'assignment' ? <User className="w-4 h-4" /> :
+                                     notif.type === 'status_change' ? <ClipboardList className="w-4 h-4" /> :
+                                     notif.type === 'admin_message' ? <Bell className="w-4 h-4" /> :
+                                     <Bell className="w-4 h-4" />}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-start justify-between gap-2">
+                                      <h3 className={`font-semibold text-sm ${!notif.read ? 'text-gray-900' : 'text-gray-600'}`}>{notif.title}</h3>
+                                      {!notif.read && (
+                                        <span className="w-2 h-2 rounded-full bg-violet-500 shrink-0 mt-1.5" />
+                                      )}
+                                    </div>
+                                    <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{notif.message}</p>
+                                    <p className="text-[10px] text-muted-foreground mt-2">{formatDateTime(notif.createdAt)}</p>
+                                  </div>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          </motion.div>
+                        ))}
+                      </motion.div>
+                    ) : (
                       <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
@@ -1320,63 +1403,7 @@ export default function BeneficiaryDashboard() {
                           <Bell className="w-10 h-10 text-violet-300" />
                         </div>
                         <p className="text-muted-foreground text-lg font-medium">لا توجد إشعارات</p>
-                        <p className="text-muted-foreground text-sm mt-1">ستظهر هنا تحديثات طلباتك ورسائل الإدارة</p>
-                      </motion.div>
-                    ) : (
-                      <motion.div
-                        className="grid gap-3"
-                        variants={containerVariants}
-                        initial="hidden"
-                        animate="visible"
-                      >
-                        {notifications.map(notif => (
-                          <motion.div key={notif.id} variants={itemVariants}>
-                            <Card
-                              className={`border-0 shadow-lg transition-all duration-200 cursor-pointer backdrop-blur-sm ${
-                                notif.read
-                                  ? 'bg-white/60'
-                                  : `bg-white/80 ${notifBorderColor[notif.type] || ''}`
-                              }`}
-                              onClick={() => markNotificationRead(notif.id)}
-                            >
-                              <CardContent className="p-4 flex items-start gap-3">
-                                <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
-                                  notif.type === 'status_change' ? 'bg-gradient-to-br from-amber-100 to-orange-100' :
-                                  notif.type === 'assignment' ? 'bg-gradient-to-br from-violet-100 to-fuchsia-100' :
-                                  notif.type === 'admin_message' ? 'bg-gradient-to-br from-blue-100 to-cyan-100' :
-                                  'bg-gray-100'
-                                }`}>
-                                  {notif.type === 'status_change' && <RefreshCw className="w-4 h-4 text-amber-600" />}
-                                  {notif.type === 'assignment' && <User className="w-4 h-4 text-violet-600" />}
-                                  {notif.type === 'admin_message' && <ClipboardList className="w-4 h-4 text-blue-600" />}
-                                  {notif.type === 'general' && <Bell className="w-4 h-4 text-gray-600" />}
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-2 mb-1">
-                                    <h4 className={`text-sm font-semibold ${notif.read ? 'text-gray-500' : 'text-gray-900'}`}>
-                                      {notif.title}
-                                    </h4>
-                                    {!notif.read && (
-                                      <span className="w-2.5 h-2.5 rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-500 shrink-0 shadow-sm shadow-violet-500/30" />
-                                    )}
-                                  </div>
-                                  <p className="text-xs text-muted-foreground leading-relaxed">{notif.message}</p>
-                                  <p className="text-[10px] text-muted-foreground mt-2">
-                                    {notif.createdAt
-                                      ? new Date(notif.createdAt).toLocaleDateString('ar-YE', {
-                                          year: 'numeric',
-                                          month: 'short',
-                                          day: 'numeric',
-                                          hour: '2-digit',
-                                          minute: '2-digit',
-                                        })
-                                      : ''}
-                                  </p>
-                                </div>
-                              </CardContent>
-                            </Card>
-                          </motion.div>
-                        ))}
+                        <p className="text-muted-foreground text-sm mt-1">ستظهر الإشعارات هنا عند تحديث حالة طلباتك</p>
                       </motion.div>
                     )}
                   </div>
@@ -1385,140 +1412,115 @@ export default function BeneficiaryDashboard() {
                 {/* ===== LOYALTY TAB ===== */}
                 {activeTab === 'loyalty' && (
                   <div className="space-y-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h1 className="text-2xl font-bold bg-gradient-to-l from-violet-700 to-fuchsia-600 bg-clip-text text-transparent">برنامج النقاط</h1>
-                        <p className="text-muted-foreground text-sm mt-1">اجمع نقاط واحصل على خصومات</p>
-                      </div>
-                      <Button variant="outline" size="sm" onClick={fetchData} className="gap-1.5 rounded-xl hover:scale-[1.02] active:scale-[0.98] transition-transform">
-                        <RefreshCw className="w-3.5 h-3.5" />
-                        تحديث
-                      </Button>
+                    <div>
+                      <h1 className="text-2xl font-bold bg-gradient-to-l from-violet-700 to-fuchsia-600 bg-clip-text text-transparent">نقاط الولاء</h1>
+                      <p className="text-muted-foreground text-sm mt-1">اجمع النقاط واستبدلها بخصومات</p>
                     </div>
 
-                    {/* Points Balance Card with circular display */}
-                    <Card className="border-0 bg-white/80 backdrop-blur-sm shadow-xl">
-                      <CardContent className="p-8 text-center">
-                        <div className="relative w-40 h-40 mx-auto mb-6">
-                          {/* Gradient ring */}
-                          <svg className="w-full h-full -rotate-90" viewBox="0 0 160 160">
-                            <circle cx="80" cy="80" r="70" fill="none" stroke="#f3f4f6" strokeWidth="12" />
-                            <circle
-                              cx="80" cy="80" r="70" fill="none"
-                              stroke="url(#loyaltyGradient)"
-                              strokeWidth="12"
-                              strokeLinecap="round"
-                              strokeDasharray={`${(loyaltyProgress / 100) * 440} 440`}
-                              className="transition-all duration-1000"
-                            />
-                            <defs>
-                              <linearGradient id="loyaltyGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                                <stop offset="0%" stopColor="#8b5cf6" />
-                                <stop offset="50%" stopColor="#a855f7" />
-                                <stop offset="100%" stopColor="#d946ef" />
-                              </linearGradient>
-                            </defs>
-                          </svg>
-                          <div className="absolute inset-0 flex flex-col items-center justify-center">
-                            <Award className="w-8 h-8 text-violet-500 mb-1" />
-                            <p className="text-3xl font-bold bg-gradient-to-l from-violet-700 to-fuchsia-600 bg-clip-text text-transparent">{loyaltyBalance.toLocaleString('ar-YE')}</p>
-                            <p className="text-xs text-muted-foreground">نقطة</p>
+                    {/* Circular Glowing Points Card */}
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ duration: 0.4 }}
+                    >
+                      <Card className="border-0 shadow-2xl relative overflow-hidden">
+                        <div className="absolute inset-0 bg-gradient-to-br from-violet-600 via-purple-600 to-fuchsia-600" />
+                        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.15)_0%,transparent_70%)]" />
+                        <CardContent className="p-8 relative z-10 text-center">
+                          {/* Circular Points Display */}
+                          <div className="relative mx-auto w-40 h-40 mb-6">
+                            <div className="absolute inset-0 rounded-full bg-white/10 backdrop-blur-sm shadow-[0_0_60px_rgba(139,92,246,0.5)]" />
+                            <div className="absolute inset-2 rounded-full bg-white/15 backdrop-blur-sm border border-white/20" />
+                            <div className="absolute inset-0 flex flex-col items-center justify-center">
+                              <Award className="w-6 h-6 text-white/70 mb-1" />
+                              <p className="text-4xl font-bold text-white">{loyaltyBalance}</p>
+                              <p className="text-violet-200 text-xs mt-0.5">نقطة</p>
+                            </div>
                           </div>
-                        </div>
 
-                        {/* Level Badge */}
-                        <Badge className={`text-sm px-4 py-1 border-0 shadow-sm ${
-                          loyaltyLevel === 'ذهبي'
-                            ? 'bg-gradient-to-r from-amber-500 to-yellow-500 text-white shadow-amber-500/25'
-                            : loyaltyLevel === 'فضي'
-                            ? 'bg-gradient-to-r from-gray-400 to-gray-500 text-white shadow-gray-400/25'
-                            : 'bg-gradient-to-r from-orange-400 to-amber-500 text-white shadow-orange-400/25'
-                        }`}>
-                          {loyaltyLevel === 'ذهبي' ? '⭐' : loyaltyLevel === 'فضي' ? '🥈' : '🥉'} مستوى {loyaltyLevel}
-                        </Badge>
-
-                        {/* Progress Bar */}
-                        <div className="mt-4 w-full max-w-xs mx-auto">
-                          <div className="flex justify-between text-xs text-muted-foreground mb-1">
-                            <span>التقدم للمستوى التالي</span>
-                            <span>{Math.round(loyaltyProgress)}%</span>
+                          {/* Level Badge */}
+                          <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r ${loyaltyLevelGradient} shadow-lg mb-4`}>
+                            <Shield className="w-4 h-4 text-white" />
+                            <span className="text-white font-bold text-sm">مستوى {loyaltyLevel}</span>
                           </div>
-                          <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-gradient-to-l from-violet-500 to-fuchsia-500 rounded-full transition-all duration-1000 shadow-sm shadow-violet-500/25"
-                              style={{ width: `${loyaltyProgress}%` }}
-                            />
-                          </div>
-                        </div>
 
-                        <div className="mt-6 bg-gradient-to-l from-violet-50/80 to-fuchsia-50/80 rounded-xl p-4 text-sm border border-violet-100/50">
-                          <p className="text-violet-800 font-medium">💎 كل 100 نقطة = خصم على خدمة مجانية</p>
-                          <p className="text-violet-600 text-xs mt-1">تحصل على 10 نقاط لكل طلب خدمة</p>
+                          {/* Progress Bar */}
+                          <div className="max-w-xs mx-auto">
+                            <div className="flex items-center justify-between text-xs text-violet-200 mb-2">
+                              <span>{loyaltyLevel}</span>
+                              <span>{loyaltyNextLevel}</span>
+                            </div>
+                            <div className="h-3 rounded-full bg-white/20 overflow-hidden">
+                              <motion.div
+                                className="h-full rounded-full bg-gradient-to-l from-white via-violet-200 to-fuchsia-200"
+                                initial={{ width: 0 }}
+                                animate={{ width: `${loyaltyProgress}%` }}
+                                transition={{ duration: 1, delay: 0.3 }}
+                              />
+                            </div>
+                            <p className="text-xs text-violet-200 mt-2">
+                              {loyaltyBalance >= 1000
+                                ? 'لقد وصلت أعلى مستوى!'
+                                : `تحتاج ${loyaltyNextThreshold - loyaltyBalance} نقطة للوصول للمستوى ${loyaltyNextLevel}`
+                              }
+                            </p>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </motion.div>
+
+                    {/* Redeem Section */}
+                    <Card className="border-0 bg-white/80 backdrop-blur-sm shadow-lg">
+                      <CardContent className="p-6">
+                        <h3 className="font-semibold text-base mb-1 flex items-center gap-2">
+                          <Gift className="w-5 h-5 text-fuchsia-600" />
+                          استبدال النقاط
+                        </h3>
+                        <p className="text-xs text-muted-foreground mb-4">الحد الأدنى للاستبدال 100 نقطة</p>
+                        <div className="flex gap-2">
+                          <Input
+                            type="number"
+                            value={redeemAmount}
+                            onChange={(e) => setRedeemAmount(e.target.value)}
+                            placeholder="عدد النقاط"
+                            min="100"
+                            className="rounded-xl"
+                          />
+                          <Button
+                            onClick={handleRedeemPoints}
+                            disabled={redeeming || !redeemAmount}
+                            className="bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white rounded-xl hover:shadow-md shrink-0"
+                          >
+                            {redeeming ? <Loader2 className="w-4 h-4 animate-spin" /> : 'استبدال'}
+                          </Button>
                         </div>
                       </CardContent>
                     </Card>
 
-                    {/* Redeem Section */}
-                    {loyaltyBalance >= 100 && (
-                      <Card className="border-0 bg-white/80 backdrop-blur-sm shadow-xl">
-                        <CardContent className="p-6">
-                          <h3 className="font-semibold text-lg mb-4 flex items-center gap-2">
-                            <Zap className="w-5 h-5 text-amber-500" />
-                            استبدال النقاط
-                          </h3>
-                          <div className="flex items-center gap-3">
-                            <Input
-                              type="number"
-                              min="100"
-                              max={loyaltyBalance}
-                              value={redeemAmount}
-                              onChange={e => setRedeemAmount(e.target.value)}
-                              placeholder="عدد النقاط"
-                              className="flex-1 rounded-xl border-violet-200 focus:border-violet-400 focus:ring-violet-400/20"
-                            />
-                            <Button
-                              className="bg-gradient-to-r from-amber-500 to-yellow-500 text-white hover:scale-[1.02] active:scale-[0.98] hover:shadow-lg hover:shadow-amber-500/25 transition-all duration-200"
-                              onClick={handleRedeemPoints}
-                              disabled={redeeming}
-                            >
-                              {redeeming ? <Loader2 className="w-4 h-4 animate-spin" /> : 'استبدال'}
-                            </Button>
-                          </div>
-                          <p className="text-xs text-muted-foreground mt-2">الحد الأدنى: 100 نقطة • المتاح: {loyaltyBalance.toLocaleString('ar-YE')} نقطة</p>
-                        </CardContent>
-                      </Card>
-                    )}
-
                     {/* Points History */}
-                    <Card className="border-0 bg-white/80 backdrop-blur-sm shadow-xl">
-                      <CardContent className="p-6">
-                        <h3 className="font-semibold text-lg mb-4">سجل النقاط</h3>
-                        {loyaltyHistory.length > 0 ? (
+                    {loyaltyHistory.length > 0 && (
+                      <Card className="border-0 bg-white/80 backdrop-blur-sm shadow-lg">
+                        <CardContent className="p-6">
+                          <h3 className="font-semibold text-base mb-4 flex items-center gap-2">
+                            <TrendingUp className="w-5 h-5 text-violet-600" />
+                            سجل النقاط
+                          </h3>
                           <div className="space-y-3 max-h-96 overflow-y-auto">
-                            {loyaltyHistory.map((item: any) => (
-                              <div key={item.id} className="flex items-center justify-between p-3 bg-gradient-to-l from-gray-50/80 to-gray-50/40 rounded-xl">
-                                <div className="flex items-center gap-3">
-                                  <div className={`w-8 h-8 rounded-full flex items-center justify-center ${item.type === 'earn' ? 'bg-emerald-100' : 'bg-red-100'}`}>
-                                    {item.type === 'earn' ? <Plus className="w-4 h-4 text-emerald-600" /> : <XCircle className="w-4 h-4 text-red-600" />}
-                                  </div>
-                                  <div>
-                                    <p className="text-sm font-medium">{item.reason}</p>
-                                    <p className="text-xs text-muted-foreground">
-                                      {item.createdAt ? new Date(typeof item.createdAt === 'object' && 'seconds' in item.createdAt ? item.createdAt.seconds * 1000 : item.createdAt).toLocaleDateString('ar-YE') : ''}
-                                    </p>
-                                  </div>
+                            {loyaltyHistory.map((item: any, i: number) => (
+                              <div key={i} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
+                                <div>
+                                  <p className="text-sm font-medium">{item.reason || 'معاملة نقاط'}</p>
+                                  <p className="text-xs text-muted-foreground">{formatDate(item.createdAt)}</p>
                                 </div>
-                                <span className={`font-bold ${item.points > 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                                  {item.points > 0 ? '+' : ''}{item.points}
+                                <span className={`text-sm font-bold ${item.action === 'redeem' || item.type === 'redeem' ? 'text-red-500' : 'text-emerald-500'}`}>
+                                  {item.action === 'redeem' || item.type === 'redeem' ? '-' : '+'}{item.points}
                                 </span>
                               </div>
                             ))}
                           </div>
-                        ) : (
-                          <p className="text-center text-muted-foreground py-8">لا يوجد سجل نقاط بعد</p>
-                        )}
-                      </CardContent>
-                    </Card>
+                        </CardContent>
+                      </Card>
+                    )}
                   </div>
                 )}
 
@@ -1527,98 +1529,94 @@ export default function BeneficiaryDashboard() {
                   <div className="space-y-6">
                     <div>
                       <h1 className="text-2xl font-bold bg-gradient-to-l from-violet-700 to-fuchsia-600 bg-clip-text text-transparent">برنامج الإحالة</h1>
-                      <p className="text-muted-foreground text-sm mt-1">ادعُ أصدقاءك واحصل على نقاط مكافأة</p>
+                      <p className="text-muted-foreground text-sm mt-1">شارك كود الإحالة مع أصدقائك واحصل على نقاط</p>
                     </div>
 
                     {/* Referral Code Card */}
-                    <Card className="border-0 bg-white/80 backdrop-blur-sm shadow-xl">
-                      <CardContent className="p-8 text-center">
-                        <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center mx-auto mb-4 shadow-lg shadow-violet-500/25">
-                          <Share2 className="w-8 h-8 text-white" />
-                        </div>
-                        <h3 className="font-semibold text-lg mb-4">كود الإحالة الخاص بك</h3>
-                        {referralCode ? (
-                          <>
-                            <div className="bg-gradient-to-l from-violet-50 to-fuchsia-50 rounded-2xl p-6 inline-block border-2 border-transparent bg-clip-padding relative">
-                              <div className="absolute inset-0 rounded-2xl bg-gradient-to-l from-violet-400 to-fuchsia-400 p-[2px]">
-                                <div className="w-full h-full bg-gradient-to-l from-violet-50 to-fuchsia-50 rounded-2xl" />
-                              </div>
-                              <div className="relative">
-                                <p className="font-mono text-3xl font-bold bg-gradient-to-l from-violet-700 to-fuchsia-600 bg-clip-text text-transparent tracking-wider">{referralCode}</p>
-                              </div>
-                            </div>
-                            <div className="flex justify-center gap-3 mt-6">
-                              <motion.button
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ duration: 0.3 }}
+                    >
+                      <Card className="border-0 shadow-2xl relative overflow-hidden">
+                        <div className="absolute inset-0 bg-gradient-to-br from-violet-600 via-purple-600 to-fuchsia-600" />
+                        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.12)_0%,transparent_70%)]" />
+                        <CardContent className="p-8 relative z-10 text-center">
+                          <Sparkles className="w-8 h-8 text-white/80 mx-auto mb-3" />
+                          <h3 className="text-lg font-bold text-white mb-1">كود الإحالة الخاص بك</h3>
+                          <p className="text-violet-200 text-xs mb-5">شارك الكود مع أصدقائك</p>
+
+                          {/* Code Display */}
+                          <div className="relative mx-auto max-w-xs">
+                            <div className="bg-white/15 backdrop-blur-sm rounded-2xl border border-white/20 p-4 flex items-center justify-between gap-3">
+                              <span className="text-2xl font-bold text-white tracking-[0.2em] font-mono flex-1 text-center">
+                                {referralCode || '------'}
+                              </span>
+                              <button
                                 onClick={handleCopyReferral}
-                                className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-medium text-sm transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] ${
-                                  copiedReferral
-                                    ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-500/25'
-                                    : 'bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white shadow-lg shadow-violet-500/25'
-                                }`}
-                                whileTap={{ scale: 0.95 }}
+                                className="w-10 h-10 rounded-xl bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors shrink-0"
+                                aria-label="نسخ الكود"
                               >
-                                {copiedReferral ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                                {copiedReferral ? 'تم النسخ!' : 'نسخ الكود'}
-                              </motion.button>
+                                {copiedReferral ? (
+                                  <Check className="w-5 h-5 text-emerald-300" />
+                                ) : (
+                                  <Copy className="w-5 h-5 text-white" />
+                                )}
+                              </button>
                             </div>
-                          </>
-                        ) : (
-                          <div className="flex justify-center mt-2">
-                            <Button
-                              className="bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white hover:scale-[1.02] active:scale-[0.98] hover:shadow-lg hover:shadow-violet-500/25 transition-all duration-200"
-                              onClick={fetchData}
-                            >
-                              إنشاء كود إحالة
-                            </Button>
                           </div>
-                        )}
-                      </CardContent>
-                    </Card>
 
-                    {/* Referral Stats */}
-                    <Card className="border-0 bg-white/80 backdrop-blur-sm shadow-xl">
-                      <CardContent className="p-6">
-                        <h3 className="font-semibold text-lg mb-4">إحصائيات الإحالة</h3>
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="bg-gradient-to-br from-violet-50 to-fuchsia-50 rounded-xl p-4 text-center border border-violet-100/50">
-                            <p className="text-2xl font-bold text-violet-700">{referralUses}</p>
-                            <p className="text-xs text-muted-foreground">أشخاص استخدموا كودك</p>
-                          </div>
-                          <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-xl p-4 text-center border border-emerald-100/50">
-                            <p className="text-2xl font-bold text-emerald-700">{referralUses * 50}</p>
-                            <p className="text-xs text-muted-foreground">نقاط مكافأة مكتسبة</p>
-                          </div>
-                        </div>
-                        <div className="mt-4 bg-gradient-to-l from-amber-50 to-yellow-50 rounded-xl p-3 text-sm border border-amber-100/50">
-                          <p className="text-amber-800 font-medium">🎁 شارك كودك مع أصدقائك!</p>
-                          <p className="text-amber-700 text-xs mt-1">تحصل على 50 نقطة لكل شخص يستخدم كودك، ويحصل هو على 25 نقطة مكافأة</p>
-                        </div>
-                      </CardContent>
-                    </Card>
-
-                    {/* Apply Referral Code */}
-                    {!referralCode && (
-                      <Card className="border-0 bg-white/80 backdrop-blur-sm shadow-xl">
-                        <CardContent className="p-6">
-                          <h3 className="font-semibold text-lg mb-4">لديك كود إحالة؟</h3>
-                          <div className="flex items-center gap-3">
-                            <Input
-                              value={referralInput}
-                              onChange={e => setReferralInput(e.target.value.toUpperCase())}
-                              placeholder="أدخل كود الإحالة"
-                              className="flex-1 font-mono rounded-xl border-violet-200 focus:border-violet-400 focus:ring-violet-400/20"
-                            />
-                            <Button
-                              className="bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white hover:scale-[1.02] active:scale-[0.98] hover:shadow-lg hover:shadow-violet-500/25 transition-all duration-200"
-                              onClick={handleApplyReferral}
-                              disabled={referralApplying}
-                            >
-                              {referralApplying ? <Loader2 className="w-4 h-4 animate-spin" /> : 'تطبيق'}
-                            </Button>
-                          </div>
+                          <p className="text-violet-200 text-xs mt-4">
+                            كل صديق يستخدم كودك يحصل على {adminSettings.referralBonusPointsReceiver || 25} نقطة وأنت تحصل على {adminSettings.referralBonusPoints || 50} نقطة
+                          </p>
                         </CardContent>
                       </Card>
-                    )}
+                    </motion.div>
+
+                    {/* Referral Stats */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <Card className="border-0 bg-white/80 backdrop-blur-sm shadow-lg">
+                        <CardContent className="p-5 text-center">
+                          <div className="w-12 h-12 rounded-xl bg-violet-100 flex items-center justify-center mx-auto mb-3">
+                            <Share2 className="w-6 h-6 text-violet-600" />
+                          </div>
+                          <p className="text-3xl font-bold text-violet-700">{referralUses}</p>
+                          <p className="text-sm text-muted-foreground mt-1">شخص استخدم كودك</p>
+                        </CardContent>
+                      </Card>
+                      <Card className="border-0 bg-white/80 backdrop-blur-sm shadow-lg">
+                        <CardContent className="p-5 text-center">
+                          <div className="w-12 h-12 rounded-xl bg-fuchsia-100 flex items-center justify-center mx-auto mb-3">
+                            <Gift className="w-6 h-6 text-fuchsia-600" />
+                          </div>
+                          <p className="text-3xl font-bold text-fuchsia-700">{adminSettings.referralBonusPoints || 50}</p>
+                          <p className="text-sm text-muted-foreground mt-1">نقطة لكل إحالة ناجحة</p>
+                        </CardContent>
+                      </Card>
+                    </div>
+
+                    {/* Apply Referral Code */}
+                    <Card className="border-0 bg-white/80 backdrop-blur-sm shadow-lg">
+                      <CardContent className="p-6">
+                        <h3 className="font-semibold text-base mb-1">لديك كود إحالة؟</h3>
+                        <p className="text-xs text-muted-foreground mb-4">أدخل كود إحالة صديقك واحصل على {adminSettings.referralBonusPointsReceiver || 25} نقطة</p>
+                        <div className="flex gap-2">
+                          <Input
+                            value={referralInput}
+                            onChange={(e) => setReferralInput(e.target.value.toUpperCase())}
+                            placeholder="أدخل كود الإحالة"
+                            className="rounded-xl font-mono tracking-wider"
+                          />
+                          <Button
+                            onClick={handleApplyReferral}
+                            disabled={referralApplying || !referralInput.trim()}
+                            className="bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white rounded-xl hover:shadow-md shrink-0"
+                          >
+                            {referralApplying ? <Loader2 className="w-4 h-4 animate-spin" /> : 'تطبيق'}
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
                   </div>
                 )}
 
@@ -1630,79 +1628,85 @@ export default function BeneficiaryDashboard() {
                       <p className="text-muted-foreground text-sm mt-1">الأسئلة الشائعة ومعلومات التواصل</p>
                     </div>
 
-                    {/* FAQ Section */}
-                    <div>
-                      <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                        <HelpCircle className="w-5 h-5 text-violet-600" />
-                        الأسئلة الشائعة
-                      </h2>
-                      <div className="grid gap-3">
-                        {faqItems.map((item, i) => (
-                          <motion.div
-                            key={i}
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: i * 0.06 }}
-                          >
-                            <Card className="border-0 bg-white/80 backdrop-blur-sm shadow-lg hover:shadow-xl transition-shadow duration-200">
-                              <CardContent className="p-5">
-                                <h3 className="font-bold mb-2 flex items-center gap-2 text-sm">
-                                  <div className="w-6 h-6 rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-500 flex items-center justify-center shrink-0 shadow-sm shadow-violet-500/25">
-                                    <span className="text-white text-xs font-bold">{(i + 1).toLocaleString('ar-YE')}</span>
-                                  </div>
-                                  {item.q}
-                                </h3>
-                                <p className="text-sm text-muted-foreground leading-relaxed mr-8">{item.a}</p>
-                              </CardContent>
-                            </Card>
-                          </motion.div>
-                        ))}
-                      </div>
+                    {/* Contact Info from Admin Settings */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {adminSettings.emergencyPhone && (
+                        <motion.div whileHover={{ y: -4 }} transition={{ duration: 0.2 }}>
+                          <Card className="border-0 bg-white/80 backdrop-blur-sm shadow-lg">
+                            <CardContent className="p-5 text-center">
+                              <div className="w-12 h-12 rounded-xl bg-red-100 flex items-center justify-center mx-auto mb-3">
+                                <Phone className="w-6 h-6 text-red-600" />
+                              </div>
+                              <h3 className="font-semibold text-sm mb-1">هاتف الطوارئ</h3>
+                              <a
+                                href={`tel:${adminSettings.emergencyPhone}`}
+                                className="text-lg font-bold text-red-600 hover:underline"
+                                dir="ltr"
+                              >
+                                {adminSettings.emergencyPhone}
+                              </a>
+                            </CardContent>
+                          </Card>
+                        </motion.div>
+                      )}
+                      {adminSettings.phone && (
+                        <motion.div whileHover={{ y: -4 }} transition={{ duration: 0.2 }}>
+                          <Card className="border-0 bg-white/80 backdrop-blur-sm shadow-lg">
+                            <CardContent className="p-5 text-center">
+                              <div className="w-12 h-12 rounded-xl bg-violet-100 flex items-center justify-center mx-auto mb-3">
+                                <Phone className="w-6 h-6 text-violet-600" />
+                              </div>
+                              <h3 className="font-semibold text-sm mb-1">هاتف الدعم</h3>
+                              <a
+                                href={`tel:${adminSettings.phone}`}
+                                className="text-lg font-bold text-violet-600 hover:underline"
+                                dir="ltr"
+                              >
+                                {adminSettings.phone}
+                              </a>
+                            </CardContent>
+                          </Card>
+                        </motion.div>
+                      )}
+                      {adminSettings.email && (
+                        <motion.div whileHover={{ y: -4 }} transition={{ duration: 0.2 }}>
+                          <Card className="border-0 bg-white/80 backdrop-blur-sm shadow-lg">
+                            <CardContent className="p-5 text-center">
+                              <div className="w-12 h-12 rounded-xl bg-fuchsia-100 flex items-center justify-center mx-auto mb-3">
+                                <MessageCircle className="w-6 h-6 text-fuchsia-600" />
+                              </div>
+                              <h3 className="font-semibold text-sm mb-1">البريد الإلكتروني</h3>
+                              <a
+                                href={`mailto:${adminSettings.email}`}
+                                className="text-sm font-bold text-fuchsia-600 hover:underline break-all"
+                              >
+                                {adminSettings.email}
+                              </a>
+                            </CardContent>
+                          </Card>
+                        </motion.div>
+                      )}
                     </div>
 
-                    <Separator />
-
-                    {/* Contact Info */}
-                    <div>
-                      <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                        <Phone className="w-5 h-5 text-violet-600" />
-                        معلومات التواصل
-                      </h2>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <Card className="border-0 bg-white/80 backdrop-blur-sm shadow-lg hover:shadow-xl transition-all duration-300">
-                          <CardContent className="p-5 flex items-center gap-4">
-                            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-emerald-100 to-teal-100 flex items-center justify-center shrink-0">
-                              <Phone className="w-5 h-5 text-emerald-600" />
-                            </div>
-                            <div>
-                              <p className="text-xs text-muted-foreground">رقم الهاتف</p>
-                              <p className="font-semibold text-sm" dir="ltr">+967 777 000 000</p>
-                            </div>
-                          </CardContent>
-                        </Card>
-                        <Card className="border-0 bg-white/80 backdrop-blur-sm shadow-lg hover:shadow-xl transition-all duration-300">
-                          <CardContent className="p-5 flex items-center gap-4">
-                            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-blue-100 to-cyan-100 flex items-center justify-center shrink-0">
-                              <Home className="w-5 h-5 text-blue-600" />
-                            </div>
-                            <div>
-                              <p className="text-xs text-muted-foreground">البريد الإلكتروني</p>
-                              <p className="font-semibold text-sm" dir="ltr">support@afiyatak.com</p>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      </div>
-                    </div>
-
-                    {/* App Info */}
-                    <Card className="border-0 bg-gradient-to-br from-violet-50/80 to-fuchsia-50/80 backdrop-blur-sm shadow-lg">
-                      <CardContent className="p-5 text-center">
-                        <div className="flex items-center justify-center gap-2 mb-2">
-                          <Image src="/logo.png" alt="عافيتك" width={24} height={24} className="rounded" />
-                          <span className="font-bold bg-gradient-to-l from-violet-700 to-fuchsia-600 bg-clip-text text-transparent">عافيتك</span>
-                        </div>
-                        <p className="text-sm text-muted-foreground">منصة التمريض المنزلي الأولى في اليمن</p>
-                        <p className="text-xs text-muted-foreground mt-1">الإصدار 1.0.0</p>
+                    {/* FAQ Accordion */}
+                    <Card className="border-0 bg-white/80 backdrop-blur-sm shadow-lg">
+                      <CardContent className="p-6">
+                        <h3 className="font-semibold text-base mb-4 flex items-center gap-2">
+                          <HelpCircle className="w-5 h-5 text-violet-600" />
+                          الأسئلة الشائعة
+                        </h3>
+                        <Accordion type="single" collapsible className="w-full">
+                          {faqItems.map((item, i) => (
+                            <AccordionItem key={i} value={`faq-${i}`}>
+                              <AccordionTrigger className="text-sm font-medium text-right hover:no-underline">
+                                {item.q}
+                              </AccordionTrigger>
+                              <AccordionContent className="text-sm text-muted-foreground leading-relaxed">
+                                {item.a}
+                              </AccordionContent>
+                            </AccordionItem>
+                          ))}
+                        </Accordion>
                       </CardContent>
                     </Card>
                   </div>
@@ -1713,257 +1717,369 @@ export default function BeneficiaryDashboard() {
         </div>
       </main>
 
-      {/* ===== Request Service Dialog ===== */}
-      <Dialog open={requestDialog} onOpenChange={setRequestDialog}>
-        <DialogContent className="max-w-md bg-white/90 backdrop-blur-xl border-0 shadow-2xl" dir="rtl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center shadow-sm shadow-violet-500/25">
-                <ShoppingBag className="w-4 h-4 text-white" />
-              </div>
-              طلب خدمة
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            {selectedService && (
-              <>
-                {/* Service Summary */}
-                <div className="bg-gradient-to-l from-violet-50 to-fuchsia-50 rounded-xl p-4 border border-violet-100/50">
-                  <h3 className="font-semibold text-base">{selectedService.name}</h3>
-                  {selectedService.description && (
-                    <p className="text-sm text-muted-foreground mt-1 leading-relaxed">{selectedService.description}</p>
-                  )}
-                  <div className="flex items-center gap-2 mt-2">
-                    <p className={`text-lg font-bold ${validCoupon ? 'text-muted-foreground line-through' : 'text-emerald-600'}`}>
-                      {formatPrice(selectedService.price)}
-                    </p>
-                    {validCoupon && (
-                      <p className="text-lg font-bold text-emerald-600">
-                        {formatPrice(Math.round(selectedService.price * (1 - validCoupon.discountPercent / 100)))}
-                      </p>
-                    )}
-                  </div>
-                  {validCoupon && (
-                    <div className="mt-1 flex items-center gap-1.5 text-sm">
-                      <Tag className="w-3.5 h-3.5 text-fuchsia-500" />
-                      <span className="text-fuchsia-600 font-medium">خصم {validCoupon.discountPercent}% مطبّق</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Coupon Code Input */}
-                <div className="space-y-2">
-                  <Label className="flex items-center gap-1.5">
-                    <Tag className="w-3.5 h-3.5 text-violet-500" />
-                    كود الخصم
-                  </Label>
-                  <div className="flex items-center gap-2">
-                    <Input
-                      value={requestForm.couponCode}
-                      onChange={e => {
-                        setRequestForm(f => ({ ...f, couponCode: e.target.value.toUpperCase() }))
-                        if (validCoupon) { setValidCoupon(null); setCouponError('') }
-                      }}
-                      placeholder="أدخل كود الخصم"
-                      className="flex-1 font-mono rounded-xl border-violet-200 focus:border-violet-400 focus:ring-violet-400/20"
-                    />
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="shrink-0 rounded-xl hover:scale-[1.02] active:scale-[0.98] transition-transform"
-                      onClick={handleValidateCoupon}
-                      disabled={couponValidating || !requestForm.couponCode.trim()}
-                    >
-                      {couponValidating ? <Loader2 className="w-4 h-4 animate-spin" /> : 'تحقق'}
-                    </Button>
-                  </div>
-                  {couponError && <p className="text-xs text-red-500">{couponError}</p>}
-                  {validCoupon && <p className="text-xs text-emerald-600">✓ كوبون صالح - خصم {validCoupon.discountPercent}%</p>}
-                </div>
-
-                {/* Address Input */}
-                <div className="space-y-2">
-                  <Label className="flex items-center gap-1.5">
-                    <MapPin className="w-3.5 h-3.5 text-violet-500" />
-                    العنوان <span className="text-red-500">*</span>
-                  </Label>
-                  <Input
-                    value={requestForm.address}
-                    onChange={e => setRequestForm(f => ({ ...f, address: e.target.value }))}
-                    placeholder="عنوانك بالتفصيل (المدينة، الحي، الشارع)"
-                    className="rounded-xl border-violet-200 focus:border-violet-400 focus:ring-violet-400/20"
-                  />
-                </div>
-
-                {/* Payment Method Select */}
-                <div className="space-y-2">
-                  <Label className="flex items-center gap-1.5">
-                    <CreditCard className="w-3.5 h-3.5 text-violet-500" />
-                    طريقة الدفع
-                  </Label>
-                  <Select
-                    value={requestForm.paymentMethod}
-                    onValueChange={v => setRequestForm(f => ({ ...f, paymentMethod: v }))}
-                  >
-                    <SelectTrigger className="rounded-xl border-violet-200 focus:border-violet-400 focus:ring-violet-400/20">
-                      <SelectValue placeholder="اختر طريقة الدفع" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="نقدي عند الاستلام">💵 نقدي عند الاستلام</SelectItem>
-                      {paymentMethods.map(pm => (
-                        <SelectItem key={pm.id} value={pm.name}>
-                          💳 {pm.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Notes Textarea */}
-                <div className="space-y-2">
-                  <Label className="flex items-center gap-1.5">
-                    <ClipboardList className="w-3.5 h-3.5 text-violet-500" />
-                    ملاحظات
-                  </Label>
-                  <Textarea
-                    value={requestForm.notes}
-                    onChange={e => setRequestForm(f => ({ ...f, notes: e.target.value }))}
-                    placeholder="أي ملاحظات إضافية أو تفاصيل خاصة بالخدمة..."
-                    className="rounded-xl min-h-[80px] resize-none border-violet-200 focus:border-violet-400 focus:ring-violet-400/20"
-                  />
-                </div>
-              </>
-            )}
-          </div>
-          <DialogFooter className="gap-2">
-            <Button
-              variant="outline"
-              onClick={() => setRequestDialog(false)}
-              className="rounded-xl hover:scale-[1.02] active:scale-[0.98] transition-transform"
-            >
-              إلغاء
-            </Button>
-            <Button
-              className="bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white hover:scale-[1.02] active:scale-[0.98] hover:shadow-lg hover:shadow-violet-500/25 rounded-xl transition-all duration-200"
-              onClick={handleRequestService}
-              disabled={submitting}
-            >
-              {submitting ? (
-                <>
-                  <Loader2 className="w-4 h-4 ml-2 animate-spin" />
-                  جارٍ الإرسال...
-                </>
-              ) : (
-                <>
-                  <Plus className="w-4 h-4 ml-1" />
-                  إرسال الطلب
-                </>
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* ===== Emergency Request Dialog ===== */}
-      <Dialog open={emergencyDialog} onOpenChange={setEmergencyDialog}>
-        <DialogContent className="max-w-md bg-white/90 backdrop-blur-xl border-0 shadow-2xl" dir="rtl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-red-600">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-red-500 to-rose-500 flex items-center justify-center shadow-sm shadow-red-500/25">
-                <AlertTriangle className="w-4 h-4 text-white" />
-              </div>
-              طلب طوارئ
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="bg-red-50 rounded-xl p-3 text-sm border border-red-100">
-              <p className="text-red-700 font-medium">سيتم إرسال طلبك كحالة طوارئ وسيتم التواصل معك في أقرب وقت ممكن.</p>
-            </div>
-            <div className="space-y-2">
-              <Label>نوع الخدمة <span className="text-red-500">*</span></Label>
-              <Select
-                value={emergencyForm.serviceType}
-                onValueChange={v => setEmergencyForm(f => ({ ...f, serviceType: v }))}
-              >
-                <SelectTrigger className="rounded-xl border-red-200 focus:border-red-400 focus:ring-red-400/20">
-                  <SelectValue placeholder="اختر نوع الخدمة" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="إسعافات أولية">إسعافات أولية</SelectItem>
-                  <SelectItem value="تمريض طوارئ">تمريض طوارئ</SelectItem>
-                  <SelectItem value="قياسات حيوية">قياسات حيوية</SelectItem>
-                  <SelectItem value="رعاية عاجلة">رعاية عاجلة</SelectItem>
-                  <SelectItem value="أخرى">أخرى</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>العنوان <span className="text-red-500">*</span></Label>
-              <Input
-                value={emergencyForm.address}
-                onChange={e => setEmergencyForm(f => ({ ...f, address: e.target.value }))}
-                placeholder="عنوانك بالتفصيل"
-                className="rounded-xl border-red-200 focus:border-red-400 focus:ring-red-400/20"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>ملاحظات</Label>
-              <Textarea
-                value={emergencyForm.notes}
-                onChange={e => setEmergencyForm(f => ({ ...f, notes: e.target.value }))}
-                placeholder="صف الحالة باختصار..."
-                className="rounded-xl min-h-[80px] resize-none border-red-200 focus:border-red-400 focus:ring-red-400/20"
-              />
-            </div>
-          </div>
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setEmergencyDialog(false)} className="rounded-xl hover:scale-[1.02] active:scale-[0.98] transition-transform">إلغاء</Button>
-            <Button
-              className="bg-gradient-to-r from-red-500 to-rose-500 text-white hover:scale-[1.02] active:scale-[0.98] hover:shadow-lg hover:shadow-red-500/25 rounded-xl transition-all duration-200"
-              onClick={handleEmergencyRequest}
-              disabled={emergencySubmitting}
-            >
-              {emergencySubmitting ? (
-                <><Loader2 className="w-4 h-4 ml-2 animate-spin" />جارٍ الإرسال...</>
-              ) : (
-                <><AlertTriangle className="w-4 h-4 ml-1" />إرسال طلب الطوارئ</>
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* ===== Emergency Floating Button ===== */}
+      {/* ===== FLOATING EMERGENCY BUTTON ===== */}
       <motion.button
-        onClick={() => setEmergencyDialog(true)}
-        className="fixed bottom-6 left-6 z-50 flex items-center gap-2 px-5 py-3 rounded-full bg-gradient-to-r from-red-500 to-rose-500 text-white shadow-lg shadow-red-500/30 hover:shadow-xl hover:shadow-red-500/40 transition-shadow"
-        whileHover={{ scale: 1.05 }}
+        onClick={() => {
+          setEmergencyForm(prev => ({
+            ...prev,
+            address: beneficiaryUser?.location || profileLocation || '',
+          }))
+          setEmergencyDialog(true)
+        }}
+        className="fixed bottom-24 left-6 z-40 w-14 h-14 rounded-full bg-gradient-to-br from-red-500 to-rose-600 text-white shadow-lg shadow-red-500/50 flex items-center justify-center"
+        whileHover={{ scale: 1.1 }}
         whileTap={{ scale: 0.95 }}
         animate={{
           boxShadow: [
-            '0 10px 25px -3px rgba(239, 68, 68, 0.3)',
-            '0 10px 35px -3px rgba(239, 68, 68, 0.5)',
-            '0 10px 25px -3px rgba(239, 68, 68, 0.3)',
+            '0 0 0 0 rgba(239, 68, 68, 0.4)',
+            '0 0 0 12px rgba(239, 68, 68, 0)',
+            '0 0 0 0 rgba(239, 68, 68, 0)',
           ],
         }}
         transition={{
-          boxShadow: { duration: 2, repeat: Infinity, ease: 'easeInOut' },
+          boxShadow: {
+            duration: 1.5,
+            repeat: Infinity,
+            ease: 'easeInOut',
+          },
         }}
         aria-label="طلب طوارئ"
       >
-        <AlertTriangle className="w-5 h-5" />
-        <span className="font-bold text-sm">طلب طوارئ</span>
+        <Siren className="w-6 h-6" />
       </motion.button>
 
-      {/* ===== Chat System ===== */}
-      {activeChatRequestId && beneficiaryUser && (
+      {/* ===== ChatSystem Component ===== */}
+      {activeChatRequestId && (
         <ChatSystem
           requestId={activeChatRequestId}
-          userId={beneficiaryUser.id}
-          userName={beneficiaryUser.name}
+          userId={beneficiaryUser?.id || ''}
+          userName={beneficiaryUser?.name || ''}
           userType="beneficiary"
+          otherPartyName={activeChatNurseName}
         />
       )}
+
+      {/* ===== EMERGENCY DIALOG ===== */}
+      <Dialog open={emergencyDialog} onOpenChange={setEmergencyDialog}>
+        <DialogContent className="sm:max-w-md border-0 shadow-2xl p-0 overflow-hidden" dir="rtl">
+          {/* Red Gradient Header */}
+          <div className="bg-gradient-to-l from-red-600 via-rose-600 to-red-700 p-5 text-white relative overflow-hidden">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.1)_0%,transparent_70%)]" />
+            <div className="relative flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center animate-pulse">
+                <Siren className="w-5 h-5" />
+              </div>
+              <div>
+                <DialogTitle className="text-lg font-bold">طلب طوارئ</DialogTitle>
+                <p className="text-red-100 text-xs mt-0.5">سيتم التعامل مع طلبك بأولوية قصوى</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="p-6 space-y-4">
+            {/* Service Type Selection */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium text-red-700">
+                <AlertTriangle className="w-3.5 h-3.5 inline ml-1" />
+                نوع الخدمة العاجلة
+              </Label>
+              <div className="grid grid-cols-2 gap-2">
+                {emergencyServiceTypes.map(type => (
+                  <button
+                    key={type}
+                    onClick={() => setEmergencyForm(prev => ({ ...prev, serviceType: type }))}
+                    className={`px-3 py-2 rounded-xl text-xs font-medium transition-all duration-200 ${
+                      emergencyForm.serviceType === type
+                        ? 'bg-gradient-to-r from-red-500 to-rose-500 text-white shadow-md'
+                        : 'bg-gray-50 text-gray-600 border border-gray-200 hover:border-red-300 hover:text-red-600'
+                    }`}
+                  >
+                    {type}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Address Field */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">
+                <MapPin className="w-3.5 h-3.5 inline ml-1" />
+                العنوان
+              </Label>
+              <Input
+                value={emergencyForm.address}
+                onChange={(e) => setEmergencyForm(prev => ({ ...prev, address: e.target.value }))}
+                placeholder="أدخل عنوانك الحالي"
+                className="rounded-xl"
+              />
+            </div>
+
+            {/* Notes Field */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">ملاحظات إضافية</Label>
+              <Textarea
+                value={emergencyForm.notes}
+                onChange={(e) => setEmergencyForm(prev => ({ ...prev, notes: e.target.value }))}
+                placeholder="أضف أي تفاصيل إضافية..."
+                className="rounded-xl resize-none"
+                rows={2}
+              />
+            </div>
+
+            <Separator />
+
+            {/* Call Admin Section */}
+            {adminSettings.emergencyPhone && (
+              <div className="p-4 rounded-xl bg-red-50 border border-red-100">
+                <p className="text-sm font-semibold text-red-700 mb-2 flex items-center gap-2">
+                  <Phone className="w-4 h-4" />
+                  اتصل بالإدارة
+                </p>
+                <p className="text-xs text-red-600 mb-3">في حالات الطوارئ، اتصل مباشرة بالإدارة للحصول على استجابة فورية</p>
+                <a
+                  href={`tel:${adminSettings.emergencyPhone}`}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gradient-to-r from-red-500 to-rose-500 text-white font-bold text-base shadow-lg shadow-red-500/30 hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all"
+                >
+                  <Phone className="w-5 h-5" />
+                  اتصال
+                  <span className="text-red-100 text-sm mr-1" dir="ltr">({adminSettings.emergencyPhone})</span>
+                </a>
+              </div>
+            )}
+
+            {/* Submit Button */}
+            <Button
+              onClick={handleEmergencyRequest}
+              disabled={emergencySubmitting || !emergencyForm.serviceType || !emergencyForm.address}
+              className="w-full bg-gradient-to-r from-red-500 to-rose-500 text-white hover:shadow-lg rounded-xl text-base py-3"
+            >
+              {emergencySubmitting ? (
+                <Loader2 className="w-5 h-5 animate-spin ml-2" />
+              ) : (
+                <Siren className="w-5 h-5 ml-2" />
+              )}
+              إرسال طلب الطوارئ
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ===== SERVICE REQUEST DIALOG ===== */}
+      <Dialog open={requestDialog} onOpenChange={setRequestDialog}>
+        <DialogContent className="sm:max-w-md border-0 shadow-2xl p-0 overflow-hidden" dir="rtl">
+          {/* Gradient Header */}
+          <div className="bg-gradient-to-l from-violet-600 via-purple-600 to-fuchsia-600 p-5 text-white relative overflow-hidden">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.1)_0%,transparent_70%)]" />
+            <div className="relative">
+              <DialogTitle className="text-lg font-bold">طلب خدمة</DialogTitle>
+              {selectedService && (
+                <div className="mt-2 flex items-center justify-between">
+                  <p className="text-violet-100 text-sm">{selectedService.name}</p>
+                  <span className="text-white font-bold">{formatPrice(selectedService.price)}</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="p-6 space-y-4">
+            {/* Address Field */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">
+                <MapPin className="w-3.5 h-3.5 inline ml-1" />
+                العنوان
+              </Label>
+              <Input
+                value={requestForm.address}
+                onChange={(e) => setRequestForm(prev => ({ ...prev, address: e.target.value }))}
+                placeholder="أدخل عنوانك"
+                className="rounded-xl"
+              />
+            </div>
+
+            {/* Payment Method */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">
+                <CreditCard className="w-3.5 h-3.5 inline ml-1" />
+                طريقة الدفع
+              </Label>
+              <Select value={requestForm.paymentMethod} onValueChange={(v) => setRequestForm(prev => ({ ...prev, paymentMethod: v }))}>
+                <SelectTrigger className="rounded-xl">
+                  <SelectValue placeholder="اختر طريقة الدفع" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="cash">نقدي عند الاستلام</SelectItem>
+                  <SelectItem value="card">بطاقة</SelectItem>
+                  <SelectItem value="transfer">تحويل بنكي</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Notes Field */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">ملاحظات</Label>
+              <Textarea
+                value={requestForm.notes}
+                onChange={(e) => setRequestForm(prev => ({ ...prev, notes: e.target.value }))}
+                placeholder="أضف أي ملاحظات..."
+                className="rounded-xl resize-none"
+                rows={2}
+              />
+            </div>
+
+            {/* Coupon Code */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">
+                <Tag className="w-3.5 h-3.5 inline ml-1" />
+                كود الخصم
+              </Label>
+              <div className="flex gap-2">
+                <Input
+                  value={requestForm.couponCode}
+                  onChange={(e) => {
+                    setRequestForm(prev => ({ ...prev, couponCode: e.target.value }))
+                    if (validCoupon) {
+                      setValidCoupon(null)
+                      setCouponError('')
+                    }
+                  }}
+                  placeholder="أدخل كود الخصم"
+                  className="rounded-xl"
+                  disabled={!!validCoupon}
+                />
+                <Button
+                  variant="outline"
+                  onClick={handleValidateCoupon}
+                  disabled={couponValidating || !requestForm.couponCode.trim() || !!validCoupon}
+                  className="rounded-xl shrink-0"
+                >
+                  {couponValidating ? <Loader2 className="w-4 h-4 animate-spin" /> : 'تحقق'}
+                </Button>
+              </div>
+              {couponError && (
+                <p className="text-xs text-red-500">{couponError}</p>
+              )}
+              {validCoupon && (
+                <p className="text-xs text-emerald-600 flex items-center gap-1">
+                  <Check className="w-3 h-3" />
+                  تم تطبيق خصم {validCoupon.discountPercent}%
+                </p>
+              )}
+            </div>
+
+            <Separator />
+
+            {/* Price Summary */}
+            <div className="p-4 rounded-xl bg-gradient-to-l from-violet-50/50 to-fuchsia-50/50 border border-violet-100/50">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">السعر الأصلي</span>
+                <span>{formatPrice(selectedService?.price || 0)}</span>
+              </div>
+              {validCoupon && (
+                <div className="flex items-center justify-between text-sm mt-1">
+                  <span className="text-emerald-600">الخصم ({validCoupon.discountPercent}%)</span>
+                  <span className="text-emerald-600">-{formatPrice((selectedService?.price || 0) * validCoupon.discountPercent / 100)}</span>
+                </div>
+              )}
+              <Separator className="my-2" />
+              <div className="flex items-center justify-between font-bold">
+                <span>المجموع</span>
+                <span className="text-violet-700 text-lg">{formatPrice(getDiscountedPrice())}</span>
+              </div>
+            </div>
+
+            {/* Submit Button */}
+            <Button
+              onClick={handleRequestService}
+              disabled={submitting || !requestForm.address.trim()}
+              className="w-full bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white hover:shadow-lg hover:shadow-violet-500/25 rounded-xl"
+            >
+              {submitting ? (
+                <Loader2 className="w-5 h-5 animate-spin ml-2" />
+              ) : (
+                <Plus className="w-5 h-5 ml-2" />
+              )}
+              إرسال الطلب
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ===== RATING DIALOG ===== */}
+      <Dialog open={ratingDialog} onOpenChange={setRatingDialog}>
+        <DialogContent className="sm:max-w-md border-0 shadow-2xl p-0 overflow-hidden" dir="rtl">
+          {/* Gradient Header */}
+          <div className="bg-gradient-to-l from-amber-500 via-orange-500 to-amber-600 p-5 text-white relative overflow-hidden">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.1)_0%,transparent_70%)]" />
+            <div className="relative flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
+                <Star className="w-5 h-5" />
+              </div>
+              <div>
+                <DialogTitle className="text-lg font-bold">تقييم الخدمة</DialogTitle>
+                <p className="text-amber-100 text-xs mt-0.5">أخبرنا عن رأيك في الخدمة المقدمة</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="p-6 space-y-5">
+            {/* Stars */}
+            <div className="flex items-center justify-center gap-2">
+              {[1, 2, 3, 4, 5].map(star => (
+                <motion.button
+                  key={star}
+                  whileHover={{ scale: 1.2 }}
+                  whileTap={{ scale: 0.9 }}
+                  onClick={() => setRatingValue(star)}
+                  className="focus:outline-none"
+                >
+                  <Star
+                    className={`w-10 h-10 transition-colors duration-150 ${
+                      star <= ratingValue
+                        ? 'fill-amber-400 text-amber-400'
+                        : 'text-gray-300'
+                    }`}
+                  />
+                </motion.button>
+              ))}
+            </div>
+            {ratingValue > 0 && (
+              <p className="text-center text-sm text-muted-foreground">
+                {ratingValue === 1 ? 'سيء' :
+                 ratingValue === 2 ? 'مقبول' :
+                 ratingValue === 3 ? 'جيد' :
+                 ratingValue === 4 ? 'جيد جداً' :
+                 'ممتاز'}
+              </p>
+            )}
+
+            {/* Comment */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">تعليقك (اختياري)</Label>
+              <Textarea
+                value={ratingComment}
+                onChange={(e) => setRatingComment(e.target.value)}
+                placeholder="شاركنا تجربتك..."
+                className="rounded-xl resize-none"
+                rows={3}
+              />
+            </div>
+
+            {/* Submit */}
+            <Button
+              onClick={handleSubmitRating}
+              disabled={ratingSubmitting || ratingValue === 0}
+              className="w-full bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:shadow-lg rounded-xl"
+            >
+              {ratingSubmitting ? (
+                <Loader2 className="w-5 h-5 animate-spin ml-2" />
+              ) : (
+                <Star className="w-5 h-5 ml-2" />
+              )}
+              إرسال التقييم
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

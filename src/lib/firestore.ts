@@ -167,14 +167,16 @@ export async function createBeneficiary(data: {
   phone: string
   location: string
   password: string
+  status?: string
 }) {
   checkFirebase()
   const docRef = await firestore.collection('beneficiaries').add({
     ...data,
+    status: data.status || 'active',
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   })
-  return { id: docRef.id, ...data }
+  return { id: docRef.id, ...data, status: data.status || 'active' }
 }
 
 export async function updateBeneficiary(id: string, data: Record<string, any>) {
@@ -962,4 +964,210 @@ export async function getReferralByBeneficiary(beneficiaryId: string) {
     .get()
   if (snapshot.empty) return null
   return docToObject(snapshot.docs[0])
+}
+
+// ==================== NURSE DELETE / BLOCK / UNBLOCK ====================
+
+export async function deleteNurse(id: string) {
+  checkFirebase()
+  // Delete nurse's assignments first
+  const assignmentsSnapshot = await firestore.collection('serviceAssignments')
+    .where('nurseId', '==', id)
+    .get()
+  const batch = firestore.batch()
+  for (const doc of assignmentsSnapshot.docs) {
+    batch.delete(doc.ref)
+  }
+  await batch.commit()
+  // Delete the nurse document
+  await firestore.collection('nurses').doc(id).delete()
+}
+
+export async function blockNurse(id: string) {
+  checkFirebase()
+  await firestore.collection('nurses').doc(id).update({
+    status: 'blocked',
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  })
+  const doc = await firestore.collection('nurses').doc(id).get()
+  return docToObject(doc)
+}
+
+export async function unblockNurse(id: string) {
+  checkFirebase()
+  await firestore.collection('nurses').doc(id).update({
+    status: 'approved',
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  })
+  const doc = await firestore.collection('nurses').doc(id).get()
+  return docToObject(doc)
+}
+
+// ==================== BENEFICIARY DELETE / BLOCK / UNBLOCK ====================
+
+export async function deleteBeneficiary(id: string) {
+  checkFirebase()
+  // Delete beneficiary's service requests first
+  const requestsSnapshot = await firestore.collection('serviceRequests')
+    .where('beneficiaryId', '==', id)
+    .get()
+  const batch = firestore.batch()
+  for (const doc of requestsSnapshot.docs) {
+    batch.delete(doc.ref)
+  }
+  await batch.commit()
+  // Delete the beneficiary document
+  await firestore.collection('beneficiaries').doc(id).delete()
+}
+
+export async function blockBeneficiary(id: string) {
+  checkFirebase()
+  await firestore.collection('beneficiaries').doc(id).update({
+    status: 'blocked',
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  })
+  const doc = await firestore.collection('beneficiaries').doc(id).get()
+  return docToObject(doc)
+}
+
+export async function unblockBeneficiary(id: string) {
+  checkFirebase()
+  await firestore.collection('beneficiaries').doc(id).update({
+    status: 'active',
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  })
+  const doc = await firestore.collection('beneficiaries').doc(id).get()
+  return docToObject(doc)
+}
+
+// ==================== ADMIN SETTINGS ====================
+
+export async function getAdminSettings() {
+  checkFirebase()
+  const doc = await firestore.collection('appSettings').doc('admin').get()
+  if (!doc.exists) return null
+  return docToObject(doc)
+}
+
+export async function updateAdminSettings(data: Record<string, any>) {
+  checkFirebase()
+  await firestore.collection('appSettings').doc('admin').set({
+    ...data,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  }, { merge: true })
+  const doc = await firestore.collection('appSettings').doc('admin').get()
+  return docToObject(doc)
+}
+
+// ==================== RATINGS ====================
+
+export async function getNurseRatings(nurseId: string) {
+  checkFirebase()
+  const snapshot = await firestore.collection('ratings')
+    .where('nurseId', '==', nurseId)
+    .orderBy('createdAt', 'desc')
+    .get()
+  return snapshot.docs.map(docToObject)
+}
+
+export async function getAllRatings() {
+  checkFirebase()
+  const snapshot = await firestore.collection('ratings')
+    .orderBy('createdAt', 'desc')
+    .get()
+  return snapshot.docs.map(docToObject)
+}
+
+export async function createRating(data: {
+  requestId: string
+  nurseId: string
+  beneficiaryId: string
+  beneficiaryName: string
+  nurseName: string
+  rating: number
+  comment?: string
+  serviceName?: string
+}) {
+  checkFirebase()
+  const docRef = await firestore.collection('ratings').add({
+    ...data,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  })
+  return { id: docRef.id, ...data }
+}
+
+// ==================== SUB-ADMINS ====================
+
+export async function getSubAdmins(adminId: string) {
+  checkFirebase()
+  const snapshot = await firestore.collection('subAdmins')
+    .where('adminId', '==', adminId)
+    .orderBy('createdAt', 'desc')
+    .get()
+  return snapshot.docs.map(doc => {
+    const data = doc.data()
+    const { password, ...rest } = data
+    return { id: doc.id, ...rest }
+  })
+}
+
+export async function createSubAdmin(data: {
+  adminId: string
+  name: string
+  phone: string
+  password: string
+  permissions: Record<string, boolean>
+}) {
+  checkFirebase()
+  const hashedPassword = await import('bcryptjs').then(bcrypt => bcrypt.hash(data.password, 10))
+  const docRef = await firestore.collection('subAdmins').add({
+    ...data,
+    password: hashedPassword,
+    status: 'active',
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  })
+  const { password: _, ...safeData } = data
+  return { id: docRef.id, ...safeData, status: 'active' }
+}
+
+export async function updateSubAdmin(id: string, data: Record<string, any>) {
+  checkFirebase()
+  const updateData: Record<string, any> = { ...data, updatedAt: admin.firestore.FieldValue.serverTimestamp() }
+  // If password is being updated, hash it
+  if (data.password) {
+    const hashedPassword = await import('bcryptjs').then(bcrypt => bcrypt.hash(data.password, 10))
+    updateData.password = hashedPassword
+  }
+  await firestore.collection('subAdmins').doc(id).update(updateData)
+  const doc = await firestore.collection('subAdmins').doc(id).get()
+  const docData = doc.data()!
+  const { password, ...rest } = docData
+  return { id: doc.id, ...rest }
+}
+
+export async function deleteSubAdmin(id: string) {
+  checkFirebase()
+  await firestore.collection('subAdmins').doc(id).delete()
+}
+
+// ==================== EMERGENCY REQUESTS (ADMIN) ====================
+
+export async function getEmergencyRequests() {
+  checkFirebase()
+  const snapshot = await firestore.collection('emergencyRequests')
+    .orderBy('createdAt', 'desc')
+    .get()
+  return snapshot.docs.map(docToObject)
+}
+
+export async function updateEmergencyRequest(id: string, data: Record<string, any>) {
+  checkFirebase()
+  await firestore.collection('emergencyRequests').doc(id).update({
+    ...data,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  })
+  const doc = await firestore.collection('emergencyRequests').doc(id).get()
+  return docToObject(doc)
 }

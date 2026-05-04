@@ -161,7 +161,7 @@ export default function ChatSystem({ requestId, userId, userName, userType, othe
       case 'nurse': return 'text-violet-600'
       case 'beneficiary': return 'text-rose-600'
       case 'admin': return 'text-emerald-600'
-      default: return 'text-gray-600 dark:text-gray-300'
+      default: return 'text-gray-600'
     }
   }
 
@@ -220,7 +220,7 @@ export default function ChatSystem({ requestId, userId, userName, userType, othe
               {/* Messages Area */}
               <div
                 ref={scrollRef}
-                className="h-80 overflow-y-auto p-4 space-y-3 bg-gray-50/50 dark:bg-gray-800/50"
+                className="h-80 overflow-y-auto p-4 space-y-3 bg-gray-50/50"
               >
                 {loading ? (
                   <div className="flex items-center justify-center h-full">
@@ -255,7 +255,7 @@ export default function ChatSystem({ requestId, userId, userName, userType, othe
                             className={`rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
                               isMe
                                 ? 'bg-gradient-to-l from-rose-500 to-pink-600 text-white rounded-bl-md'
-                                : 'bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-200 rounded-br-md shadow-sm'
+                                : 'bg-white border border-gray-200 text-gray-800 rounded-br-md shadow-sm'
                             }`}
                           >
                             {msg.message}
@@ -271,7 +271,7 @@ export default function ChatSystem({ requestId, userId, userName, userType, othe
               </div>
 
               {/* Input Area */}
-              <div className="p-3 border-t dark:border-gray-700 bg-white dark:bg-gray-900">
+              <div className="p-3 border-t border-gray-200 bg-white">
                 <div className="flex items-center gap-2">
                   <Input
                     ref={inputRef}

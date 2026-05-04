@@ -21,6 +21,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'رقم الهاتف أو كلمة المرور غير صحيحة' }, { status: 401 })
     }
 
+    if (beneficiary.status === 'blocked') {
+      return NextResponse.json({
+        error: 'تم حظر حسابك. يرجى التواصل مع الإدارة',
+      }, { status: 403 })
+    }
+
     return NextResponse.json({
       id: beneficiary.id,
       name: beneficiary.name,
