@@ -35,8 +35,40 @@ export async function POST(request: NextRequest) {
       isActive,
     } = body
 
-    if (!type || !name) {
-      return NextResponse.json({ error: 'النوع والاسم مطلوبان' }, { status: 400 })
+    if (!type) {
+      return NextResponse.json({ error: 'النوع مطلوب' }, { status: 400 })
+    }
+
+    // Auto-generate name from walletType, bankName, or exchangeName if not provided
+    const walletTypeLabels: Record<string, string> = {
+      'one-cash': 'ون كاش',
+      'cash-wallet': 'محفظة كاش',
+      'jawali': 'جوالي',
+      'yemen-wallet': 'يمن والت',
+      'saba-cash': 'سبأكاش',
+      'mahfathati': 'محفظتي',
+      'pyes': 'بيس',
+      'floosak': 'فلوسك',
+      'jaib': 'جيب',
+      'shamil-money': 'شامل مالي',
+      'em-pay': 'إم باي',
+      'bin-dowal-pay': 'بن دول باي',
+      'national-wallet': 'المحفظة الوطنية',
+      'other': 'أخرى',
+    }
+    let autoName = name || ''
+    if (!autoName) {
+      if (type === 'wallet-deposit' && walletType) {
+        autoName = walletTypeLabels[walletType] || walletType
+      } else if (type === 'exchange-transfer' && exchangeName) {
+        autoName = `صراف ${exchangeName}`
+      } else if (type === 'bank-transfer' && bankName) {
+        autoName = bankName
+      } else if (type === 'cash') {
+        autoName = 'نقدي'
+      } else {
+        autoName = 'طريقة دفع'
+      }
     }
 
     const validTypes = ['wallet-deposit', 'exchange-transfer', 'bank-transfer', 'cash']
@@ -57,7 +89,7 @@ export async function POST(request: NextRequest) {
 
     const paymentData = {
       type,
-      name,
+      name: autoName,
       accountName: accountName || '',
       accountNumber: accountNumber || '',
       bankName: bankName || '',

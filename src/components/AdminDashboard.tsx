@@ -482,15 +482,35 @@ export default function AdminDashboard() {
   }
 
   // ─── Payment CRUD ───────────────────────────────────────────
+  const getWalletTypeLabel = (wt: string) => {
+    const labels: Record<string, string> = {
+      'one-cash': 'ون كاش', 'cash-wallet': 'محفظة كاش', 'jawali': 'جوالي', 'yemen-wallet': 'يمن والت',
+      'saba-cash': 'سبأكاش', 'mahfathati': 'محفظتي', 'pyes': 'بيس', 'floosak': 'فلوسك',
+      'jaib': 'جيب', 'shamil-money': 'شامل مالي', 'em-pay': 'إم باي', 'bin-dowal-pay': 'بن دول باي',
+      'national-wallet': 'المحفظة الوطنية', 'other': 'أخرى',
+    }
+    return labels[wt] || wt
+  }
+
   const handleSavePayment = async () => {
-    if (!paymentForm.type || !paymentForm.name) { toast({ title: 'خطأ', description: 'يرجى اختيار النوع وإدخال الاسم', variant: 'destructive' }); return }
+    if (!paymentForm.type) { toast({ title: 'خطأ', description: 'يرجى اختيار النوع', variant: 'destructive' }); return }
+    if (paymentForm.type === 'wallet-deposit' && !paymentForm.walletType) { toast({ title: 'خطأ', description: 'يرجى اختيار نوع المحفظة', variant: 'destructive' }); return }
     if (paymentForm.type === 'wallet-deposit' && !paymentForm.accountNumber) { toast({ title: 'خطأ', description: 'يرجى إدخال رقم المحفظة', variant: 'destructive' }); return }
     if (paymentForm.type === 'exchange-transfer' && !paymentForm.exchangeName) { toast({ title: 'خطأ', description: 'يرجى إدخال اسم الصراف', variant: 'destructive' }); return }
     if (paymentForm.type === 'bank-transfer' && !paymentForm.accountNumber) { toast({ title: 'خطأ', description: 'يرجى إدخال رقم الحساب البنكي', variant: 'destructive' }); return }
+    // Auto-generate name from walletType, bankName, or exchangeName
+    let autoName = paymentForm.name
+    if (!autoName) {
+      if (paymentForm.type === 'wallet-deposit') autoName = getWalletTypeLabel(paymentForm.walletType)
+      else if (paymentForm.type === 'exchange-transfer') autoName = `صراف ${paymentForm.exchangeName}`
+      else if (paymentForm.type === 'bank-transfer') autoName = paymentForm.bankName
+      else if (paymentForm.type === 'cash') autoName = 'نقدي'
+      else autoName = 'طريقة دفع'
+    }
     try {
       const url = editingPayment ? `/api/admin/payments/${editingPayment.id}` : '/api/admin/payments'
       const method = editingPayment ? 'PUT' : 'POST'
-      const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(paymentForm) })
+      const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...paymentForm, name: autoName }) })
       if (res.ok) { toast({ title: editingPayment ? 'تم تحديث طريقة الدفع' : 'تم إضافة طريقة الدفع' }); setPaymentDialog(false); setEditingPayment(null); setPaymentForm({ type: 'wallet-deposit', name: '', accountName: '', accountNumber: '', bankName: '', exchangeName: '', walletType: '', instructions: '', isActive: true }); fetchData() }
       else { const data = await res.json(); toast({ title: 'خطأ', description: data.error, variant: 'destructive' }) }
     } catch { toast({ title: 'خطأ', description: 'حدث خطأ', variant: 'destructive' }) }
@@ -1447,8 +1467,7 @@ export default function AdminDashboard() {
                 {activeTab === 'payments' && (
                   <div className="space-y-6">
                     <div className="flex items-center justify-between">
-                      <div><h1 className="text-2xl font-bold bg-gradient-to-l from-amber-600 via-orange-600 to-rose-600 bg-clip-text text-transparent">المدفوعات والمعاملات</h1><p className="text-gray-500 text-sm mt-1">إدارة طرق الدفع وتأكيد المعاملات</p></div>
-                      <Button className="bg-gradient-to-l from-amber-500 via-orange-500 to-rose-500 text-white shadow-lg shadow-amber-500/25" onClick={() => { setEditingPayment(null); setPaymentForm({ type: 'wallet-deposit', name: '', accountName: '', accountNumber: '', bankName: '', exchangeName: '', walletType: '', instructions: '', isActive: true }); setPaymentDialog(true) }}><Plus className="w-4 h-4 ml-2" />إضافة طريقة دفع</Button>
+                      <div><h1 className="text-2xl font-bold bg-gradient-to-l from-amber-600 via-orange-600 to-rose-600 bg-clip-text text-transparent">المدفوعات والمعاملات</h1><p className="text-gray-500 text-sm mt-1">تأكيد المعاملات ومتابعة المدفوعات</p></div>
                     </div>
 
                     {/* Pending Payments Section */}
@@ -1529,75 +1548,6 @@ export default function AdminDashboard() {
                       </div>
                     </div>
 
-                    {/* Payment Methods Section */}
-                    <div className="space-y-3 pt-4 border-t">
-                      <h2 className="text-lg font-bold text-gray-700 flex items-center gap-2">
-                        <CreditCard className="w-5 h-5" />
-                        طرق الدفع المتاحة
-                      </h2>
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {payments.map((p: any) => (
-                          <motion.div key={p.id} variants={cardVariants} initial="hidden" animate="visible">
-                            <Card className="border-0 shadow-lg hover:-translate-y-1 hover:shadow-xl transition-all duration-300">
-                              <CardContent className="p-4">
-                                <div className="flex items-start justify-between mb-3">
-                                  <div className="flex items-center gap-2">
-                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-md ${
-                                      p.type === 'wallet-deposit' ? 'bg-gradient-to-br from-blue-400 to-indigo-500' :
-                                      p.type === 'exchange-transfer' ? 'bg-gradient-to-br from-amber-400 to-orange-500' :
-                                      p.type === 'bank-transfer' ? 'bg-gradient-to-br from-emerald-400 to-teal-500' :
-                                      'bg-gradient-to-br from-gray-400 to-gray-500'
-                                    }`}>
-                                      {p.type === 'wallet-deposit' ? <Wallet className="w-5 h-5 text-white" /> :
-                                       p.type === 'exchange-transfer' ? <Send className="w-5 h-5 text-white" /> :
-                                       p.type === 'bank-transfer' ? <Building className="w-5 h-5 text-white" /> :
-                                       <DollarSign className="w-5 h-5 text-white" />}
-                                    </div>
-                                    <div>
-                                      <p className="font-bold text-sm">{p.name}</p>
-                                      <p className="text-xs text-gray-400">{
-                                        p.type === 'wallet-deposit' ? 'إيداع محفظة' :
-                                        p.type === 'exchange-transfer' ? 'تحويل صراف' :
-                                        p.type === 'bank-transfer' ? 'تحويل بنكي' :
-                                        p.type === 'cash' ? 'نقدي' : p.type
-                                      }</p>
-                                    </div>
-                                  </div>
-                                  <Badge className={`${getStatusColor(p.isActive ? 'active' : 'suspended')} border text-xs`}>{p.isActive ? 'نشطة' : 'معطلة'}</Badge>
-                                </div>
-                                <div className="space-y-1 mb-3 text-sm">
-                                  {p.accountNumber && <p className="text-gray-600"><span className="text-gray-400">الرقم:</span> <span dir="ltr" className="font-mono">{p.accountNumber}</span></p>}
-                                  {p.accountName && <p className="text-gray-600"><span className="text-gray-400">الحساب:</span> {p.accountName}</p>}
-                                  {p.bankName && <p className="text-gray-600"><span className="text-gray-400">البنك:</span> {p.bankName}</p>}
-                                  {p.exchangeName && <p className="text-gray-600"><span className="text-gray-400">الصراف:</span> {p.exchangeName}</p>}
-                                  {p.walletType && <p className="text-gray-600"><span className="text-gray-400">المحفظة:</span> {
-                                    p.walletType === 'one-cash' ? 'ون كاش' :
-                                    p.walletType === 'cash-wallet' ? 'محفظة كاش' :
-                                    p.walletType === 'jawali' ? 'جوالي' :
-                                    p.walletType === 'yemen-wallet' ? 'يمن والت' :
-                                    p.walletType === 'saba-cash' ? 'سبأكاش' :
-                                    p.walletType === 'mahfathati' ? 'محفظتي' :
-                                    p.walletType === 'pyes' ? 'بيس' :
-                                    p.walletType === 'floosak' ? 'فلوسك' :
-                                    p.walletType === 'jaib' ? 'جيب' :
-                                    p.walletType === 'shamil-money' ? 'شامل مالي' :
-                                    p.walletType === 'em-pay' ? 'إم باي' :
-                                    p.walletType === 'bin-dowal-pay' ? 'بن دول باي' :
-                                    p.walletType === 'national-wallet' ? 'المحفظة الوطنية' : p.walletType
-                                  }</p>}
-                                  {p.instructions && <p className="text-gray-400 text-xs italic">{p.instructions}</p>}
-                                </div>
-                                <div className="flex gap-2">
-                                  <Button size="sm" variant="outline" className="flex-1" onClick={() => { setEditingPayment(p); setPaymentForm({ type: p.type || 'wallet-deposit', name: p.name || '', accountName: p.accountName || '', accountNumber: p.accountNumber || '', bankName: p.bankName || '', exchangeName: p.exchangeName || '', walletType: p.walletType || '', instructions: p.instructions || '', isActive: p.isActive }); setPaymentDialog(true) }}><Pencil className="w-3.5 h-3.5 ml-1" />تعديل</Button>
-                                  <Button size="sm" variant="outline" className="text-red-500 hover:bg-red-50" onClick={() => handleDeletePayment(p.id)}><Trash2 className="w-3.5 h-3.5" /></Button>
-                                </div>
-                              </CardContent>
-                            </Card>
-                          </motion.div>
-                        ))}
-                      </div>
-                      {payments.length === 0 && <div className="text-center py-8"><CreditCard className="w-12 h-12 text-gray-300 mx-auto mb-3" /><p className="text-gray-400">لا توجد طرق دفع - أضف طرق الدفع لتظهر للمستفيدين</p></div>}
-                    </div>
                   </div>
                 )}
 
@@ -2174,7 +2124,65 @@ export default function AdminDashboard() {
                         <div><Label>رقم واتساب الإدارة (لإثبات الدفع) *</Label><Input value={settings.whatsappNumber || ''} onChange={e => setSettings({ ...settings, whatsappNumber: e.target.value })} placeholder="مثال: 967771234567" className="border-amber-200 mt-1" dir="ltr" />
                           <p className="text-xs text-gray-400 mt-1">أدخل الرقم بالصيغة الدولية بدون + (مثال: 967771234567)</p>
                         </div>
-                        <Button className="bg-gradient-to-l from-amber-500 via-orange-500 to-rose-500 text-white shadow-lg shadow-amber-500/25" onClick={() => handleSaveSettings({ whatsappNumber: settings.whatsappNumber })}>حفظ إعدادات الدفع</Button>
+                        <Button className="bg-gradient-to-l from-amber-500 via-orange-500 to-rose-500 text-white shadow-lg shadow-amber-500/25" onClick={() => handleSaveSettings({ whatsappNumber: settings.whatsappNumber })}>حفظ رقم الواتساب</Button>
+                      </CardContent>
+                    </Card>
+
+                    {/* Payment Methods Management */}
+                    <Card className="border-0 shadow-lg">
+                      <CardHeader className="pb-3">
+                        <div className="flex items-center justify-between">
+                          <CardTitle className="text-lg flex items-center gap-2"><Wallet className="w-5 h-5 text-blue-500" />طرق الدفع المتاحة</CardTitle>
+                          <Button className="bg-gradient-to-l from-amber-500 via-orange-500 to-rose-500 text-white shadow-lg shadow-amber-500/25" onClick={() => { setEditingPayment(null); setPaymentForm({ type: 'wallet-deposit', name: '', accountName: '', accountNumber: '', bankName: '', exchangeName: '', walletType: '', instructions: '', isActive: true }); setPaymentDialog(true) }}><Plus className="w-4 h-4 ml-2" />إضافة طريقة دفع</Button>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        {payments.length > 0 ? (
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                            {payments.map((p: any) => (
+                              <div key={p.id} className="p-3 rounded-xl border border-gray-200 hover:border-amber-300 hover:shadow-md transition-all">
+                                <div className="flex items-start justify-between mb-2">
+                                  <div className="flex items-center gap-2">
+                                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center shadow-sm ${
+                                      p.type === 'wallet-deposit' ? 'bg-gradient-to-br from-blue-400 to-indigo-500' :
+                                      p.type === 'exchange-transfer' ? 'bg-gradient-to-br from-amber-400 to-orange-500' :
+                                      p.type === 'bank-transfer' ? 'bg-gradient-to-br from-emerald-400 to-teal-500' :
+                                      'bg-gradient-to-br from-gray-400 to-gray-500'
+                                    }`}>
+                                      {p.type === 'wallet-deposit' ? <Wallet className="w-4 h-4 text-white" /> :
+                                       p.type === 'exchange-transfer' ? <Send className="w-4 h-4 text-white" /> :
+                                       p.type === 'bank-transfer' ? <Building className="w-4 h-4 text-white" /> :
+                                       <DollarSign className="w-4 h-4 text-white" />}
+                                    </div>
+                                    <div>
+                                      <p className="font-bold text-sm">{p.name || getWalletTypeLabel(p.walletType)}</p>
+                                      <p className="text-[10px] text-gray-400">{
+                                        p.type === 'wallet-deposit' ? 'إيداع محفظة' :
+                                        p.type === 'exchange-transfer' ? 'تحويل صراف' :
+                                        p.type === 'bank-transfer' ? 'تحويل بنكي' :
+                                        p.type === 'cash' ? 'نقدي' : p.type
+                                      }</p>
+                                    </div>
+                                  </div>
+                                  <Badge className={`${getStatusColor(p.isActive ? 'active' : 'suspended')} border text-[10px] px-1.5`}>{p.isActive ? 'نشطة' : 'معطلة'}</Badge>
+                                </div>
+                                <div className="space-y-0.5 mb-2 text-xs">
+                                  {p.accountNumber && <p className="text-gray-600"><span className="text-gray-400">الرقم:</span> <span dir="ltr" className="font-mono">{p.accountNumber}</span></p>}
+                                  {p.accountName && <p className="text-gray-600"><span className="text-gray-400">الحساب:</span> {p.accountName}</p>}
+                                  {p.bankName && <p className="text-gray-600"><span className="text-gray-400">البنك:</span> {p.bankName}</p>}
+                                  {p.exchangeName && <p className="text-gray-600"><span className="text-gray-400">الصراف:</span> {p.exchangeName}</p>}
+                                  {p.walletType && <p className="text-gray-600"><span className="text-gray-400">المحفظة:</span> {getWalletTypeLabel(p.walletType)}</p>}
+                                </div>
+                                <div className="flex gap-2">
+                                  <Button size="sm" variant="outline" className="flex-1 text-xs h-7" onClick={() => { setEditingPayment(p); setPaymentForm({ type: p.type || 'wallet-deposit', name: p.name || '', accountName: p.accountName || '', accountNumber: p.accountNumber || '', bankName: p.bankName || '', exchangeName: p.exchangeName || '', walletType: p.walletType || '', instructions: p.instructions || '', isActive: p.isActive }); setPaymentDialog(true) }}><Pencil className="w-3 h-3 ml-1" />تعديل</Button>
+                                  <Button size="sm" variant="outline" className="text-red-500 hover:bg-red-50 text-xs h-7" onClick={() => handleDeletePayment(p.id)}><Trash2 className="w-3 h-3" /></Button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="text-center py-6"><CreditCard className="w-10 h-10 text-gray-300 mx-auto mb-2" /><p className="text-gray-400 text-sm">لا توجد طرق دفع - أضف طرق الدفع لتظهر للمستفيدين</p></div>
+                        )}
                       </CardContent>
                     </Card>
 
@@ -2268,8 +2276,7 @@ export default function AdminDashboard() {
               </div>
             </div>
 
-            {/* Name */}
-            <div><Label className="text-sm font-medium">الاسم المعروض *</Label><Input value={paymentForm.name} onChange={e => setPaymentForm({ ...paymentForm, name: e.target.value })} placeholder="مثال: زين كاش - حساب المنصة" className="border-amber-200 mt-1" /></div>
+            {/* Name is auto-generated from walletType/bankName/exchangeName - hidden */}
 
             {/* Wallet-specific fields */}
             {paymentForm.type === 'wallet-deposit' && (

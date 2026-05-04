@@ -3168,15 +3168,20 @@ export default function BeneficiaryDashboard() {
               if (!selectedPm) return null
               const amount = dynamicPricing?.totalPrice || selectedService?.price || 0
               const walletLabel = selectedPm.walletType ? (
-                selectedPm.walletType === 'zain-cash' ? 'زين كاش' :
-                selectedPm.walletType === 'hala-cash' ? 'هلا كاش' :
-                selectedPm.walletType === 'mtn-momo' ? 'إم تي إن' :
-                selectedPm.walletType === 'y-cash' ? 'واي كاش' :
-                selectedPm.walletType === 'flous' ? 'فلوس' :
                 selectedPm.walletType === 'one-cash' ? 'ون كاش' :
+                selectedPm.walletType === 'cash-wallet' ? 'محفظة كاش' :
                 selectedPm.walletType === 'jawali' ? 'جوالي' :
+                selectedPm.walletType === 'yemen-wallet' ? 'يمن والت' :
                 selectedPm.walletType === 'saba-cash' ? 'سبأكاش' :
-                selectedPm.walletType === 'national-wallet' ? 'المحفظة الوطنية' : selectedPm.walletType
+                selectedPm.walletType === 'mahfathati' ? 'محفظتي' :
+                selectedPm.walletType === 'pyes' ? 'بيس' :
+                selectedPm.walletType === 'floosak' ? 'فلوسك' :
+                selectedPm.walletType === 'jaib' ? 'جيب' :
+                selectedPm.walletType === 'shamil-money' ? 'شامل مالي' :
+                selectedPm.walletType === 'em-pay' ? 'إم باي' :
+                selectedPm.walletType === 'bin-dowal-pay' ? 'بن دول باي' :
+                selectedPm.walletType === 'national-wallet' ? 'المحفظة الوطنية' :
+                selectedPm.walletType === 'other' ? 'أخرى' : selectedPm.walletType
               ) : ''
               const typeIcon = selectedPm.type === 'wallet-deposit' ? Wallet : selectedPm.type === 'exchange-transfer' ? Send : Building
               const typeColor = selectedPm.type === 'wallet-deposit' ? 'from-blue-400 to-indigo-500' : selectedPm.type === 'exchange-transfer' ? 'from-amber-400 to-orange-500' : 'from-emerald-400 to-teal-500'
@@ -3204,7 +3209,7 @@ export default function BeneficiaryDashboard() {
                   <div className="rounded-xl border-2 border-emerald-200 overflow-hidden">
                     <div className={`bg-gradient-to-l ${typeColor} p-3 text-white flex items-center gap-2`}>
                       <Icon className="w-5 h-5" />
-                      <span className="font-bold text-sm">{typeLabel}</span>
+                      <span className="font-bold text-sm">{selectedPm.name || typeLabel}</span>
                       <span className="text-white/70 text-xs mr-auto">بيانات التحويل</span>
                     </div>
                     <div className="p-4 space-y-3 bg-white">
@@ -3830,23 +3835,6 @@ export default function BeneficiaryDashboard() {
                                     <div className="flex-1 min-w-0">
                                       <p className="font-bold text-sm truncate">{pm.name}</p>
                                       <div className="flex items-center gap-2 flex-wrap">
-                                        {pm.walletType && (
-                                          <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full">{
-                                            pm.walletType === 'one-cash' ? 'ون كاش' :
-                                            pm.walletType === 'cash-wallet' ? 'محفظة كاش' :
-                                            pm.walletType === 'jawali' ? 'جوالي' :
-                                            pm.walletType === 'yemen-wallet' ? 'يمن والت' :
-                                            pm.walletType === 'saba-cash' ? 'سبأكاش' :
-                                            pm.walletType === 'mahfathati' ? 'محفظتي' :
-                                            pm.walletType === 'pyes' ? 'بيس' :
-                                            pm.walletType === 'floosak' ? 'فلوسك' :
-                                            pm.walletType === 'jaib' ? 'جيب' :
-                                            pm.walletType === 'shamil-money' ? 'شامل مالي' :
-                                            pm.walletType === 'em-pay' ? 'إم باي' :
-                                            pm.walletType === 'bin-dowal-pay' ? 'بن دول باي' :
-                                            pm.walletType === 'national-wallet' ? 'المحفظة الوطنية' : pm.walletType
-                                          }</span>
-                                        )}
                                         {pm.accountNumber && (
                                           <span className="text-[10px] text-gray-500 font-mono" dir="ltr">{pm.accountNumber}</span>
                                         )}
