@@ -83,6 +83,11 @@
   body {
     @apply bg-background text-foreground;
   }
+  /* Prevent pull-to-refresh from exiting the PWA/app */
+  html, body {
+    overscroll-behavior-y: contain;
+    overflow-y: auto;
+  }
 }
 
 /* Custom scrollbar */

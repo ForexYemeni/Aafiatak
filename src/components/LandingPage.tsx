@@ -1,10 +1,12 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Shield, Stethoscope, Heart, Loader2, UserPlus, Eye, EyeOff,
-  CheckCircle, Sparkles, ArrowRight, Navigation, MapPin, AlertTriangle, Check, X
+  CheckCircle, Sparkles, ArrowRight, Navigation, MapPin, AlertTriangle,
+  Check, X, Phone, CreditCard, FileBadge, Lock, ChevronLeft, User,
+  RefreshCw, BadgeCheck
 } from 'lucide-react'
 import { useAppStore } from '@/lib/store'
 import { Button } from '@/components/ui/button'
@@ -16,6 +18,7 @@ import Image from 'next/image'
 // ─── Types ───
 type Role = 'beneficiary' | 'nurse' | 'admin'
 type AuthTab = 'login' | 'register'
+type NurseRegStep = 1 | 2 | 3
 
 // ─── Password Input with toggle ───
 function PasswordInput({
@@ -27,6 +30,7 @@ function PasswordInput({
   disabled = false,
   onKeyDown,
   className = 'h-12',
+  accentColor = 'violet',
 }: {
   value: string
   onChange: (v: string) => void
@@ -36,7 +40,15 @@ function PasswordInput({
   disabled?: boolean
   onKeyDown?: (e: React.KeyboardEvent) => void
   className?: string
+  accentColor?: 'violet' | 'blue' | 'amber'
 }) {
+  const colorMap = {
+    violet: 'border-violet-200/50 focus:border-violet-400 focus:ring-violet-400/20 text-violet-400 hover:text-violet-600',
+    blue: 'border-blue-200/50 focus:border-blue-400 focus:ring-blue-400/20 text-blue-400 hover:text-blue-600',
+    amber: 'border-amber-200/50 focus:border-amber-400 focus:ring-amber-400/20 text-amber-400 hover:text-amber-600',
+  }
+  const colors = colorMap[accentColor]
+
   return (
     <div className="relative">
       <Input
@@ -45,13 +57,13 @@ function PasswordInput({
         onChange={e => onChange(e.target.value)}
         onKeyDown={onKeyDown}
         placeholder={placeholder}
-        className={`${className} pl-10 bg-white/60 backdrop-blur-sm border-violet-200/50 focus:border-violet-400 focus:ring-violet-400/20 transition-all duration-300`}
+        className={`${className} pl-10 bg-white/60 backdrop-blur-sm ${colors.split(' ').slice(0, 2).join(' ')} transition-all duration-300`}
         disabled={disabled}
       />
       <button
         type="button"
         onClick={() => setShowPassword(!showPassword)}
-        className="absolute left-3 top-1/2 -translate-y-1/2 text-violet-400 hover:text-violet-600 transition-colors"
+        className={`absolute left-3 top-1/2 -translate-y-1/2 ${colors.split(' ').slice(2).join(' ')} transition-colors`}
       >
         {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
       </button>
@@ -71,6 +83,83 @@ function FloatingOrbs() {
   )
 }
 
+// ─── Step Indicator for Nurse Registration ───
+function StepIndicator({ currentStep, steps }: { currentStep: NurseRegStep; steps: { num: number; label: string; icon: React.ElementType }[] }) {
+  return (
+    <div className="flex items-center justify-center gap-0 mb-5">
+      {steps.map((step, idx) => {
+        const Icon = step.icon
+        const isActive = currentStep === step.num
+        const isCompleted = currentStep > step.num
+        return (
+          <div key={step.num} className="flex items-center">
+            <div className="flex flex-col items-center">
+              <motion.div
+                animate={{
+                  scale: isActive ? 1.1 : 1,
+                  backgroundColor: isCompleted ? '#10b981' : isActive ? '#3b82f6' : '#e2e8f0',
+                }}
+                className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-md transition-all duration-500 ${
+                  isActive ? 'shadow-blue-500/30 ring-2 ring-blue-200' : ''
+                }`}
+              >
+                {isCompleted ? (
+                  <Check className="w-5 h-5 text-white" />
+                ) : (
+                  <Icon className={`w-4.5 h-4.5 ${isActive ? 'text-white' : 'text-slate-400'}`} />
+                )}
+              </motion.div>
+              <span className={`text-[10px] mt-1.5 font-bold ${isActive ? 'text-blue-600' : isCompleted ? 'text-emerald-600' : 'text-slate-400'}`}>
+                {step.label}
+              </span>
+            </div>
+            {idx < steps.length - 1 && (
+              <div className="mx-1.5 mb-5">
+                <div className={`w-8 h-0.5 rounded-full transition-all duration-500 ${isCompleted ? 'bg-emerald-400' : 'bg-slate-200'}`} />
+              </div>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// ─── Geolocation Helper ───
+function useGeoLocation() {
+  const { toast } = useToast()
+
+  const getLocation = useCallback((onSuccess: (address: string) => void) => {
+    if (!navigator.geolocation) {
+      toast({ title: 'غير مدعوم', description: 'متصفحك لا يدعم تحديد الموقع', variant: 'destructive' })
+      return
+    }
+    toast({ title: 'جارٍ تحديد الموقع...', description: 'يرجى الانتظار' })
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const { latitude, longitude } = pos.coords
+        try {
+          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&accept-language=ar`)
+          const data = await res.json()
+          const address = data.display_name || `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`
+          onSuccess(address)
+          toast({ title: 'تم تحديد الموقع بنجاح', description: address.substring(0, 80) })
+        } catch {
+          const coord = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`
+          onSuccess(coord)
+          toast({ title: 'تم تحديد الموقع', description: `${latitude.toFixed(4)}, ${longitude.toFixed(4)}` })
+        }
+      },
+      () => {
+        toast({ title: 'خطأ في تحديد الموقع', description: 'يرجى السماح بالوصول إلى الموقع أو إدخاله يدوياً', variant: 'destructive' })
+      },
+      { enableHighAccuracy: true, timeout: 15000 }
+    )
+  }, [toast])
+
+  return { getLocation }
+}
+
 // ═══════════════════════════════════════════
 //  MAIN COMPONENT
 // ═══════════════════════════════════════════
@@ -78,6 +167,7 @@ function FloatingOrbs() {
 export default function LandingPage() {
   const { setView, setUser } = useAppStore()
   const { toast } = useToast()
+  const { getLocation } = useGeoLocation()
 
   // ─── Auth tab state ───
   const [authTab, setAuthTab] = useState<AuthTab>('login')
@@ -86,6 +176,9 @@ export default function LandingPage() {
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [registerSuccess, setRegisterSuccess] = useState(false)
+
+  // ─── Nurse Registration Step ───
+  const [nurseStep, setNurseStep] = useState<NurseRegStep>(1)
 
   // ─── Login forms ───
   const [adminForm, setAdminForm] = useState({ phone: '', password: '' })
@@ -106,9 +199,16 @@ export default function LandingPage() {
   const openAuth = useCallback((tab: AuthTab, role?: Role) => {
     setAuthTab(tab)
     setRegisterSuccess(false)
+    setNurseStep(1)
     if (tab === 'login' && role) setLoginRole(role)
     if (tab === 'register' && role && role !== 'admin') setRegisterRole(role as 'beneficiary' | 'nurse')
   }, [])
+
+  // ─── Nurse step validation ───
+  const isNurseStep1Valid = nurseRegForm.fullName.trim().split(/\s+/).length >= 3 && nurseRegForm.phone && nurseRegForm.location
+  const isNurseStep2Valid = nurseRegForm.nationalId && nurseRegForm.licenseNumber && nurseRegForm.licenseExpiryDate
+  const isLicenseExpired = nurseRegForm.licenseExpiryDate ? new Date(nurseRegForm.licenseExpiryDate) < new Date(new Date().toDateString()) : false
+  const isNurseStep3Valid = nurseRegForm.password.length >= 6 && nurseRegForm.password === nurseRegForm.confirmPassword
 
   // ═══════════════════════════════════════════
   //  LOGIN HANDLERS
@@ -311,8 +411,13 @@ export default function LandingPage() {
 
   const handleRegisterKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
-      if (registerRole === 'nurse') handleNurseRegister()
-      else handleBeneficiaryRegister()
+      if (registerRole === 'nurse') {
+        if (nurseStep === 1 && isNurseStep1Valid) setNurseStep(2)
+        else if (nurseStep === 2 && isNurseStep2Valid && !isLicenseExpired) setNurseStep(3)
+        else if (nurseStep === 3) handleNurseRegister()
+      } else {
+        handleBeneficiaryRegister()
+      }
     }
   }
 
@@ -346,6 +451,13 @@ export default function LandingPage() {
       glowColor: 'shadow-amber-500/25',
     },
   }
+
+  // ─── Nurse registration steps config ───
+  const nurseSteps = [
+    { num: 1, label: 'الشخصية', icon: User },
+    { num: 2, label: 'الترخيص', icon: FileBadge },
+    { num: 3, label: 'الحساب', icon: Lock },
+  ]
 
   // ═══════════════════════════════════════════
   //  RENDER
@@ -417,7 +529,7 @@ export default function LandingPage() {
                 return (
                   <button
                     key={tab.key}
-                    onClick={() => { setAuthTab(tab.key); setRegisterSuccess(false) }}
+                    onClick={() => { setAuthTab(tab.key); setRegisterSuccess(false); setNurseStep(1) }}
                     className={`flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl text-sm font-bold transition-all duration-500 relative ${
                       isActive
                         ? `bg-gradient-to-l ${isActive && tab.key === 'login' ? 'from-violet-600 via-purple-600 to-fuchsia-600' : 'from-cyan-600 via-blue-600 to-indigo-600'} text-white shadow-lg ${isActive && tab.key === 'login' ? 'shadow-violet-500/30' : 'shadow-blue-500/30'}`
@@ -482,7 +594,7 @@ export default function LandingPage() {
                       {loginRole === 'admin' && (
                         <>
                           <div className="space-y-2">
-                            <Label className="text-sm font-semibold text-slate-700">رقم الهاتف</Label>
+                            <Label className="text-sm font-semibold text-slate-700 flex items-center gap-1.5"><Phone className="w-3.5 h-3.5 text-amber-500" />رقم الهاتف</Label>
                             <Input
                               value={adminForm.phone}
                               onChange={e => setAdminForm(f => ({ ...f, phone: e.target.value }))}
@@ -494,7 +606,7 @@ export default function LandingPage() {
                             />
                           </div>
                           <div className="space-y-2">
-                            <Label className="text-sm font-semibold text-slate-700">كلمة المرور</Label>
+                            <Label className="text-sm font-semibold text-slate-700 flex items-center gap-1.5"><Lock className="w-3.5 h-3.5 text-amber-500" />كلمة المرور</Label>
                             <PasswordInput
                               value={adminForm.password}
                               onChange={v => setAdminForm(f => ({ ...f, password: v }))}
@@ -502,6 +614,7 @@ export default function LandingPage() {
                               showPassword={showPassword}
                               setShowPassword={setShowPassword}
                               disabled={loading}
+                              accentColor="amber"
                             />
                           </div>
                         </>
@@ -510,7 +623,7 @@ export default function LandingPage() {
                       {loginRole === 'nurse' && (
                         <>
                           <div className="space-y-2">
-                            <Label className="text-sm font-semibold text-slate-700">رقم الهاتف</Label>
+                            <Label className="text-sm font-semibold text-slate-700 flex items-center gap-1.5"><Phone className="w-3.5 h-3.5 text-blue-500" />رقم الهاتف</Label>
                             <Input
                               value={nurseLoginForm.phone}
                               onChange={e => setNurseLoginForm(f => ({ ...f, phone: e.target.value }))}
@@ -522,7 +635,7 @@ export default function LandingPage() {
                             />
                           </div>
                           <div className="space-y-2">
-                            <Label className="text-sm font-semibold text-slate-700">كلمة المرور</Label>
+                            <Label className="text-sm font-semibold text-slate-700 flex items-center gap-1.5"><Lock className="w-3.5 h-3.5 text-blue-500" />كلمة المرور</Label>
                             <PasswordInput
                               value={nurseLoginForm.password}
                               onChange={v => setNurseLoginForm(f => ({ ...f, password: v }))}
@@ -530,6 +643,7 @@ export default function LandingPage() {
                               showPassword={showPassword}
                               setShowPassword={setShowPassword}
                               disabled={loading}
+                              accentColor="blue"
                             />
                           </div>
                         </>
@@ -538,7 +652,7 @@ export default function LandingPage() {
                       {loginRole === 'beneficiary' && (
                         <>
                           <div className="space-y-2">
-                            <Label className="text-sm font-semibold text-slate-700">رقم الهاتف</Label>
+                            <Label className="text-sm font-semibold text-slate-700 flex items-center gap-1.5"><Phone className="w-3.5 h-3.5 text-violet-500" />رقم الهاتف</Label>
                             <Input
                               value={beneficiaryLoginForm.phone}
                               onChange={e => setBeneficiaryLoginForm(f => ({ ...f, phone: e.target.value }))}
@@ -550,7 +664,7 @@ export default function LandingPage() {
                             />
                           </div>
                           <div className="space-y-2">
-                            <Label className="text-sm font-semibold text-slate-700">كلمة المرور</Label>
+                            <Label className="text-sm font-semibold text-slate-700 flex items-center gap-1.5"><Lock className="w-3.5 h-3.5 text-violet-500" />كلمة المرور</Label>
                             <PasswordInput
                               value={beneficiaryLoginForm.password}
                               onChange={v => setBeneficiaryLoginForm(f => ({ ...f, password: v }))}
@@ -558,6 +672,7 @@ export default function LandingPage() {
                               showPassword={showPassword}
                               setShowPassword={setShowPassword}
                               disabled={loading}
+                              accentColor="violet"
                             />
                           </div>
                         </>
@@ -625,7 +740,7 @@ export default function LandingPage() {
                         </p>
                         <Button
                           className={`bg-gradient-to-l ${roleConfig[registerRole].gradient} text-white hover:opacity-90 border-0 shadow-lg ${roleConfig[registerRole].glowColor} rounded-xl px-8 h-12 font-bold`}
-                          onClick={() => { setRegisterSuccess(false); setAuthTab('login') }}
+                          onClick={() => { setRegisterSuccess(false); setAuthTab('login'); setNurseStep(1) }}
                         >
                           تسجيل الدخول الآن
                         </Button>
@@ -641,7 +756,7 @@ export default function LandingPage() {
                             return (
                               <button
                                 key={r}
-                                onClick={() => setRegisterRole(r)}
+                                onClick={() => { setRegisterRole(r); setNurseStep(1) }}
                                 className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-all duration-400 ${
                                   isActive
                                     ? `bg-gradient-to-l ${config.gradient} text-white shadow-lg ${config.glowColor}`
@@ -655,7 +770,7 @@ export default function LandingPage() {
                           })}
                         </div>
 
-                        <div className="text-center mb-5">
+                        <div className="text-center mb-4">
                           <h3 className="text-xl font-black text-slate-800">
                             حساب جديد
                           </h3>
@@ -664,149 +779,349 @@ export default function LandingPage() {
                           </p>
                         </div>
 
-                        {/* Nurse Register Form */}
+                        {/* ═══════════════════════════════════ */}
+                        {/* NURSE REGISTER FORM - MULTI-STEP */}
+                        {/* ═══════════════════════════════════ */}
                         {registerRole === 'nurse' && (
-                          <div className="space-y-3 max-w-lg mx-auto">
-                            {/* Section: Personal Info */}
-                            <div className="bg-blue-50/50 rounded-xl p-3 border border-blue-100/50">
-                              <p className="text-xs font-bold text-blue-600 mb-2 flex items-center gap-1.5"><UserPlus className="w-3.5 h-3.5" />المعلومات الشخصية</p>
-                            </div>
-                            <div className="space-y-1.5">
-                              <Label className="text-xs font-semibold text-slate-600">الاسم الرباعي *</Label>
-                              <Input
-                                value={nurseRegForm.fullName}
-                                onChange={e => setNurseRegForm(f => ({ ...f, fullName: e.target.value }))}
-                                placeholder="أدخل اسمك الرباعي كاملاً"
-                                className="h-10 bg-white/60 backdrop-blur-sm border-blue-200/50 focus:border-blue-400 focus:ring-blue-400/20 transition-all duration-300"
-                                onKeyDown={handleRegisterKeyDown}
-                              />
-                              <p className="text-[10px] text-gray-400">يجب أن يحتوي على 3 أسماء على الأقل</p>
-                            </div>
-                            <div className="grid grid-cols-2 gap-3">
-                              <div className="space-y-1.5">
-                                <Label className="text-xs font-semibold text-slate-600">رقم الهاتف *</Label>
-                                <Input value={nurseRegForm.phone} onChange={e => setNurseRegForm(f => ({ ...f, phone: e.target.value }))} placeholder="7XXXXXXXX" dir="ltr" className="h-10 bg-white/60 backdrop-blur-sm border-blue-200/50 focus:border-blue-400 focus:ring-blue-400/20 text-left transition-all duration-300" />
-                              </div>
-                              <div className="space-y-1.5">
-                                <Label className="text-xs font-semibold text-slate-600">
-                                  <MapPin className="w-3 h-3 inline ml-1" />
-                                  الموقع *
-                                </Label>
-                                <div className="flex gap-1.5">
-                                  <Input value={nurseRegForm.location} onChange={e => setNurseRegForm(f => ({ ...f, location: e.target.value }))} placeholder="المدينة أو العنوان" className="h-10 bg-white/60 backdrop-blur-sm border-blue-200/50 focus:border-blue-400 focus:ring-blue-400/20 transition-all duration-300 flex-1" />
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    className="shrink-0 h-10 rounded-xl border-blue-200 text-blue-600 hover:bg-blue-50 px-2.5"
-                                    disabled={loading}
-                                    onClick={() => {
-                                      if (navigator.geolocation) {
-                                        toast({ title: 'جارٍ تحديد الموقع...', description: 'يرجى الانتظار' })
-                                        navigator.geolocation.getCurrentPosition(
-                                          async (pos) => {
-                                            const { latitude, longitude } = pos.coords
-                                            try {
-                                              const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&accept-language=ar`)
-                                              const data = await res.json()
-                                              const address = data.display_name || `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`
-                                              setNurseRegForm(f => ({ ...f, location: address }))
-                                              toast({ title: 'تم تحديد الموقع بنجاح', description: address.substring(0, 80) })
-                                            } catch {
-                                              setNurseRegForm(f => ({ ...f, location: `${latitude.toFixed(6)}, ${longitude.toFixed(6)}` }))
-                                              toast({ title: 'تم تحديد الموقع', description: `${latitude.toFixed(4)}, ${longitude.toFixed(4)}` })
-                                            }
-                                          },
-                                          (err) => {
-                                            toast({ title: 'خطأ في تحديد الموقع', description: 'يرجى السماح بالوصول إلى الموقع أو إدخاله يدوياً', variant: 'destructive' })
-                                          },
-                                          { enableHighAccuracy: true, timeout: 15000 }
-                                        )
-                                      } else {
-                                        toast({ title: 'غير مدعوم', description: 'متصفحك لا يدعم تحديد الموقع', variant: 'destructive' })
-                                      }
-                                    }}
-                                  >
-                                    <Navigation className="w-4 h-4" />
-                                  </Button>
-                                </div>
-                              </div>
-                            </div>
+                          <div className="max-w-lg mx-auto">
+                            {/* Step Indicator */}
+                            <StepIndicator currentStep={nurseStep} steps={nurseSteps} />
 
-                            {/* Section: License Info */}
-                            <div className="bg-amber-50/50 rounded-xl p-3 border border-amber-100/50 mt-1">
-                              <p className="text-xs font-bold text-amber-600 mb-0 flex items-center gap-1.5"><Shield className="w-3.5 h-3.5" />معلومات الترخيص</p>
-                            </div>
-                            <div className="grid grid-cols-2 gap-3">
-                              <div className="space-y-1.5">
-                                <Label className="text-xs font-semibold text-slate-600">رقم الهوية *</Label>
-                                <Input value={nurseRegForm.nationalId} onChange={e => setNurseRegForm(f => ({ ...f, nationalId: e.target.value }))} placeholder="رقم الهوية" className="h-10 bg-white/60 backdrop-blur-sm border-blue-200/50 focus:border-blue-400 focus:ring-blue-400/20 transition-all duration-300" />
-                              </div>
-                              <div className="space-y-1.5">
-                                <Label className="text-xs font-semibold text-slate-600">رقم الترخيص *</Label>
-                                <Input value={nurseRegForm.licenseNumber} onChange={e => setNurseRegForm(f => ({ ...f, licenseNumber: e.target.value }))} placeholder="رقم الترخيص" className="h-10 bg-white/60 backdrop-blur-sm border-blue-200/50 focus:border-blue-400 focus:ring-blue-400/20 transition-all duration-300" />
-                              </div>
-                            </div>
-                            <div className="space-y-1.5">
-                              <Label className="text-xs font-semibold text-slate-600">تاريخ انتهاء الترخيص *</Label>
-                              <div className="relative">
-                                <Input
-                                  type="date"
-                                  value={nurseRegForm.licenseExpiryDate}
-                                  onChange={e => setNurseRegForm(f => ({ ...f, licenseExpiryDate: e.target.value }))}
-                                  className={`h-10 bg-white/60 backdrop-blur-sm transition-all duration-300 ${nurseRegForm.licenseExpiryDate && new Date(nurseRegForm.licenseExpiryDate) < new Date() ? 'border-red-300 focus:border-red-400 focus:ring-red-400/20' : 'border-blue-200/50 focus:border-blue-400 focus:ring-blue-400/20'}`}
-                                  onKeyDown={handleRegisterKeyDown}
-                                />
-                                {nurseRegForm.licenseExpiryDate && (
-                                  <div className="absolute left-3 top-1/2 -translate-y-1/2">
-                                    {new Date(nurseRegForm.licenseExpiryDate) >= new Date() ? (
-                                      <Check className="w-4 h-4 text-emerald-500" />
-                                    ) : (
-                                      <X className="w-4 h-4 text-red-500" />
-                                    )}
+                            <AnimatePresence mode="wait">
+                              {/* ─── STEP 1: Personal Info ─── */}
+                              {nurseStep === 1 && (
+                                <motion.div
+                                  key="nurse-step-1"
+                                  initial={{ opacity: 0, x: 30 }}
+                                  animate={{ opacity: 1, x: 0 }}
+                                  exit={{ opacity: 0, x: -30 }}
+                                  transition={{ duration: 0.3, ease: 'easeOut' }}
+                                  className="space-y-4"
+                                >
+                                  {/* Section Card: Personal Info */}
+                                  <div className="bg-gradient-to-br from-blue-50/80 to-indigo-50/50 rounded-2xl p-4 border border-blue-100/60 shadow-sm">
+                                    <div className="flex items-center gap-2 mb-4">
+                                      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center shadow-md">
+                                        <User className="w-4 h-4 text-white" />
+                                      </div>
+                                      <div>
+                                        <p className="text-sm font-bold text-blue-700">المعلومات الشخصية</p>
+                                        <p className="text-[10px] text-blue-400">الخطوة 1 من 3</p>
+                                      </div>
+                                    </div>
+
+                                    {/* Full Name */}
+                                    <div className="space-y-2 mb-3">
+                                      <Label className="text-xs font-semibold text-slate-600 flex items-center gap-1.5">
+                                        <BadgeCheck className="w-3.5 h-3.5 text-blue-400" />
+                                        الاسم الرباعي *
+                                      </Label>
+                                      <Input
+                                        value={nurseRegForm.fullName}
+                                        onChange={e => setNurseRegForm(f => ({ ...f, fullName: e.target.value }))}
+                                        placeholder="أدخل اسمك الرباعي كاملاً"
+                                        className="h-11 bg-white/70 backdrop-blur-sm border-blue-200/50 focus:border-blue-400 focus:ring-blue-400/20 transition-all duration-300 rounded-xl text-sm"
+                                        onKeyDown={handleRegisterKeyDown}
+                                      />
+                                      <div className="flex items-center gap-1.5">
+                                        {nurseRegForm.fullName.trim().split(/\s+/).filter(Boolean).length >= 3 ? (
+                                          <Check className="w-3 h-3 text-emerald-500" />
+                                        ) : (
+                                          <X className="w-3 h-3 text-slate-300" />
+                                        )}
+                                        <p className="text-[10px] text-gray-400">يجب أن يحتوي على 3 أسماء على الأقل</p>
+                                      </div>
+                                    </div>
+
+                                    {/* Phone */}
+                                    <div className="space-y-2 mb-3">
+                                      <Label className="text-xs font-semibold text-slate-600 flex items-center gap-1.5">
+                                        <Phone className="w-3.5 h-3.5 text-blue-400" />
+                                        رقم الهاتف *
+                                      </Label>
+                                      <Input
+                                        value={nurseRegForm.phone}
+                                        onChange={e => setNurseRegForm(f => ({ ...f, phone: e.target.value }))}
+                                        placeholder="7XXXXXXXX"
+                                        dir="ltr"
+                                        className="h-11 bg-white/70 backdrop-blur-sm border-blue-200/50 focus:border-blue-400 focus:ring-blue-400/20 text-left transition-all duration-300 rounded-xl text-sm"
+                                      />
+                                    </div>
+
+                                    {/* Location */}
+                                    <div className="space-y-2">
+                                      <Label className="text-xs font-semibold text-slate-600 flex items-center gap-1.5">
+                                        <MapPin className="w-3.5 h-3.5 text-blue-400" />
+                                        الموقع *
+                                      </Label>
+                                      <div className="flex gap-2">
+                                        <Input
+                                          value={nurseRegForm.location}
+                                          onChange={e => setNurseRegForm(f => ({ ...f, location: e.target.value }))}
+                                          placeholder="المدينة أو العنوان"
+                                          className="h-11 bg-white/70 backdrop-blur-sm border-blue-200/50 focus:border-blue-400 focus:ring-blue-400/20 transition-all duration-300 flex-1 rounded-xl text-sm"
+                                        />
+                                        <Button
+                                          type="button"
+                                          variant="outline"
+                                          className="shrink-0 h-11 rounded-xl border-blue-200 text-blue-600 hover:bg-blue-50 hover:border-blue-300 px-3 transition-all duration-300"
+                                          disabled={loading}
+                                          onClick={() => getLocation((address) => setNurseRegForm(f => ({ ...f, location: address })))}
+                                        >
+                                          <Navigation className="w-4 h-4" />
+                                        </Button>
+                                      </div>
+                                    </div>
                                   </div>
-                                )}
-                              </div>
-                              {nurseRegForm.licenseExpiryDate && new Date(nurseRegForm.licenseExpiryDate) < new Date() && (
-                                <div className="flex items-center gap-2 p-2 bg-red-50 rounded-lg border border-red-200">
-                                  <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
-                                  <p className="text-xs text-red-600 font-bold">ترخيص منتهي! لا يمكن التسجيل برخصة منتهية الصلاحية</p>
-                                </div>
+
+                                  {/* Next Button */}
+                                  <Button
+                                    className="w-full h-12 font-bold bg-gradient-to-l from-cyan-600 via-blue-600 to-indigo-600 text-white hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-blue-500/25 border-0 transition-all duration-300 rounded-xl"
+                                    onClick={() => setNurseStep(2)}
+                                    disabled={!isNurseStep1Valid}
+                                  >
+                                    <span className="flex items-center gap-2">
+                                      التالي - معلومات الترخيص
+                                      <ChevronLeft className="w-4 h-4" />
+                                    </span>
+                                  </Button>
+                                </motion.div>
                               )}
-                            </div>
-                            <div className="space-y-1.5">
-                              <Label className="text-xs font-semibold text-slate-600">كلمة المرور *</Label>
-                              <PasswordInput
-                                value={nurseRegForm.password}
-                                onChange={v => setNurseRegForm(f => ({ ...f, password: v }))}
-                                onKeyDown={handleRegisterKeyDown}
-                                showPassword={showPassword}
-                                setShowPassword={setShowPassword}
-                                className="h-10"
-                                placeholder="كلمة المرور (6 أحرف على الأقل)"
-                              />
-                            </div>
-                            <div className="space-y-1.5">
-                              <Label className="text-xs font-semibold text-slate-600">تأكيد كلمة المرور *</Label>
-                              <PasswordInput
-                                value={nurseRegForm.confirmPassword}
-                                onChange={v => setNurseRegForm(f => ({ ...f, confirmPassword: v }))}
-                                onKeyDown={handleRegisterKeyDown}
-                                showPassword={showPassword}
-                                setShowPassword={setShowPassword}
-                                className="h-10"
-                                placeholder="أعد إدخال كلمة المرور"
-                              />
-                            </div>
-                            <Button
-                              className={`w-full h-12 font-bold bg-gradient-to-l ${roleConfig.nurse.gradient} text-white hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] shadow-lg ${roleConfig.nurse.glowColor} border-0 transition-all duration-300 rounded-xl`}
-                              onClick={handleNurseRegister}
-                              disabled={loading}
-                            >
-                              {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'إنشاء حساب ممرض'}
-                            </Button>
-                            <div className="text-center">
+
+                              {/* ─── STEP 2: License Info ─── */}
+                              {nurseStep === 2 && (
+                                <motion.div
+                                  key="nurse-step-2"
+                                  initial={{ opacity: 0, x: 30 }}
+                                  animate={{ opacity: 1, x: 0 }}
+                                  exit={{ opacity: 0, x: -30 }}
+                                  transition={{ duration: 0.3, ease: 'easeOut' }}
+                                  className="space-y-4"
+                                >
+                                  {/* Section Card: License Info */}
+                                  <div className="bg-gradient-to-br from-amber-50/80 to-orange-50/50 rounded-2xl p-4 border border-amber-100/60 shadow-sm">
+                                    <div className="flex items-center gap-2 mb-4">
+                                      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center shadow-md">
+                                        <FileBadge className="w-4 h-4 text-white" />
+                                      </div>
+                                      <div>
+                                        <p className="text-sm font-bold text-amber-700">معلومات الترخيص</p>
+                                        <p className="text-[10px] text-amber-400">الخطوة 2 من 3</p>
+                                      </div>
+                                    </div>
+
+                                    {/* National ID + License Number */}
+                                    <div className="grid grid-cols-2 gap-3 mb-3">
+                                      <div className="space-y-2">
+                                        <Label className="text-xs font-semibold text-slate-600 flex items-center gap-1.5">
+                                          <CreditCard className="w-3.5 h-3.5 text-amber-400" />
+                                          رقم الهوية *
+                                        </Label>
+                                        <Input
+                                          value={nurseRegForm.nationalId}
+                                          onChange={e => setNurseRegForm(f => ({ ...f, nationalId: e.target.value }))}
+                                          placeholder="رقم الهوية"
+                                          className="h-11 bg-white/70 backdrop-blur-sm border-amber-200/50 focus:border-amber-400 focus:ring-amber-400/20 transition-all duration-300 rounded-xl text-sm"
+                                        />
+                                      </div>
+                                      <div className="space-y-2">
+                                        <Label className="text-xs font-semibold text-slate-600 flex items-center gap-1.5">
+                                          <Shield className="w-3.5 h-3.5 text-amber-400" />
+                                          رقم الترخيص *
+                                        </Label>
+                                        <Input
+                                          value={nurseRegForm.licenseNumber}
+                                          onChange={e => setNurseRegForm(f => ({ ...f, licenseNumber: e.target.value }))}
+                                          placeholder="رقم الترخيص"
+                                          className="h-11 bg-white/70 backdrop-blur-sm border-amber-200/50 focus:border-amber-400 focus:ring-amber-400/20 transition-all duration-300 rounded-xl text-sm"
+                                        />
+                                      </div>
+                                    </div>
+
+                                    {/* License Expiry Date */}
+                                    <div className="space-y-2">
+                                      <Label className="text-xs font-semibold text-slate-600 flex items-center gap-1.5">
+                                        <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+                                        تاريخ انتهاء الترخيص *
+                                      </Label>
+                                      <div className="relative">
+                                        <Input
+                                          type="date"
+                                          value={nurseRegForm.licenseExpiryDate}
+                                          onChange={e => setNurseRegForm(f => ({ ...f, licenseExpiryDate: e.target.value }))}
+                                          className={`h-11 bg-white/70 backdrop-blur-sm transition-all duration-300 rounded-xl ${nurseRegForm.licenseExpiryDate && isLicenseExpired ? 'border-red-300 focus:border-red-400 focus:ring-red-400/20' : 'border-amber-200/50 focus:border-amber-400 focus:ring-amber-400/20'}`}
+                                          onKeyDown={handleRegisterKeyDown}
+                                        />
+                                        {nurseRegForm.licenseExpiryDate && (
+                                          <div className="absolute left-3 top-1/2 -translate-y-1/2">
+                                            {isLicenseExpired ? (
+                                              <X className="w-4 h-4 text-red-500" />
+                                            ) : (
+                                              <Check className="w-4 h-4 text-emerald-500" />
+                                            )}
+                                          </div>
+                                        )}
+                                      </div>
+                                      {nurseRegForm.licenseExpiryDate && isLicenseExpired && (
+                                        <motion.div
+                                          initial={{ opacity: 0, y: -5 }}
+                                          animate={{ opacity: 1, y: 0 }}
+                                          className="flex items-center gap-2 p-2.5 bg-red-50 rounded-xl border border-red-200"
+                                        >
+                                          <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
+                                          <p className="text-xs text-red-600 font-bold">ترخيص منتهي! لا يمكن التسجيل برخصة منتهية الصلاحية</p>
+                                        </motion.div>
+                                      )}
+                                      {nurseRegForm.licenseExpiryDate && !isLicenseExpired && (
+                                        <motion.div
+                                          initial={{ opacity: 0, y: -5 }}
+                                          animate={{ opacity: 1, y: 0 }}
+                                          className="flex items-center gap-2 p-2.5 bg-emerald-50 rounded-xl border border-emerald-200"
+                                        >
+                                          <Check className="w-4 h-4 text-emerald-500 shrink-0" />
+                                          <p className="text-xs text-emerald-600 font-bold">الترخيص ساري - يمكن المتابعة</p>
+                                        </motion.div>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {/* Back + Next Buttons */}
+                                  <div className="flex gap-3">
+                                    <Button
+                                      variant="outline"
+                                      className="flex-1 h-12 rounded-xl font-bold border-slate-200 hover:bg-slate-50 transition-all duration-300"
+                                      onClick={() => setNurseStep(1)}
+                                    >
+                                      <ArrowRight className="w-4 h-4 ml-1" />
+                                      السابق
+                                    </Button>
+                                    <Button
+                                      className="flex-[2] h-12 font-bold bg-gradient-to-l from-cyan-600 via-blue-600 to-indigo-600 text-white hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-blue-500/25 border-0 transition-all duration-300 rounded-xl"
+                                      onClick={() => setNurseStep(3)}
+                                      disabled={!isNurseStep2Valid || isLicenseExpired}
+                                    >
+                                      <span className="flex items-center gap-2">
+                                        التالي - إعداد الحساب
+                                        <ChevronLeft className="w-4 h-4" />
+                                      </span>
+                                    </Button>
+                                  </div>
+                                </motion.div>
+                              )}
+
+                              {/* ─── STEP 3: Account Setup ─── */}
+                              {nurseStep === 3 && (
+                                <motion.div
+                                  key="nurse-step-3"
+                                  initial={{ opacity: 0, x: 30 }}
+                                  animate={{ opacity: 1, x: 0 }}
+                                  exit={{ opacity: 0, x: -30 }}
+                                  transition={{ duration: 0.3, ease: 'easeOut' }}
+                                  className="space-y-4"
+                                >
+                                  {/* Section Card: Account Setup */}
+                                  <div className="bg-gradient-to-br from-emerald-50/80 to-teal-50/50 rounded-2xl p-4 border border-emerald-100/60 shadow-sm">
+                                    <div className="flex items-center gap-2 mb-4">
+                                      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center shadow-md">
+                                        <Lock className="w-4 h-4 text-white" />
+                                      </div>
+                                      <div>
+                                        <p className="text-sm font-bold text-emerald-700">إعداد الحساب</p>
+                                        <p className="text-[10px] text-emerald-400">الخطوة 3 من 3</p>
+                                      </div>
+                                    </div>
+
+                                    {/* Summary of entered data */}
+                                    <div className="bg-white/50 rounded-xl p-3 mb-4 border border-emerald-100/40">
+                                      <p className="text-[10px] font-bold text-slate-400 mb-2">ملخص البيانات</p>
+                                      <div className="grid grid-cols-2 gap-1.5 text-[11px]">
+                                        <div className="flex items-center gap-1"><Check className="w-3 h-3 text-emerald-500" /><span className="text-slate-500 truncate">{nurseRegForm.fullName.substring(0, 20)}</span></div>
+                                        <div className="flex items-center gap-1"><Check className="w-3 h-3 text-emerald-500" /><span className="text-slate-500">{nurseRegForm.phone}</span></div>
+                                        <div className="flex items-center gap-1"><Check className="w-3 h-3 text-emerald-500" /><span className="text-slate-500 truncate">{nurseRegForm.nationalId}</span></div>
+                                        <div className="flex items-center gap-1"><Check className="w-3 h-3 text-emerald-500" /><span className="text-slate-500 truncate">{nurseRegForm.licenseNumber}</span></div>
+                                      </div>
+                                    </div>
+
+                                    {/* Password */}
+                                    <div className="space-y-2 mb-3">
+                                      <Label className="text-xs font-semibold text-slate-600 flex items-center gap-1.5">
+                                        <Lock className="w-3.5 h-3.5 text-emerald-400" />
+                                        كلمة المرور *
+                                      </Label>
+                                      <PasswordInput
+                                        value={nurseRegForm.password}
+                                        onChange={v => setNurseRegForm(f => ({ ...f, password: v }))}
+                                        onKeyDown={handleRegisterKeyDown}
+                                        showPassword={showPassword}
+                                        setShowPassword={setShowPassword}
+                                        className="h-11"
+                                        placeholder="كلمة المرور (6 أحرف على الأقل)"
+                                        accentColor="blue"
+                                      />
+                                      {nurseRegForm.password && nurseRegForm.password.length < 6 && (
+                                        <p className="text-[10px] text-red-400">كلمة المرور يجب أن تكون 6 أحرف على الأقل</p>
+                                      )}
+                                    </div>
+
+                                    {/* Confirm Password */}
+                                    <div className="space-y-2">
+                                      <Label className="text-xs font-semibold text-slate-600 flex items-center gap-1.5">
+                                        <Lock className="w-3.5 h-3.5 text-emerald-400" />
+                                        تأكيد كلمة المرور *
+                                      </Label>
+                                      <PasswordInput
+                                        value={nurseRegForm.confirmPassword}
+                                        onChange={v => setNurseRegForm(f => ({ ...f, confirmPassword: v }))}
+                                        onKeyDown={handleRegisterKeyDown}
+                                        showPassword={showPassword}
+                                        setShowPassword={setShowPassword}
+                                        className="h-11"
+                                        placeholder="أعد إدخال كلمة المرور"
+                                        accentColor="blue"
+                                      />
+                                      {nurseRegForm.confirmPassword && nurseRegForm.password !== nurseRegForm.confirmPassword && (
+                                        <p className="text-[10px] text-red-400">كلمتا المرور غير متطابقتين</p>
+                                      )}
+                                      {nurseRegForm.confirmPassword && nurseRegForm.password === nurseRegForm.confirmPassword && nurseRegForm.password.length >= 6 && (
+                                        <div className="flex items-center gap-1">
+                                          <Check className="w-3 h-3 text-emerald-500" />
+                                          <p className="text-[10px] text-emerald-500 font-bold">كلمتا المرور متطابقتان</p>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {/* Back + Submit Buttons */}
+                                  <div className="flex gap-3">
+                                    <Button
+                                      variant="outline"
+                                      className="flex-1 h-12 rounded-xl font-bold border-slate-200 hover:bg-slate-50 transition-all duration-300"
+                                      onClick={() => setNurseStep(2)}
+                                    >
+                                      <ArrowRight className="w-4 h-4 ml-1" />
+                                      السابق
+                                    </Button>
+                                    <Button
+                                      className="flex-[2] h-12 font-bold bg-gradient-to-l from-cyan-600 via-blue-600 to-indigo-600 text-white hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-blue-500/25 border-0 transition-all duration-300 rounded-xl"
+                                      onClick={handleNurseRegister}
+                                      disabled={loading || !isNurseStep3Valid}
+                                    >
+                                      {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : (
+                                        <span className="flex items-center gap-2">
+                                          <CheckCircle className="w-4 h-4" />
+                                          إنشاء حساب الممرض
+                                        </span>
+                                      )}
+                                    </Button>
+                                  </div>
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
+
+                            {/* Link to login */}
+                            <div className="text-center mt-3">
                               <button
-                                onClick={() => setAuthTab('login')}
+                                onClick={() => { setAuthTab('login'); setNurseStep(1) }}
                                 className="text-sm text-slate-500 hover:text-blue-600 transition-colors font-medium"
                               >
                                 لديك حساب؟ تسجيل الدخول
@@ -815,112 +1130,125 @@ export default function LandingPage() {
                           </div>
                         )}
 
-                        {/* Beneficiary Register Form */}
+                        {/* ═══════════════════════════════════ */}
+                        {/* BENEFICIARY REGISTER FORM */}
+                        {/* ═══════════════════════════════════ */}
                         {registerRole === 'beneficiary' && (
                           <div className="space-y-4 max-w-md mx-auto">
-                            <div className="space-y-2">
-                              <Label className="text-sm font-semibold text-slate-700">الاسم الكامل *</Label>
-                              <Input
-                                value={beneficiaryRegForm.name}
-                                onChange={e => setBeneficiaryRegForm(f => ({ ...f, name: e.target.value }))}
-                                onKeyDown={handleRegisterKeyDown}
-                                placeholder="أدخل اسمك الكامل"
-                                className="h-12 bg-white/60 backdrop-blur-sm border-violet-200/50 focus:border-violet-400 focus:ring-violet-400/20 transition-all duration-300"
-                                disabled={loading}
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label className="text-sm font-semibold text-slate-700">رقم الهاتف *</Label>
-                              <Input
-                                value={beneficiaryRegForm.phone}
-                                onChange={e => setBeneficiaryRegForm(f => ({ ...f, phone: e.target.value }))}
-                                onKeyDown={handleRegisterKeyDown}
-                                placeholder="7XXXXXXXX"
-                                dir="ltr"
-                                className="h-12 bg-white/60 backdrop-blur-sm border-violet-200/50 focus:border-violet-400 focus:ring-violet-400/20 text-left transition-all duration-300"
-                                disabled={loading}
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label className="text-sm font-semibold text-slate-700">
-                                <MapPin className="w-3.5 h-3.5 inline ml-1" />
-                                الموقع *
-                              </Label>
-                              <div className="flex gap-2">
-                                <Input
-                                  value={beneficiaryRegForm.location}
-                                  onChange={e => setBeneficiaryRegForm(f => ({ ...f, location: e.target.value }))}
-                                  onKeyDown={handleRegisterKeyDown}
-                                  placeholder="سيتم تحديد موقعك تلقائياً أو أدخل العنوان يدوياً"
-                                  className="h-12 bg-white/60 backdrop-blur-sm border-violet-200/50 focus:border-violet-400 focus:ring-violet-400/20 transition-all duration-300 flex-1"
-                                  disabled={loading}
-                                />
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  className="shrink-0 h-12 rounded-xl border-violet-200 text-violet-600 hover:bg-violet-50"
-                                  disabled={loading}
-                                  onClick={() => {
-                                    if (navigator.geolocation) {
-                                      toast({ title: 'جارٍ تحديد الموقع...', description: 'يرجى الانتظار' })
-                                      navigator.geolocation.getCurrentPosition(
-                                        async (pos) => {
-                                          const { latitude, longitude } = pos.coords
-                                          try {
-                                            const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&accept-language=ar`)
-                                            const data = await res.json()
-                                            const address = data.display_name || `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`
-                                            setBeneficiaryRegForm(f => ({ ...f, location: address }))
-                                            toast({ title: 'تم تحديد الموقع بنجاح', description: address.substring(0, 80) })
-                                          } catch {
-                                            setBeneficiaryRegForm(f => ({ ...f, location: `${latitude.toFixed(6)}, ${longitude.toFixed(6)}` }))
-                                            toast({ title: 'تم تحديد الموقع', description: `${latitude.toFixed(4)}, ${longitude.toFixed(4)}` })
-                                          }
-                                        },
-                                        (err) => {
-                                          toast({ title: 'خطأ في تحديد الموقع', description: 'يرجى السماح بالوصول إلى الموقع أو إدخاله يدوياً', variant: 'destructive' })
-                                        },
-                                        { enableHighAccuracy: true, timeout: 15000 }
-                                      )
-                                    } else {
-                                      toast({ title: 'غير مدعوم', description: 'متصفحك لا يدعم تحديد الموقع', variant: 'destructive' })
-                                    }
-                                  }}
-                                >
-                                  <Navigation className="w-4 h-4" />
-                                </Button>
+                            <div className="bg-gradient-to-br from-violet-50/80 to-fuchsia-50/50 rounded-2xl p-4 border border-violet-100/60 shadow-sm">
+                              <div className="flex items-center gap-2 mb-4">
+                                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center shadow-md">
+                                  <Heart className="w-4 h-4 text-white" />
+                                </div>
+                                <div>
+                                  <p className="text-sm font-bold text-violet-700">معلومات المستفيد</p>
+                                  <p className="text-[10px] text-violet-400">أنشئ حسابك لطلب الخدمات الصحية</p>
+                                </div>
+                              </div>
+
+                              <div className="space-y-3">
+                                <div className="space-y-2">
+                                  <Label className="text-xs font-semibold text-slate-600 flex items-center gap-1.5">
+                                    <User className="w-3.5 h-3.5 text-violet-400" />
+                                    الاسم الكامل *
+                                  </Label>
+                                  <Input
+                                    value={beneficiaryRegForm.name}
+                                    onChange={e => setBeneficiaryRegForm(f => ({ ...f, name: e.target.value }))}
+                                    onKeyDown={handleRegisterKeyDown}
+                                    placeholder="أدخل اسمك الكامل"
+                                    className="h-11 bg-white/60 backdrop-blur-sm border-violet-200/50 focus:border-violet-400 focus:ring-violet-400/20 transition-all duration-300 rounded-xl text-sm"
+                                    disabled={loading}
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <Label className="text-xs font-semibold text-slate-600 flex items-center gap-1.5">
+                                    <Phone className="w-3.5 h-3.5 text-violet-400" />
+                                    رقم الهاتف *
+                                  </Label>
+                                  <Input
+                                    value={beneficiaryRegForm.phone}
+                                    onChange={e => setBeneficiaryRegForm(f => ({ ...f, phone: e.target.value }))}
+                                    onKeyDown={handleRegisterKeyDown}
+                                    placeholder="7XXXXXXXX"
+                                    dir="ltr"
+                                    className="h-11 bg-white/60 backdrop-blur-sm border-violet-200/50 focus:border-violet-400 focus:ring-violet-400/20 text-left transition-all duration-300 rounded-xl text-sm"
+                                    disabled={loading}
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <Label className="text-xs font-semibold text-slate-600 flex items-center gap-1.5">
+                                    <MapPin className="w-3.5 h-3.5 text-violet-400" />
+                                    الموقع *
+                                  </Label>
+                                  <div className="flex gap-2">
+                                    <Input
+                                      value={beneficiaryRegForm.location}
+                                      onChange={e => setBeneficiaryRegForm(f => ({ ...f, location: e.target.value }))}
+                                      onKeyDown={handleRegisterKeyDown}
+                                      placeholder="سيتم تحديد موقعك تلقائياً أو أدخل العنوان"
+                                      className="h-11 bg-white/60 backdrop-blur-sm border-violet-200/50 focus:border-violet-400 focus:ring-violet-400/20 transition-all duration-300 flex-1 rounded-xl text-sm"
+                                      disabled={loading}
+                                    />
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      className="shrink-0 h-11 rounded-xl border-violet-200 text-violet-600 hover:bg-violet-50 hover:border-violet-300 px-3 transition-all duration-300"
+                                      disabled={loading}
+                                      onClick={() => getLocation((address) => setBeneficiaryRegForm(f => ({ ...f, location: address })))}
+                                    >
+                                      <Navigation className="w-4 h-4" />
+                                    </Button>
+                                  </div>
+                                </div>
+                                <div className="space-y-2">
+                                  <Label className="text-xs font-semibold text-slate-600 flex items-center gap-1.5">
+                                    <Lock className="w-3.5 h-3.5 text-violet-400" />
+                                    كلمة المرور *
+                                  </Label>
+                                  <PasswordInput
+                                    value={beneficiaryRegForm.password}
+                                    onChange={v => setBeneficiaryRegForm(f => ({ ...f, password: v }))}
+                                    onKeyDown={handleRegisterKeyDown}
+                                    showPassword={showPassword}
+                                    setShowPassword={setShowPassword}
+                                    disabled={loading}
+                                    className="h-11"
+                                    placeholder="كلمة المرور (6 أحرف على الأقل)"
+                                    accentColor="violet"
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <Label className="text-xs font-semibold text-slate-600 flex items-center gap-1.5">
+                                    <Lock className="w-3.5 h-3.5 text-violet-400" />
+                                    تأكيد كلمة المرور *
+                                  </Label>
+                                  <PasswordInput
+                                    value={beneficiaryRegForm.confirmPassword}
+                                    onChange={v => setBeneficiaryRegForm(f => ({ ...f, confirmPassword: v }))}
+                                    onKeyDown={handleRegisterKeyDown}
+                                    showPassword={showPassword}
+                                    setShowPassword={setShowPassword}
+                                    disabled={loading}
+                                    className="h-11"
+                                    placeholder="أعد إدخال كلمة المرور"
+                                    accentColor="violet"
+                                  />
+                                </div>
                               </div>
                             </div>
-                            <div className="space-y-2">
-                              <Label className="text-sm font-semibold text-slate-700">كلمة المرور *</Label>
-                              <PasswordInput
-                                value={beneficiaryRegForm.password}
-                                onChange={v => setBeneficiaryRegForm(f => ({ ...f, password: v }))}
-                                onKeyDown={handleRegisterKeyDown}
-                                showPassword={showPassword}
-                                setShowPassword={setShowPassword}
-                                disabled={loading}
-                                placeholder="كلمة المرور (6 أحرف على الأقل)"
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label className="text-sm font-semibold text-slate-700">تأكيد كلمة المرور *</Label>
-                              <PasswordInput
-                                value={beneficiaryRegForm.confirmPassword}
-                                onChange={v => setBeneficiaryRegForm(f => ({ ...f, confirmPassword: v }))}
-                                onKeyDown={handleRegisterKeyDown}
-                                showPassword={showPassword}
-                                setShowPassword={setShowPassword}
-                                disabled={loading}
-                                placeholder="أعد إدخال كلمة المرور"
-                              />
-                            </div>
+
                             <Button
                               className={`w-full h-12 text-base font-bold bg-gradient-to-l ${roleConfig.beneficiary.gradient} text-white hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] shadow-lg ${roleConfig.beneficiary.glowColor} border-0 transition-all duration-300 rounded-xl`}
                               onClick={handleBeneficiaryRegister}
                               disabled={loading}
                             >
-                              {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'إنشاء حساب'}
+                              {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : (
+                                <span className="flex items-center gap-2">
+                                  <CheckCircle className="w-4 h-4" />
+                                  إنشاء حساب
+                                </span>
+                              )}
                             </Button>
                             <div className="text-center">
                               <button
@@ -940,18 +1268,6 @@ export default function LandingPage() {
             </div>
           </div>
         </div>
-      </motion.div>
-
-      {/* Footer */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 1, duration: 0.8 }}
-        className="pb-6 text-center relative z-10"
-      >
-        <p className="text-xs text-slate-400 font-medium">
-          © {new Date().getFullYear()} عافيتك · جميع الحقوق محفوظة
-        </p>
       </motion.div>
     </div>
   )
