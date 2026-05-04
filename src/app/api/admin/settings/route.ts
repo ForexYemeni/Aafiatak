@@ -9,6 +9,7 @@ export async function GET() {
         phone: '',
         email: '',
         emergencyPhone: '',
+        whatsappNumber: '',
         referralBonusPoints: 50,
         referralBonusPointsReceiver: 25,
         referralEnabled: true,
@@ -24,7 +25,7 @@ export async function GET() {
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json()
-    const allowedFields = ['phone', 'email', 'emergencyPhone', 'referralBonusPoints', 'referralBonusPointsReceiver', 'referralEnabled']
+    const allowedFields = ['phone', 'email', 'emergencyPhone', 'whatsappNumber', 'referralBonusPoints', 'referralBonusPointsReceiver', 'referralEnabled']
     const updateData: Record<string, any> = {}
 
     for (const field of allowedFields) {

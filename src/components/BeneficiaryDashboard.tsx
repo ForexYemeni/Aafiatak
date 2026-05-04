@@ -80,6 +80,7 @@ interface AdminSettings {
   phone?: string
   email?: string
   emergencyPhone?: string
+  whatsappNumber?: string
   referralBonusPoints?: number
   referralBonusPointsReceiver?: number
   referralEnabled?: boolean
@@ -3080,26 +3081,26 @@ export default function BeneficiaryDashboard() {
             </div>
           </div>
 
-          <div className="p-6 space-y-4">
-            {/* Service Info */}
+          <div className="p-5 space-y-4">
+            {/* Service Info + Amount */}
             <div className="p-4 rounded-xl bg-gradient-to-l from-emerald-50/50 to-teal-50/50 border border-emerald-100">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="font-semibold text-sm">{selectedService?.name || 'خدمة'}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">رقم الطلب: {lastCreatedRequestId.slice(0, 8)}...</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">رقم الطلب: #{lastCreatedRequestId ? lastCreatedRequestId.slice(0, 8).toUpperCase() : ''}</p>
                 </div>
-                <span className="text-lg font-bold text-emerald-600">{formatPrice(dynamicPricing?.totalPrice || selectedService?.price || 0)}</span>
+                <span className="text-xl font-bold text-emerald-600">{formatPrice(dynamicPricing?.totalPrice || selectedService?.price || 0)}</span>
               </div>
             </div>
 
-            {/* Payment Method Selection from Admin-added methods */}
+            {/* Payment Method Selection */}
             <div className="space-y-2">
               <Label className="text-sm font-medium">
                 <CreditCard className="w-3.5 h-3.5 inline ml-1" />
                 اختر طريقة الدفع
               </Label>
               {availablePaymentMethods.length > 0 ? (
-                <div className="space-y-2">
+                <div className="space-y-2 max-h-48 overflow-y-auto">
                   {availablePaymentMethods.map((pm: any) => {
                     const isSelected = paymentForm.paymentMethodId === pm.id
                     const typeIcon = pm.type === 'wallet-deposit' ? Wallet : pm.type === 'exchange-transfer' ? Send : pm.type === 'bank-transfer' ? Building : DollarSign
@@ -3110,142 +3111,243 @@ export default function BeneficiaryDashboard() {
                       <button
                         key={pm.id}
                         onClick={() => setPaymentForm(prev => ({ ...prev, method: pm.type, paymentMethodId: pm.id }))}
-                        className={`w-full p-4 rounded-xl border-2 transition-all text-right ${
-                          isSelected
-                            ? 'border-emerald-400 bg-emerald-50 shadow-md'
-                            : 'border-gray-200 hover:border-emerald-200'
+                        className={`w-full p-3 rounded-xl border-2 transition-all text-right ${
+                          isSelected ? 'border-emerald-400 bg-emerald-50 shadow-md' : 'border-gray-200 hover:border-emerald-200'
                         }`}
                       >
-                        <div className="flex items-start gap-3">
-                          <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${typeColor} flex items-center justify-center shadow-md shrink-0`}>
-                            <Icon className="w-5 h-5 text-white" />
+                        <div className="flex items-center gap-2.5">
+                          <div className={`w-9 h-9 rounded-lg bg-gradient-to-br ${typeColor} flex items-center justify-center shadow-sm shrink-0`}>
+                            <Icon className="w-4 h-4 text-white" />
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center justify-between">
                               <p className="font-bold text-sm">{pm.name}</p>
                               <Badge className="bg-gray-100 text-gray-500 border-0 text-[10px] px-1.5">{typeLabel}</Badge>
                             </div>
-                            {pm.walletType && (
-                              <p className="text-xs text-gray-500 mt-0.5">{
-                                pm.walletType === 'one-cash' ? 'ون كاش' :
-                                pm.walletType === 'cash-wallet' ? 'محفظة كاش' :
-                                pm.walletType === 'jawali' ? 'جوالي' :
-                                pm.walletType === 'yemen-wallet' ? 'يمن والت' :
-                                pm.walletType === 'saba-cash' ? 'سبأكاش' :
-                                pm.walletType === 'mahfathati' ? 'محفظتي' :
-                                pm.walletType === 'pyes' ? 'بيس' :
-                                pm.walletType === 'floosak' ? 'فلوسك' :
-                                pm.walletType === 'jaib' ? 'جيب' :
-                                pm.walletType === 'shamil-money' ? 'شامل مالي' :
-                                pm.walletType === 'em-pay' ? 'إم باي' :
-                                pm.walletType === 'bin-dowal-pay' ? 'بن دول باي' :
-                                pm.walletType === 'national-wallet' ? 'المحفظة الوطنية' : pm.walletType
-                              }</p>
-                            )}
-                            {pm.accountNumber && (
-                              <p className="text-xs text-gray-600 mt-1 font-mono" dir="ltr">{pm.accountNumber}</p>
-                            )}
-                            {pm.accountName && (
-                              <p className="text-xs text-gray-500">{pm.accountName}</p>
-                            )}
-                            {pm.bankName && (
-                              <p className="text-xs text-gray-500">{pm.bankName}</p>
-                            )}
-                            {pm.exchangeName && (
-                              <p className="text-xs text-gray-500">صراف: {pm.exchangeName}</p>
-                            )}
-                            {pm.instructions && (
-                              <p className="text-xs text-amber-600 mt-1 italic">{pm.instructions}</p>
-                            )}
                           </div>
+                          {isSelected && <Check className="w-4 h-4 text-emerald-500 shrink-0" />}
                         </div>
                       </button>
                     )
                   })}
-
-                  {/* Cash option always available */}
+                  {/* Cash option */}
                   <button
                     onClick={() => setPaymentForm(prev => ({ ...prev, method: 'cash', paymentMethodId: 'cash' }))}
-                    className={`w-full p-4 rounded-xl border-2 transition-all text-right ${
-                      paymentForm.method === 'cash'
-                        ? 'border-emerald-400 bg-emerald-50 shadow-md'
-                        : 'border-gray-200 hover:border-emerald-200'
+                    className={`w-full p-3 rounded-xl border-2 transition-all text-right ${
+                      paymentForm.method === 'cash' ? 'border-emerald-400 bg-emerald-50 shadow-md' : 'border-gray-200 hover:border-emerald-200'
                     }`}
                   >
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-gray-400 to-gray-500 flex items-center justify-center shadow-md shrink-0">
-                        <DollarSign className="w-5 h-5 text-white" />
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-gray-400 to-gray-500 flex items-center justify-center shadow-sm shrink-0">
+                        <DollarSign className="w-4 h-4 text-white" />
                       </div>
-                      <div>
+                      <div className="flex-1">
                         <p className="font-bold text-sm">نقدي عند الاستلام</p>
-                        <p className="text-xs text-gray-500">سيتم الدفع نقداً عند وصول الممرض</p>
+                        <p className="text-[10px] text-gray-500">الدفع عند وصول الممرض</p>
                       </div>
+                      {paymentForm.method === 'cash' && <Check className="w-4 h-4 text-emerald-500 shrink-0" />}
                     </div>
                   </button>
                 </div>
               ) : (
                 <div className="p-4 bg-amber-50 rounded-xl text-center">
-                  <CreditCard className="w-8 h-8 text-amber-400 mx-auto mb-2" />
-                  <p className="text-amber-700 text-sm font-medium">لا توجد طرق دفع إلكترونية متاحة حالياً</p>
-                  <p className="text-amber-600 text-xs mt-1">يمكنك الدفع نقداً عند الاستلام</p>
+                  <p className="text-amber-700 text-sm font-medium">لا توجد طرق دفع إلكترونية متاحة</p>
                   <button
                     onClick={() => setPaymentForm(prev => ({ ...prev, method: 'cash', paymentMethodId: 'cash' }))}
-                    className="mt-3 px-4 py-2 bg-amber-500 text-white rounded-xl text-sm hover:bg-amber-600 transition-colors"
+                    className="mt-2 px-4 py-2 bg-amber-500 text-white rounded-xl text-sm hover:bg-amber-600"
                   >
-                    الدفع نقداً
+                    الدفع نقداً عند الاستلام
                   </button>
                 </div>
               )}
             </div>
 
-            {/* Payment proof fields */}
-            {paymentForm.method && paymentForm.method !== 'cash' && (
-              <div className="space-y-3 p-4 bg-gray-50 rounded-xl border">
-                <p className="text-sm font-bold text-gray-700">أدخل بيانات التحويل</p>
+            {/* ===== FULL PAYMENT DETAILS (copyable) ===== */}
+            {paymentForm.method && paymentForm.method !== 'cash' && (() => {
+              const selectedPm = availablePaymentMethods.find((m: any) => m.id === paymentForm.paymentMethodId)
+              if (!selectedPm) return null
+              const amount = dynamicPricing?.totalPrice || selectedService?.price || 0
+              const walletLabel = selectedPm.walletType ? (
+                selectedPm.walletType === 'zain-cash' ? 'زين كاش' :
+                selectedPm.walletType === 'hala-cash' ? 'هلا كاش' :
+                selectedPm.walletType === 'mtn-momo' ? 'إم تي إن' :
+                selectedPm.walletType === 'y-cash' ? 'واي كاش' :
+                selectedPm.walletType === 'flous' ? 'فلوس' :
+                selectedPm.walletType === 'one-cash' ? 'ون كاش' :
+                selectedPm.walletType === 'jawali' ? 'جوالي' :
+                selectedPm.walletType === 'saba-cash' ? 'سبأكاش' :
+                selectedPm.walletType === 'national-wallet' ? 'المحفظة الوطنية' : selectedPm.walletType
+              ) : ''
+              const typeIcon = selectedPm.type === 'wallet-deposit' ? Wallet : selectedPm.type === 'exchange-transfer' ? Send : Building
+              const typeColor = selectedPm.type === 'wallet-deposit' ? 'from-blue-400 to-indigo-500' : selectedPm.type === 'exchange-transfer' ? 'from-amber-400 to-orange-500' : 'from-emerald-400 to-teal-500'
+              const typeLabel = selectedPm.type === 'wallet-deposit' ? 'إيداع محفظة' : selectedPm.type === 'exchange-transfer' ? 'تحويل صراف' : 'تحويل بنكي'
+              const Icon = typeIcon
 
-                {/* Sender name for exchange/bank */}
-                {(paymentForm.method === 'exchange-transfer' || paymentForm.method === 'bank-transfer') && (
-                  <div>
-                    <Label className="text-sm font-medium">اسم المرسل *</Label>
-                    <Input value={paymentForm.senderName} onChange={e => setPaymentForm(prev => ({ ...prev, senderName: e.target.value }))} placeholder="اسم المرسل" className="rounded-xl mt-1" />
+              const copyToClipboard = (text: string, label: string) => {
+                navigator.clipboard.writeText(text).then(() => {
+                  toast({ title: `تم نسخ ${label}`, description: text })
+                }).catch(() => {
+                  // Fallback
+                  const el = document.createElement('textarea')
+                  el.value = text
+                  document.body.appendChild(el)
+                  el.select()
+                  document.execCommand('copy')
+                  document.body.removeChild(el)
+                  toast({ title: `تم نسخ ${label}` })
+                })
+              }
+
+              return (
+                <div className="space-y-3">
+                  {/* Payment Details Card */}
+                  <div className="rounded-xl border-2 border-emerald-200 overflow-hidden">
+                    <div className={`bg-gradient-to-l ${typeColor} p-3 text-white flex items-center gap-2`}>
+                      <Icon className="w-5 h-5" />
+                      <span className="font-bold text-sm">{typeLabel}</span>
+                      <span className="text-white/70 text-xs mr-auto">بيانات التحويل</span>
+                    </div>
+                    <div className="p-4 space-y-3 bg-white">
+                      {/* Amount */}
+                      <div className="flex items-center justify-between p-3 bg-emerald-50 rounded-lg border border-emerald-100">
+                        <span className="text-sm font-medium text-gray-600">المبلغ المطلوب</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg font-bold text-emerald-600">{formatPrice(amount)}</span>
+                          <button onClick={() => copyToClipboard(String(amount), 'المبلغ')} className="p-1.5 rounded-lg hover:bg-emerald-100 transition-colors" title="نسخ المبلغ">
+                            <Copy className="w-3.5 h-3.5 text-emerald-500" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Account Name */}
+                      {selectedPm.accountName && (
+                        <div className="flex items-center justify-between p-2.5 bg-gray-50 rounded-lg">
+                          <div className="flex-1">
+                            <p className="text-[10px] text-gray-400">اسم صاحب الحساب</p>
+                            <p className="text-sm font-bold text-gray-800">{selectedPm.accountName}</p>
+                          </div>
+                          <button onClick={() => copyToClipboard(selectedPm.accountName, 'اسم صاحب الحساب')} className="p-1.5 rounded-lg hover:bg-gray-200 transition-colors shrink-0" title="نسخ">
+                            <Copy className="w-3.5 h-3.5 text-gray-400" />
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Account Number / Phone */}
+                      {selectedPm.accountNumber && (
+                        <div className="flex items-center justify-between p-2.5 bg-gray-50 rounded-lg">
+                          <div className="flex-1">
+                            <p className="text-[10px] text-gray-400">
+                              {selectedPm.type === 'wallet-deposit' ? 'رقم المحفظة / الهاتف' : selectedPm.type === 'exchange-transfer' ? 'رقم هاتف الصراف' : 'رقم الحساب / IBAN'}
+                            </p>
+                            <p className="text-sm font-bold font-mono text-gray-800" dir="ltr">{selectedPm.accountNumber}</p>
+                          </div>
+                          <button onClick={() => copyToClipboard(selectedPm.accountNumber, 'رقم الحساب')} className="p-1.5 rounded-lg hover:bg-gray-200 transition-colors shrink-0" title="نسخ">
+                            <Copy className="w-3.5 h-3.5 text-gray-400" />
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Wallet Type */}
+                      {walletLabel && (
+                        <div className="flex items-center justify-between p-2.5 bg-blue-50 rounded-lg">
+                          <div className="flex-1">
+                            <p className="text-[10px] text-gray-400">نوع المحفظة</p>
+                            <p className="text-sm font-bold text-blue-700">{walletLabel}</p>
+                          </div>
+                          <button onClick={() => copyToClipboard(walletLabel, 'نوع المحفظة')} className="p-1.5 rounded-lg hover:bg-blue-100 transition-colors shrink-0" title="نسخ">
+                            <Copy className="w-3.5 h-3.5 text-blue-400" />
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Bank Name */}
+                      {selectedPm.bankName && (
+                        <div className="flex items-center justify-between p-2.5 bg-gray-50 rounded-lg">
+                          <div className="flex-1">
+                            <p className="text-[10px] text-gray-400">اسم البنك</p>
+                            <p className="text-sm font-bold text-gray-800">{selectedPm.bankName}</p>
+                          </div>
+                          <button onClick={() => copyToClipboard(selectedPm.bankName, 'اسم البنك')} className="p-1.5 rounded-lg hover:bg-gray-200 transition-colors shrink-0" title="نسخ">
+                            <Copy className="w-3.5 h-3.5 text-gray-400" />
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Exchange Name */}
+                      {selectedPm.exchangeName && (
+                        <div className="flex items-center justify-between p-2.5 bg-gray-50 rounded-lg">
+                          <div className="flex-1">
+                            <p className="text-[10px] text-gray-400">اسم الصراف</p>
+                            <p className="text-sm font-bold text-gray-800">{selectedPm.exchangeName}</p>
+                          </div>
+                          <button onClick={() => copyToClipboard(selectedPm.exchangeName, 'اسم الصراف')} className="p-1.5 rounded-lg hover:bg-gray-200 transition-colors shrink-0" title="نسخ">
+                            <Copy className="w-3.5 h-3.5 text-gray-400" />
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Instructions */}
+                      {selectedPm.instructions && (
+                        <div className="p-2.5 bg-amber-50 rounded-lg border border-amber-100">
+                          <p className="text-[10px] text-amber-500 mb-0.5">تعليمات</p>
+                          <p className="text-xs text-amber-700">{selectedPm.instructions}</p>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                )}
 
-                {/* Sender phone */}
-                <div>
-                  <Label className="text-sm font-medium">رقم هاتف المرسل *</Label>
-                  <Input value={paymentForm.senderPhone} onChange={e => setPaymentForm(prev => ({ ...prev, senderPhone: e.target.value }))} placeholder="رقم هاتف المرسل" className="rounded-xl mt-1" dir="ltr" />
+                  {/* Prove Payment - WhatsApp Button */}
+                  <div className="space-y-2">
+                    <p className="text-xs text-gray-500 text-center">بعد التحويل، اضغط الزر أدناه لإرسال إثبات الدفع عبر واتساب</p>
+                    <button
+                      onClick={() => {
+                        const phone = adminSettings.whatsappNumber || adminSettings.phone || ''
+                        const orderId = lastCreatedRequestId ? lastCreatedRequestId.slice(0, 8).toUpperCase() : ''
+                        const amountStr = formatPrice(amount)
+                        const message = `سلام عليكم\n\nأريد إثبات دفع لطلب #${orderId}\nالمبلغ: ${amountStr}\nطريقة الدفع: ${typeLabel}\n\nتم التحويل بنجاح ✅\nمرفق لقطة شاشة إثبات التحويل`
+                        const whatsappUrl = phone
+                          ? `https://wa.me/${phone}?text=${encodeURIComponent(message)}`
+                          : `https://wa.me/?text=${encodeURIComponent(message)}`
+                        window.open(whatsappUrl, '_blank')
+                        // Also update request status to pending_confirmation
+                        handleProcessPayment()
+                      }}
+                      disabled={paymentSubmitting}
+                      className="w-full p-4 rounded-xl bg-gradient-to-l from-green-500 via-green-600 to-emerald-600 text-white font-bold shadow-lg shadow-green-500/25 hover:shadow-green-500/40 transition-all flex items-center justify-center gap-2"
+                    >
+                      {paymentSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : (
+                        <>
+                          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+                          إثبات الدفع عبر واتساب
+                        </>
+                      )}
+                    </button>
+                    <p className="text-[10px] text-gray-400 text-center">سيتم فتح واتساب مع رسالة جاهزة تحتوي رقم الطلب - أرفق لقطة شاشة إثبات التحويل</p>
+                  </div>
                 </div>
+              )
+            })()}
 
-                {/* Transaction reference */}
-                <div>
-                  <Label className="text-sm font-medium">رقم العملية / المرجع *</Label>
-                  <Input value={paymentForm.transactionRef} onChange={e => setPaymentForm(prev => ({ ...prev, transactionRef: e.target.value }))} placeholder="رقم إيصال التحويل" className="rounded-xl mt-1" dir="ltr" />
-                </div>
-
-                <p className="text-xs text-amber-600">⚠️ سيتم مراجعة الدفع من قبل الإدارة قبل تنفيذ الطلب</p>
-              </div>
-            )}
-
+            {/* Cash on delivery info */}
             {paymentForm.method === 'cash' && (
-              <div className="p-4 bg-amber-50 rounded-xl text-center">
-                <p className="text-amber-700 text-sm">سيتم الدفع نقداً عند وصول الممرض</p>
-                <p className="text-amber-600 text-xs mt-1">يرجى تجهيز المبلغ المطلوب: <strong>{formatPrice(dynamicPricing?.totalPrice || selectedService?.price || 0)}</strong></p>
+              <div className="p-4 bg-amber-50 rounded-xl text-center border border-amber-100">
+                <DollarSign className="w-8 h-8 text-amber-400 mx-auto mb-2" />
+                <p className="text-amber-700 font-bold">الدفع نقداً عند الاستلام</p>
+                <p className="text-amber-600 text-xs mt-1">يرجى تجهيز المبلغ: <strong>{formatPrice(dynamicPricing?.totalPrice || selectedService?.price || 0)}</strong></p>
               </div>
             )}
 
-            <Button
-              onClick={handleProcessPayment}
-              disabled={paymentSubmitting || !paymentForm.method}
-              className="w-full bg-gradient-to-r from-emerald-500 to-teal-500 text-white hover:shadow-lg rounded-xl"
-            >
-              {paymentSubmitting ? (
-                <Loader2 className="w-5 h-5 animate-spin ml-2" />
-              ) : (
-                <CreditCard className="w-5 h-5 ml-2" />
-              )}
-              تأكيد الدفع
-            </Button>
+            {/* Confirm button for cash */}
+            {paymentForm.method === 'cash' && (
+              <Button
+                onClick={handleProcessPayment}
+                disabled={paymentSubmitting}
+                className="w-full bg-gradient-to-r from-emerald-500 to-teal-500 text-white hover:shadow-lg rounded-xl"
+              >
+                {paymentSubmitting ? <Loader2 className="w-5 h-5 animate-spin ml-2" /> : <CheckCircle className="w-5 h-5 ml-2" />}
+                تأكيد الطلب
+              </Button>
+            )}
           </div>
         </DialogContent>
       </Dialog>

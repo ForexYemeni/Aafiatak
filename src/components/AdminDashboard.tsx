@@ -2164,6 +2164,20 @@ export default function AdminDashboard() {
                       </CardContent>
                     </Card>
 
+                    {/* Payment Settings */}
+                    <Card className="border-0 shadow-lg">
+                      <CardHeader className="pb-3"><CardTitle className="text-lg flex items-center gap-2"><CreditCard className="w-5 h-5 text-emerald-500" />إعدادات الدفع</CardTitle></CardHeader>
+                      <CardContent className="space-y-4">
+                        <div className="p-3 bg-emerald-50/50 rounded-xl border border-emerald-100">
+                          <p className="text-sm text-emerald-700 mb-2">عندما يختار المستفيد الدفع إلكترونياً، يتم عرض بيانات الحساب كاملة مع زر "إثبات الدفع" يحوله لواتساب الإدارة</p>
+                        </div>
+                        <div><Label>رقم واتساب الإدارة (لإثبات الدفع) *</Label><Input value={settings.whatsappNumber || ''} onChange={e => setSettings({ ...settings, whatsappNumber: e.target.value })} placeholder="مثال: 967771234567" className="border-amber-200 mt-1" dir="ltr" />
+                          <p className="text-xs text-gray-400 mt-1">أدخل الرقم بالصيغة الدولية بدون + (مثال: 967771234567)</p>
+                        </div>
+                        <Button className="bg-gradient-to-l from-amber-500 via-orange-500 to-rose-500 text-white shadow-lg shadow-amber-500/25" onClick={() => handleSaveSettings({ whatsappNumber: settings.whatsappNumber })}>حفظ إعدادات الدفع</Button>
+                      </CardContent>
+                    </Card>
+
                     {/* Dangerous Zone - Only main admin */}
                     {!isSubAdmin && (
                     <Card className="border-2 border-red-200 shadow-lg bg-red-50/20">
