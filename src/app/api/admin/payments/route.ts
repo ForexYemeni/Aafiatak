@@ -77,6 +77,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate required fields per type
+    if (type === 'wallet-deposit' && !accountName) {
+      return NextResponse.json({ error: 'اسم صاحب المحفظة مطلوب' }, { status: 400 })
+    }
     if (type === 'wallet-deposit' && !accountNumber) {
       return NextResponse.json({ error: 'رقم المحفظة مطلوب لطريقة الإيداع عبر محفظة' }, { status: 400 })
     }

@@ -525,6 +525,8 @@ export default function BeneficiaryDashboard() {
         // If payment method is card or wallet, open payment dialog
         if (requestForm.paymentMethod && requestForm.paymentMethod !== 'cash') {
           setLastCreatedRequestId(data.id || data.requestId || '')
+          // Save payment amount before clearing dynamic pricing and selected service
+          setPaymentAmount(dynamicPricing?.totalPrice || selectedService?.price || 0)
           setPaymentForm(prev => ({ ...prev, method: requestForm.paymentMethod, paymentMethodId: requestForm.paymentMethodId }))
           setRequestDialog(false)
           // Use already-fetched payment methods or fetch them
@@ -551,8 +553,7 @@ export default function BeneficiaryDashboard() {
         } else {
           setRequestDialog(false)
         }
-        // Save payment amount before clearing dynamic pricing and selected service
-        setPaymentAmount(dynamicPricing?.totalPrice || selectedService?.price || 0)
+        // Note: paymentAmount is already set above before opening dialog
         setSelectedService(null)
         setSelectedServices([])
         setRequestForm({ paymentMethod: '', paymentMethodId: '', notes: '', address: '', couponCode: '' })
@@ -1083,6 +1084,7 @@ export default function BeneficiaryDashboard() {
   const handlePayForRequest = async (req: any) => {
     setLastCreatedRequestId(req.id)
     setSelectedService(req.service || { id: req.serviceId, name: req.service?.name || 'خدمة', price: req.price || req.service?.price || 0 })
+    setPaymentAmount(req.dynamicPrice || req.price || req.service?.price || 0)
     setPaymentForm({ method: '', paymentMethodId: '', transactionRef: '', senderName: '', senderPhone: '', exchangeName: '', walletType: '' })
     // Fetch admin payment methods
     try {
@@ -1847,6 +1849,27 @@ export default function BeneficiaryDashboard() {
 
                                   {/* Action Buttons */}
                                   <div className="flex items-center gap-2 mt-4 flex-wrap">
+                                    {req.status === 'pending_payment' && (
+                                      <>
+                                        <Button
+                                          size="sm"
+                                          className="bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl text-xs hover:shadow-md"
+                                          onClick={() => handlePayForRequest(req)}
+                                        >
+                                          <CreditCard className="w-3.5 h-3.5 ml-1" />
+                                          دفع الآن
+                                        </Button>
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          className="text-red-600 border-red-200 hover:bg-red-50 rounded-xl text-xs"
+                                          onClick={() => handleCancelRequest(req.id)}
+                                        >
+                                          <XCircle className="w-3.5 h-3.5 ml-1" />
+                                          إلغاء
+                                        </Button>
+                                      </>
+                                    )}
                                     {req.status === 'pending' && (
                                       <Button
                                         variant="outline"
@@ -3231,7 +3254,7 @@ export default function BeneficiaryDashboard() {
                       {selectedPm.accountName && (
                         <div className="flex items-center justify-between p-2.5 bg-gray-50 rounded-lg">
                           <div className="flex-1">
-                            <p className="text-[10px] text-gray-400">اسم صاحب الحساب</p>
+                            <p className="text-[10px] text-gray-400">{selectedPm.type === 'wallet-deposit' ? 'اسم صاحب المحفظة' : 'اسم صاحب الحساب'}</p>
                             <p className="text-sm font-bold text-gray-800">{selectedPm.accountName}</p>
                           </div>
                           <button onClick={() => copyToClipboard(selectedPm.accountName, 'اسم صاحب الحساب')} className="p-1.5 rounded-lg hover:bg-gray-200 transition-colors shrink-0" title="نسخ">

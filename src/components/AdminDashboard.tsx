@@ -495,6 +495,7 @@ export default function AdminDashboard() {
   const handleSavePayment = async () => {
     if (!paymentForm.type) { toast({ title: 'خطأ', description: 'يرجى اختيار النوع', variant: 'destructive' }); return }
     if (paymentForm.type === 'wallet-deposit' && !paymentForm.walletType) { toast({ title: 'خطأ', description: 'يرجى اختيار نوع المحفظة', variant: 'destructive' }); return }
+    if (paymentForm.type === 'wallet-deposit' && !paymentForm.accountName) { toast({ title: 'خطأ', description: 'يرجى إدخال اسم صاحب المحفظة', variant: 'destructive' }); return }
     if (paymentForm.type === 'wallet-deposit' && !paymentForm.accountNumber) { toast({ title: 'خطأ', description: 'يرجى إدخال رقم المحفظة', variant: 'destructive' }); return }
     if (paymentForm.type === 'exchange-transfer' && !paymentForm.exchangeName) { toast({ title: 'خطأ', description: 'يرجى إدخال اسم الصراف', variant: 'destructive' }); return }
     if (paymentForm.type === 'bank-transfer' && !paymentForm.accountNumber) { toast({ title: 'خطأ', description: 'يرجى إدخال رقم الحساب البنكي', variant: 'destructive' }); return }
@@ -531,6 +532,26 @@ export default function AdminDashboard() {
       })
       if (res.ok) {
         toast({ title: 'تم تأكيد الدفع', description: 'يمكن الآن تنفيذ الطلب وتعيين ممرض' })
+        fetchData()
+      } else {
+        const data = await res.json()
+        toast({ title: 'خطأ', description: data.error, variant: 'destructive' })
+      }
+    } catch {
+      toast({ title: 'خطأ', description: 'حدث خطأ', variant: 'destructive' })
+    }
+  }
+
+  // Confirm payment directly on a pending_payment request (when beneficiary paid via WhatsApp)
+  const handleConfirmRequestPayment = async (requestId: string) => {
+    try {
+      const res = await fetch(`/api/admin/requests/${requestId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'pending_confirmation', paymentStatus: 'paid' }),
+      })
+      if (res.ok) {
+        toast({ title: 'تم تأكيد الدفع', description: 'تم تأكيد استلام الدفع، يمكن الآن قبول الطلب وتعيين ممرض' })
         fetchData()
       } else {
         const data = await res.json()
@@ -1329,7 +1350,7 @@ export default function AdminDashboard() {
                                 <div className="flex gap-2 flex-wrap">
                                   {r.status === 'pending' && (<><Button size="sm" className="bg-gradient-to-l from-amber-500 via-orange-500 to-rose-500 text-white" onClick={() => handleRequestAction(r.id, 'approved')}><CheckCircle className="w-3.5 h-3.5 ml-1" />قبول</Button><Button size="sm" variant="outline" className="text-red-500 hover:bg-red-50" onClick={() => handleRequestAction(r.id, 'rejected')}><XCircle className="w-3.5 h-3.5 ml-1" />رفض</Button></>)}
                                   {r.status === 'pending_confirmation' && (<><Button size="sm" className="bg-gradient-to-l from-amber-500 via-orange-500 to-rose-500 text-white" onClick={() => handleRequestAction(r.id, 'approved')}><CheckCircle className="w-3.5 h-3.5 ml-1" />قبول</Button><Button size="sm" variant="outline" className="text-red-500 hover:bg-red-50" onClick={() => handleRequestAction(r.id, 'rejected')}><XCircle className="w-3.5 h-3.5 ml-1" />رفض</Button></>)}
-                                  {r.status === 'pending_payment' && <Badge className="bg-orange-100 text-orange-700 border border-orange-300 text-xs">بانتظار الدفع</Badge>}
+                                  {r.status === 'pending_payment' && (<><Badge className="bg-orange-100 text-orange-700 border border-orange-300 text-xs">بانتظار الدفع</Badge><Button size="sm" className="bg-emerald-500 hover:bg-emerald-600 text-white" onClick={() => { if (confirm('هل أنت متأكد من تأكيد استلام الدفع لهذا الطلب؟')) handleConfirmRequestPayment(r.id) }}><CheckCircle className="w-3.5 h-3.5 ml-1" />تأكيد الدفع</Button></>)}
                                   {r.status === 'approved' && <Button size="sm" className="bg-blue-500 hover:bg-blue-600 text-white" onClick={() => handleOpenApproveDialog(r)}><UserPlus className="w-3.5 h-3.5 ml-1" />تعيين ممرض</Button>}
                                   {r.status === 'in_progress' && <Button size="sm" className="bg-emerald-500 hover:bg-emerald-600 text-white" onClick={async () => { await fetch(`/api/admin/requests/${r.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'completed' }) }); toast({ title: 'تم إكمال الطلب' }); fetchData() }}><CheckCircle className="w-3.5 h-3.5 ml-1" />إكمال</Button>}
                                 </div>
@@ -2369,6 +2390,7 @@ export default function AdminDashboard() {
                     </SelectContent>
                   </Select>
                 </div>
+                <div><Label className="text-sm font-medium">اسم صاحب المحفظة *</Label><Input value={paymentForm.accountName} onChange={e => setPaymentForm({ ...paymentForm, accountName: e.target.value })} placeholder="الاسم المسجل في المحفظة" className="border-amber-200 mt-1" /></div>
                 <div><Label className="text-sm font-medium">رقم المحفظة *</Label><Input value={paymentForm.accountNumber} onChange={e => setPaymentForm({ ...paymentForm, accountNumber: e.target.value })} placeholder="رقم هاتف المحفظة" className="border-amber-200 mt-1" dir="ltr" /></div>
               </>
             )}

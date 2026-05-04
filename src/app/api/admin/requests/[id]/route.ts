@@ -8,10 +8,10 @@ export async function PUT(
   try {
     const { id } = await params
     const body = await request.json()
-    const { status, adminNotes } = body
+    const { status, adminNotes, paymentStatus } = body
 
-    if (!['approved', 'rejected', 'pending', 'completed', 'cancelled'].includes(status)) {
-      return NextResponse.json({ error: 'حالة غير صالحة' }, { status: 400 })
+    if (!status && !paymentStatus && !adminNotes) {
+      return NextResponse.json({ error: 'يجب توفير حقل واحد على الأقل للتحديث' }, { status: 400 })
     }
 
     const existing = await getServiceRequestById(id)
@@ -19,7 +19,14 @@ export async function PUT(
       return NextResponse.json({ error: 'الطلب غير موجود' }, { status: 404 })
     }
 
-    const updateData: Record<string, any> = { status }
+    const updateData: Record<string, any> = {}
+    if (status) {
+      if (!['approved', 'rejected', 'pending', 'pending_confirmation', 'pending_payment', 'completed', 'cancelled'].includes(status)) {
+        return NextResponse.json({ error: 'حالة غير صالحة' }, { status: 400 })
+      }
+      updateData.status = status
+    }
+    if (paymentStatus) updateData.paymentStatus = paymentStatus
     if (adminNotes !== undefined) updateData.adminNotes = adminNotes
 
     const updated = await updateServiceRequest(id, updateData)
