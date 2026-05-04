@@ -11,7 +11,7 @@ import {
   Ban, Unlock, Eye, AlertTriangle, UsersRound, Settings,
   ChevronDown, AlertCircle, MessageSquare, Clock, MapPin, Calendar, Navigation,
   FileWarning, ShieldCheck, ShieldAlert, Image as ImageIcon,
-  Wallet, Send, Building, DollarSign, Save
+  Wallet, Send, Building, DollarSign, Save, Copy
 } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RTooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts'
 import { useAppStore, formatPrice, getStatusLabel, getStatusColor } from '@/lib/store'
