@@ -9,7 +9,8 @@ import {
   FileText, Activity, Search, Filter, BarChart3,
   TrendingUp, Tag, Sparkles, Star, Phone, Mail, Gift,
   Ban, Unlock, Eye, AlertTriangle, UsersRound, Settings,
-  ChevronDown, AlertCircle, MessageSquare, Clock, MapPin, Calendar, Navigation
+  ChevronDown, AlertCircle, MessageSquare, Clock, MapPin, Calendar, Navigation,
+  FileWarning, ShieldCheck, ShieldAlert, Image as ImageIcon
 } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RTooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts'
 import { useAppStore, formatPrice, getStatusLabel, getStatusColor } from '@/lib/store'
@@ -50,7 +51,7 @@ function formatDateTime(ts: any): string {
 }
 
 // ─── Types ─────────────────────────────────────────────────────
-type Tab = 'dashboard' | 'services' | 'nurses' | 'beneficiaries' | 'requests' | 'emergency' | 'payments' | 'coupons' | 'ratings' | 'reports' | 'activity' | 'sub-admins' | 'settings'
+type Tab = 'dashboard' | 'services' | 'nurses' | 'beneficiaries' | 'requests' | 'emergency' | 'payments' | 'coupons' | 'ratings' | 'reports' | 'complaints' | 'appointments' | 'activity' | 'sub-admins' | 'settings'
 
 interface DashboardStats {
   totalNurses: number
@@ -160,6 +161,18 @@ export default function AdminDashboard() {
   const [locationSearchResults, setLocationSearchResults] = useState<Array<{ name: string; lat: string; lng: string; display: string }>>([])
   const [locationSearchLoading, setLocationSearchLoading] = useState(false)
 
+  // Complaints
+  const [complaints, setComplaints] = useState<any[]>([])
+  const [complaintsLoading, setComplaintsLoading] = useState(false)
+  const [complaintDetail, setComplaintDetail] = useState<any>(null)
+  const [complaintFilter, setComplaintFilter] = useState<string>('all')
+  const [complaintNotes, setComplaintNotes] = useState('')
+
+  // Appointments
+  const [appointments, setAppointments] = useState<any[]>([])
+  const [appointmentsLoading, setAppointmentsLoading] = useState(false)
+  const [appointmentFilter, setAppointmentFilter] = useState<string>('all')
+
   // Settings
   const [settings, setSettings] = useState<any>(null)
   const [subAdmins, setSubAdmins] = useState<any[]>([])
@@ -240,6 +253,20 @@ export default function AdminDashboard() {
         if (dashRes.ok) setStats(await dashRes.json())
         if (reqRes.ok) setRequests(await reqRes.json())
         if (svcRes.ok) setServices(await svcRes.json())
+      } else if (activeTab === 'complaints') {
+        setComplaintsLoading(true)
+        try {
+          const res = await fetch('/api/reports/list')
+          if (res.ok) { const data = await res.json(); setComplaints(Array.isArray(data) ? data : []) }
+        } catch { /* silently fail */ }
+        finally { setComplaintsLoading(false) }
+      } else if (activeTab === 'appointments') {
+        setAppointmentsLoading(true)
+        try {
+          const res = await fetch('/api/appointments')
+          if (res.ok) { const data = await res.json(); setAppointments(Array.isArray(data) ? data : []) }
+        } catch { /* silently fail */ }
+        finally { setAppointmentsLoading(false) }
       } else if (activeTab === 'sub-admins') {
         // Use adminId for sub-admins (parent admin ID) or own ID for main admin
         const isSub = (user as any)?.role === 'sub-admin'
@@ -666,6 +693,8 @@ export default function AdminDashboard() {
     { key: 'coupons', label: 'الكوبونات', icon: Tag, perm: 'coupons' },
     { key: 'ratings', label: 'التقييمات', icon: Star, perm: 'ratings' },
     { key: 'reports', label: 'التقارير', icon: BarChart3, perm: 'reports' },
+    { key: 'complaints', label: 'الشكاوى', icon: FileWarning, perm: 'reports' },
+    { key: 'appointments', label: 'المواعيد', icon: Calendar, perm: 'requests' },
     { key: 'activity', label: 'النشاط', icon: Activity, perm: 'reports' },
     { key: 'sub-admins', label: 'المدراء الفرعيين', icon: UserCog, perm: '__sub_admins__' },
     { key: 'settings', label: 'الإعدادات', icon: Settings },
@@ -1035,6 +1064,11 @@ export default function AdminDashboard() {
                                         <div className="flex items-center gap-2 flex-wrap">
                                           <h3 className="font-bold text-lg truncate">{n.firstName} {n.secondName} {n.thirdName} {n.lastName}</h3>
                                           <Badge className={`bg-gradient-to-l ${cfg.gradient} text-white border-0 text-[10px] font-bold px-2 py-0.5`}>{cfg.label}</Badge>
+                                          {n.isVerified ? (
+                                            <Badge className="bg-emerald-100 text-emerald-700 border border-emerald-200 text-[10px] font-bold px-2 py-0.5 flex items-center gap-1"><ShieldCheck className="w-3 h-3" />موثّق</Badge>
+                                          ) : (
+                                            <Badge className="bg-orange-100 text-orange-700 border border-orange-200 text-[10px] font-bold px-2 py-0.5 flex items-center gap-1"><ShieldAlert className="w-3 h-3" />غير موثّق</Badge>
+                                          )}
                                           {isExpired && <Badge className="bg-gradient-to-l from-red-500 to-rose-500 text-white border-0 text-[10px] font-bold px-2 py-0.5"><AlertTriangle className="w-3 h-3 ml-0.5" />ترخيص منتهي</Badge>}
                                         </div>
                                         {/* Quick Info Row */}
@@ -1509,6 +1543,237 @@ export default function AdminDashboard() {
                 )}
 
                 {/* ═══════════════════════════════════════════════════
+                    TAB: الشكاوى (Complaints)
+                ═══════════════════════════════════════════════════ */}
+                {activeTab === 'complaints' && (
+                  <div className="space-y-6">
+                    <div><h1 className="text-2xl font-bold bg-gradient-to-l from-amber-600 via-orange-600 to-rose-600 bg-clip-text text-transparent">إدارة الشكاوى والبلاغات</h1><p className="text-gray-500 text-sm mt-1">مراجعة ومعالجة الشكاوى المقدمة من المستخدمين</p></div>
+
+                    {/* Stats Cards */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      {[
+                        { label: 'إجمالي الشكاوى', value: complaints.length, gradient: 'from-amber-400 to-orange-500', icon: FileWarning },
+                        { label: 'بانتظار المراجعة', value: complaints.filter((c: any) => c.status === 'pending' || !c.status).length, gradient: 'from-yellow-400 to-amber-500', icon: Clock },
+                        { label: 'تمت المراجعة', value: complaints.filter((c: any) => c.status === 'reviewed').length, gradient: 'from-blue-400 to-cyan-500', icon: Eye },
+                        { label: 'تم الحل', value: complaints.filter((c: any) => c.status === 'resolved').length, gradient: 'from-emerald-400 to-teal-500', icon: CheckCircle },
+                      ].map((item, i) => (
+                        <motion.div key={i} variants={cardVariants} initial="hidden" animate="visible" transition={{ delay: i * 0.05, duration: 0.4 }}>
+                          <Card className="border-0 shadow-lg hover:-translate-y-1 hover:shadow-xl transition-all duration-300">
+                            <CardContent className="p-4">
+                              <div className="flex items-center gap-3 mb-3">
+                                <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${item.gradient} flex items-center justify-center shadow-md`}><item.icon className="w-5 h-5 text-white" /></div>
+                                <p className="text-xs text-gray-500 leading-tight">{item.label}</p>
+                              </div>
+                              <p className={`text-2xl font-bold bg-gradient-to-l ${item.gradient} bg-clip-text text-transparent`}>{item.value}</p>
+                            </CardContent>
+                          </Card>
+                        </motion.div>
+                      ))}
+                    </div>
+
+                    {/* Filter */}
+                    <div className="flex gap-2 flex-wrap">
+                      {[
+                        { key: 'all', label: 'الكل', count: complaints.length },
+                        { key: 'pending', label: 'بانتظار المراجعة', count: complaints.filter((c: any) => c.status === 'pending' || !c.status).length },
+                        { key: 'reviewed', label: 'تمت المراجعة', count: complaints.filter((c: any) => c.status === 'reviewed').length },
+                        { key: 'resolved', label: 'تم الحل', count: complaints.filter((c: any) => c.status === 'resolved').length },
+                        { key: 'rejected', label: 'مرفوضة', count: complaints.filter((c: any) => c.status === 'rejected').length },
+                      ].map(filter => (
+                        <button key={filter.key} onClick={() => setComplaintFilter(filter.key)}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all duration-300 ${
+                            complaintFilter === filter.key
+                              ? 'bg-gradient-to-l from-amber-500 via-orange-500 to-rose-500 text-white shadow-lg shadow-amber-500/25'
+                              : 'bg-white/70 backdrop-blur-sm text-gray-500 hover:text-gray-700 hover:bg-white ring-1 ring-gray-200/50'
+                          }`}
+                        >
+                          {filter.label} {filter.count > 0 && <span className="opacity-75">({filter.count})</span>}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Complaints List */}
+                    {complaintsLoading ? (
+                      <div className="flex items-center justify-center py-20"><Loader2 className="w-10 h-10 animate-spin text-amber-500" /></div>
+                    ) : (
+                      <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
+                        {complaints.filter((c: any) => complaintFilter === 'all' || (c.status || 'pending') === complaintFilter).length === 0 ? (
+                          <div className="text-center py-16">
+                            <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-amber-100 to-orange-100 flex items-center justify-center mx-auto mb-4">
+                              <FileWarning className="w-10 h-10 text-amber-400" />
+                            </div>
+                            <p className="text-lg font-bold text-gray-600 mb-2">لا توجد شكاوى</p>
+                            <p className="text-sm text-gray-400">لا توجد شكاوى مطابقة للفلتر المحدد</p>
+                          </div>
+                        ) : (
+                          complaints.filter((c: any) => complaintFilter === 'all' || (c.status || 'pending') === complaintFilter).map((c: any, index: number) => {
+                            const statusColors: Record<string, string> = {
+                              pending: 'bg-amber-100 text-amber-700 border-amber-200',
+                              reviewed: 'bg-blue-100 text-blue-700 border-blue-200',
+                              resolved: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+                              rejected: 'bg-red-100 text-red-700 border-red-200',
+                            }
+                            const statusLabels: Record<string, string> = {
+                              pending: 'بانتظار المراجعة',
+                              reviewed: 'تمت المراجعة',
+                              resolved: 'تم الحل',
+                              rejected: 'مرفوضة',
+                            }
+                            const cStatus = c.status || 'pending'
+                            const badgeClass = statusColors[cStatus] || statusColors.pending
+                            const statusLabel = statusLabels[cStatus] || statusLabels.pending
+
+                            return (
+                              <motion.div key={c.id || index} variants={cardVariants} initial="hidden" animate="visible" transition={{ delay: index * 0.03 }}>
+                                <Card className="border-0 shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer overflow-hidden" onClick={() => { setComplaintDetail(c); setComplaintNotes(c.adminNotes || '') }}>
+                                  <CardContent className="p-4">
+                                    <div className="flex items-start gap-3">
+                                      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-md shrink-0">
+                                        <FileWarning className="w-6 h-6 text-white" />
+                                      </div>
+                                      <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                          <h3 className="font-bold">{c.reporterName || c.userName || c.beneficiaryName || 'مجهول'}</h3>
+                                          <Badge className={`${badgeClass} border text-[10px] font-bold`}>{statusLabel}</Badge>
+                                        </div>
+                                        <p className="text-sm text-gray-500 mt-1">{c.type || c.reportType || 'شكوى عامة'}</p>
+                                        <p className="text-sm text-gray-600 mt-1 line-clamp-2">{c.description || c.message || c.notes || ''}</p>
+                                        <p className="text-xs text-gray-400 mt-2">{formatDateTime(c.createdAt)}</p>
+                                      </div>
+                                      <Button size="sm" variant="outline" className="rounded-xl border-amber-200 hover:bg-amber-50 shrink-0"><Eye className="w-3.5 h-3.5 ml-1" />عرض</Button>
+                                    </div>
+                                  </CardContent>
+                                </Card>
+                              </motion.div>
+                            )
+                          })
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* ═══════════════════════════════════════════════════
+                    TAB: المواعيد (Appointments)
+                ═══════════════════════════════════════════════════ */}
+                {activeTab === 'appointments' && (
+                  <div className="space-y-6">
+                    <div><h1 className="text-2xl font-bold bg-gradient-to-l from-amber-600 via-orange-600 to-rose-600 bg-clip-text text-transparent">إدارة المواعيد</h1><p className="text-gray-500 text-sm mt-1">عرض وإدارة جميع المواعيد المحجوزة</p></div>
+
+                    {/* Stats Cards */}
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                      {[
+                        { label: 'إجمالي المواعيد', value: appointments.length, gradient: 'from-amber-400 to-orange-500', icon: Calendar },
+                        { label: 'مجدولة', value: appointments.filter((a: any) => a.status === 'scheduled').length, gradient: 'from-blue-400 to-indigo-500', icon: Clock },
+                        { label: 'مؤكدة', value: appointments.filter((a: any) => a.status === 'confirmed').length, gradient: 'from-cyan-400 to-teal-500', icon: CheckCircle },
+                        { label: 'مكتملة', value: appointments.filter((a: any) => a.status === 'completed').length, gradient: 'from-emerald-400 to-green-500', icon: CheckCircle },
+                        { label: 'ملغاة', value: appointments.filter((a: any) => a.status === 'cancelled').length, gradient: 'from-red-400 to-rose-500', icon: XCircle },
+                      ].map((item, i) => (
+                        <motion.div key={i} variants={cardVariants} initial="hidden" animate="visible" transition={{ delay: i * 0.05, duration: 0.4 }}>
+                          <Card className="border-0 shadow-lg hover:-translate-y-1 hover:shadow-xl transition-all duration-300">
+                            <CardContent className="p-4">
+                              <div className="flex items-center gap-3 mb-3">
+                                <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${item.gradient} flex items-center justify-center shadow-md`}><item.icon className="w-5 h-5 text-white" /></div>
+                                <p className="text-xs text-gray-500 leading-tight">{item.label}</p>
+                              </div>
+                              <p className={`text-2xl font-bold bg-gradient-to-l ${item.gradient} bg-clip-text text-transparent`}>{item.value}</p>
+                            </CardContent>
+                          </Card>
+                        </motion.div>
+                      ))}
+                    </div>
+
+                    {/* Filter */}
+                    <div className="flex gap-2 flex-wrap">
+                      {[
+                        { key: 'all', label: 'الكل', count: appointments.length },
+                        { key: 'scheduled', label: 'مجدولة', count: appointments.filter((a: any) => a.status === 'scheduled').length },
+                        { key: 'confirmed', label: 'مؤكدة', count: appointments.filter((a: any) => a.status === 'confirmed').length },
+                        { key: 'completed', label: 'مكتملة', count: appointments.filter((a: any) => a.status === 'completed').length },
+                        { key: 'cancelled', label: 'ملغاة', count: appointments.filter((a: any) => a.status === 'cancelled').length },
+                      ].map(filter => (
+                        <button key={filter.key} onClick={() => setAppointmentFilter(filter.key)}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all duration-300 ${
+                            appointmentFilter === filter.key
+                              ? 'bg-gradient-to-l from-amber-500 via-orange-500 to-rose-500 text-white shadow-lg shadow-amber-500/25'
+                              : 'bg-white/70 backdrop-blur-sm text-gray-500 hover:text-gray-700 hover:bg-white ring-1 ring-gray-200/50'
+                          }`}
+                        >
+                          {filter.label} {filter.count > 0 && <span className="opacity-75">({filter.count})</span>}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Appointments List */}
+                    {appointmentsLoading ? (
+                      <div className="flex items-center justify-center py-20"><Loader2 className="w-10 h-10 animate-spin text-amber-500" /></div>
+                    ) : (
+                      <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
+                        {appointments.filter((a: any) => appointmentFilter === 'all' || a.status === appointmentFilter).length === 0 ? (
+                          <div className="text-center py-16">
+                            <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-amber-100 to-orange-100 flex items-center justify-center mx-auto mb-4">
+                              <Calendar className="w-10 h-10 text-amber-400" />
+                            </div>
+                            <p className="text-lg font-bold text-gray-600 mb-2">لا توجد مواعيد</p>
+                            <p className="text-sm text-gray-400">لا توجد مواعيد مطابقة للفلتر المحدد</p>
+                          </div>
+                        ) : (
+                          appointments.filter((a: any) => appointmentFilter === 'all' || a.status === appointmentFilter).map((a: any, index: number) => {
+                            const statusColors: Record<string, { gradient: string; label: string; badgeClass: string }> = {
+                              scheduled: { gradient: 'from-blue-400 to-indigo-500', label: 'مجدولة', badgeClass: 'bg-blue-100 text-blue-700 border-blue-200' },
+                              confirmed: { gradient: 'from-cyan-400 to-teal-500', label: 'مؤكدة', badgeClass: 'bg-cyan-100 text-cyan-700 border-cyan-200' },
+                              completed: { gradient: 'from-emerald-400 to-green-500', label: 'مكتملة', badgeClass: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
+                              cancelled: { gradient: 'from-red-400 to-rose-500', label: 'ملغاة', badgeClass: 'bg-red-100 text-red-700 border-red-200' },
+                              in_progress: { gradient: 'from-orange-400 to-amber-500', label: 'قيد التنفيذ', badgeClass: 'bg-orange-100 text-orange-700 border-orange-200' },
+                            }
+                            const cfg = statusColors[a.status] || statusColors.scheduled
+
+                            return (
+                              <motion.div key={a.id || index} variants={cardVariants} initial="hidden" animate="visible" transition={{ delay: index * 0.03 }}>
+                                <Card className="border-0 shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden">
+                                  <CardContent className="p-4">
+                                    <div className="flex items-start gap-3">
+                                      <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${cfg.gradient} flex items-center justify-center shadow-md shrink-0`}>
+                                        <Calendar className="w-6 h-6 text-white" />
+                                      </div>
+                                      <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                          <h3 className="font-bold">{a.beneficiaryName || a.beneficiary?.name || 'مستفيد'}</h3>
+                                          <Badge className={`${cfg.badgeClass} border text-[10px] font-bold`}>{cfg.label}</Badge>
+                                        </div>
+                                        <div className="flex items-center gap-4 mt-1 text-sm text-gray-500 flex-wrap">
+                                          <span className="flex items-center gap-1"><Users className="w-3.5 h-3.5" />{a.nurseName || a.nurse?.name || 'ممرض'}</span>
+                                          <span className="flex items-center gap-1"><Wrench className="w-3.5 h-3.5" />{a.serviceName || a.service?.name || 'خدمة'}</span>
+                                        </div>
+                                        <div className="flex items-center gap-4 mt-1 text-sm text-gray-400 flex-wrap">
+                                          <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5" />{a.date || formatDate(a.scheduledAt || a.createdAt)}</span>
+                                          {a.time && <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" />{a.time}</span>}
+                                        </div>
+                                      </div>
+                                      <div className="flex gap-2 shrink-0">
+                                        {a.status !== 'cancelled' && a.status !== 'completed' && (
+                                          <Button size="sm" variant="outline" className="rounded-xl text-red-500 border-red-200 hover:bg-red-50" onClick={async () => {
+                                            try {
+                                              const res = await fetch(`/api/appointments/${a.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'cancel' }) })
+                                              if (res.ok) { toast({ title: 'تم إلغاء الموعد' }); logActivity('appointment_cancel', 'تم إلغاء موعد', { appointmentId: a.id }); fetchData() }
+                                              else { const data = await res.json(); toast({ title: 'خطأ', description: data.error, variant: 'destructive' }) }
+                                            } catch { toast({ title: 'خطأ', description: 'حدث خطأ', variant: 'destructive' }) }
+                                          }}><XCircle className="w-3.5 h-3.5 ml-1" />إلغاء</Button>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </CardContent>
+                                </Card>
+                              </motion.div>
+                            )
+                          })
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* ═══════════════════════════════════════════════════
                     TAB 10: النشاط (Activity)
                 ═══════════════════════════════════════════════════ */}
                 {activeTab === 'activity' && (
@@ -1924,13 +2189,55 @@ export default function AdminDashboard() {
                       </div>
                     </div>
                   </div>
+                  {/* Verification Status */}
+                  <div>
+                    <h3 className="text-sm font-bold text-gray-400 mb-3 flex items-center gap-2"><Shield className="w-4 h-4" />حالة التحقق من الهوية</h3>
+                    <div className="p-3 rounded-xl bg-gray-50/80 border border-gray-100">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          {nurseDetail.isVerified ? (
+                            <><ShieldCheck className="w-5 h-5 text-emerald-500" /><span className="font-semibold text-sm text-emerald-700">تم التحقق من الهوية</span></>
+                          ) : (
+                            <><ShieldAlert className="w-5 h-5 text-orange-500" /><span className="font-semibold text-sm text-orange-700">لم يتم التحقق من الهوية</span></>
+                          )}
+                        </div>
+                        <Badge className={nurseDetail.isVerified ? 'bg-emerald-100 text-emerald-700 border-emerald-200 border' : 'bg-orange-100 text-orange-700 border-orange-200 border'}>
+                          {nurseDetail.isVerified ? 'موثّق' : 'غير موثّق'}
+                        </Badge>
+                      </div>
+                    </div>
+                  </div>
+                  {/* Verification Photos */}
+                  {(nurseDetail.nationalIdPhotoUrl || nurseDetail.licensePhotoUrl) && (
+                    <div>
+                      <h3 className="text-sm font-bold text-gray-400 mb-3 flex items-center gap-2"><ImageIcon className="w-4 h-4" />وثائق التحقق</h3>
+                      <div className="grid grid-cols-2 gap-3">
+                        {nurseDetail.nationalIdPhotoUrl && (
+                          <div className="p-3 rounded-xl bg-blue-50/80 border border-blue-100">
+                            <p className="text-xs text-blue-500 mb-2">صورة البطاقة الوطنية</p>
+                            <a href={nurseDetail.nationalIdPhotoUrl} target="_blank" rel="noopener noreferrer" className="block w-full h-24 rounded-lg overflow-hidden border border-blue-200 hover:opacity-80 transition-opacity">
+                              <img src={nurseDetail.nationalIdPhotoUrl} alt="البطاقة الوطنية" className="w-full h-full object-cover" />
+                            </a>
+                          </div>
+                        )}
+                        {nurseDetail.licensePhotoUrl && (
+                          <div className="p-3 rounded-xl bg-amber-50/80 border border-amber-100">
+                            <p className="text-xs text-amber-500 mb-2">صورة الترخيص</p>
+                            <a href={nurseDetail.licensePhotoUrl} target="_blank" rel="noopener noreferrer" className="block w-full h-24 rounded-lg overflow-hidden border border-amber-200 hover:opacity-80 transition-opacity">
+                              <img src={nurseDetail.licensePhotoUrl} alt="الترخيص" className="w-full h-full object-cover" />
+                            </a>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                   {/* Registration Date */}
                   <div className="flex items-center justify-between text-xs text-gray-400 pt-2 border-t border-gray-100">
                     <span>تاريخ التسجيل: {formatDate(nurseDetail.createdAt)}</span>
                     <span>آخر تحديث: {formatDate(nurseDetail.updatedAt)}</span>
                   </div>
                   {/* Actions */}
-                  <div className="flex gap-3 pt-2">
+                  <div className="flex gap-3 pt-2 flex-wrap">
                     {nurseDetail.status === 'pending' && (
                       <>
                         <Button className="flex-1 bg-gradient-to-l from-emerald-500 to-teal-500 text-white rounded-xl shadow-lg shadow-emerald-500/25" onClick={() => { handleNurseAction(nurseDetail.id, 'approved'); setNurseDetail(null) }}><CheckCircle className="w-4 h-4 ml-2" />قبول الممرض</Button>
@@ -1942,6 +2249,25 @@ export default function AdminDashboard() {
                     )}
                     {nurseDetail.status === 'blocked' && (
                       <Button className="flex-1 bg-gradient-to-l from-emerald-500 to-teal-500 text-white rounded-xl shadow-lg shadow-emerald-500/25" onClick={() => { handleNurseAction(nurseDetail.id, 'approved'); setNurseDetail(null) }}><Unlock className="w-4 h-4 ml-2" />إلغاء الحظر</Button>
+                    )}
+                    {/* Verification Actions */}
+                    {nurseDetail.status === 'approved' && !nurseDetail.isVerified && (
+                      <Button className="flex-1 bg-gradient-to-l from-emerald-500 to-teal-500 text-white rounded-xl shadow-lg shadow-emerald-500/25" onClick={async () => {
+                        try {
+                          const res = await fetch(`/api/admin/nurses/${nurseDetail.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ isVerified: true }) })
+                          if (res.ok) { toast({ title: 'تم التحقق من الهوية' }); logActivity('nurse_verify', 'تم التحقق من هوية ممرض', { nurseId: nurseDetail.id }); setNurseDetail(null); fetchData() }
+                          else { const data = await res.json(); toast({ title: 'خطأ', description: data.error, variant: 'destructive' }) }
+                        } catch { toast({ title: 'خطأ', description: 'حدث خطأ', variant: 'destructive' }) }
+                      }}><ShieldCheck className="w-4 h-4 ml-2" />تحقق من الهوية</Button>
+                    )}
+                    {nurseDetail.status === 'approved' && nurseDetail.isVerified && (
+                      <Button className="flex-1 bg-gradient-to-l from-red-500 to-rose-500 text-white rounded-xl shadow-lg shadow-red-500/25" onClick={async () => {
+                        try {
+                          const res = await fetch(`/api/admin/nurses/${nurseDetail.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ isVerified: false }) })
+                          if (res.ok) { toast({ title: 'تم رفض التحقق' }); logActivity('nurse_unverify', 'تم رفض التحقق من هوية ممرض', { nurseId: nurseDetail.id }); setNurseDetail(null); fetchData() }
+                          else { const data = await res.json(); toast({ title: 'خطأ', description: data.error, variant: 'destructive' }) }
+                        } catch { toast({ title: 'خطأ', description: 'حدث خطأ', variant: 'destructive' }) }
+                      }}><ShieldAlert className="w-4 h-4 ml-2" />رفض التحقق</Button>
                     )}
                   </div>
                 </div>
@@ -2065,6 +2391,91 @@ export default function AdminDashboard() {
               {resetLoading ? <><Loader2 className="w-4 h-4 ml-2 animate-spin" />جارٍ الحذف...</> : 'حذف جميع البيانات'}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Complaint Detail Dialog */}
+      <Dialog open={!!complaintDetail} onOpenChange={() => setComplaintDetail(null)}>
+        <DialogContent className="sm:max-w-xl p-0 overflow-hidden">
+          {complaintDetail && (() => {
+            const statusColors: Record<string, { gradient: string; label: string; badgeClass: string }> = {
+              pending: { gradient: 'from-yellow-500 to-amber-500', label: 'بانتظار المراجعة', badgeClass: 'bg-amber-100 text-amber-700 border-amber-200' },
+              reviewed: { gradient: 'from-blue-400 to-cyan-500', label: 'تمت المراجعة', badgeClass: 'bg-blue-100 text-blue-700 border-blue-200' },
+              resolved: { gradient: 'from-emerald-400 to-teal-500', label: 'تم الحل', badgeClass: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
+              rejected: { gradient: 'from-red-400 to-rose-500', label: 'مرفوضة', badgeClass: 'bg-red-100 text-red-700 border-red-200' },
+            }
+            const cStatus = complaintDetail.status || 'pending'
+            const cfg = statusColors[cStatus] || statusColors.pending
+
+            const handleComplaintAction = async (newStatus: string) => {
+              try {
+                // Update complaint status locally with visual feedback
+                setComplaints(prev => prev.map((c: any) => c.id === complaintDetail.id ? { ...c, status: newStatus, adminNotes: complaintNotes } : c))
+                setComplaintDetail({ ...complaintDetail, status: newStatus, adminNotes: complaintNotes })
+                const statusLabels: Record<string, string> = { reviewed: 'تمت المراجعة', resolved: 'تم الحل', rejected: 'تم الرفض' }
+                toast({ title: statusLabels[newStatus] || 'تم التحديث' })
+                logActivity('complaint_update', `تم تحديث حالة شكوى إلى: ${statusLabels[newStatus] || newStatus}`, { complaintId: complaintDetail.id, newStatus })
+              } catch { toast({ title: 'خطأ', description: 'حدث خطأ', variant: 'destructive' }) }
+            }
+
+            return (
+              <>
+                {/* Header with gradient */}
+                <div className={`bg-gradient-to-l ${cfg.gradient} p-6 text-white relative overflow-hidden`}>
+                  <div className="absolute top-0 left-0 w-32 h-32 bg-white/10 rounded-full -translate-x-1/2 -translate-y-1/2" />
+                  <div className="absolute bottom-0 right-0 w-24 h-24 bg-white/10 rounded-full translate-x-1/3 translate-y-1/3" />
+                  <div className="relative flex items-center gap-4">
+                    <div className="w-16 h-16 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center shadow-lg ring-2 ring-white/30">
+                      <FileWarning className="w-8 h-8 text-white" />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-bold">{complaintDetail.reporterName || complaintDetail.userName || complaintDetail.beneficiaryName || 'مجهول'}</h2>
+                      <div className="flex items-center gap-2 mt-1">
+                        <Badge className="bg-white/20 text-white border-0 text-xs backdrop-blur-sm">{cfg.label}</Badge>
+                        <span className="text-white/80 text-xs">{complaintDetail.type || complaintDetail.reportType || 'شكوى عامة'}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                {/* Content */}
+                <div className="p-6 space-y-5">
+                  {/* Description */}
+                  <div>
+                    <h3 className="text-sm font-bold text-gray-400 mb-2 flex items-center gap-2"><MessageSquare className="w-4 h-4" />تفاصيل الشكوى</h3>
+                    <div className="p-3 rounded-xl bg-gray-50/80 border border-gray-100">
+                      <p className="text-sm text-gray-700 whitespace-pre-wrap">{complaintDetail.description || complaintDetail.message || complaintDetail.notes || 'لا يوجد وصف'}</p>
+                    </div>
+                  </div>
+                  {/* Info Grid */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="p-3 rounded-xl bg-amber-50/80 border border-amber-100">
+                      <p className="text-xs text-amber-500 mb-1">نوع البلاغ</p>
+                      <p className="font-semibold text-sm">{complaintDetail.type || complaintDetail.reportType || 'شكوى عامة'}</p>
+                    </div>
+                    <div className="p-3 rounded-xl bg-blue-50/80 border border-blue-100">
+                      <p className="text-xs text-blue-500 mb-1">تاريخ التقديم</p>
+                      <p className="font-semibold text-sm">{formatDateTime(complaintDetail.createdAt)}</p>
+                    </div>
+                  </div>
+                  {/* Admin Notes */}
+                  <div>
+                    <h3 className="text-sm font-bold text-gray-400 mb-2 flex items-center gap-2"><FileText className="w-4 h-4" />ملاحظات الإدارة</h3>
+                    <Textarea value={complaintNotes} onChange={e => setComplaintNotes(e.target.value)} placeholder="أضف ملاحظاتك هنا..." className="border-amber-200 rounded-xl min-h-[80px]" />
+                  </div>
+                  {/* Actions */}
+                  <div className="flex gap-3 pt-2">
+                    {cStatus === 'pending' && (
+                      <Button className="flex-1 bg-gradient-to-l from-blue-500 to-cyan-500 text-white rounded-xl shadow-lg shadow-blue-500/25" onClick={() => handleComplaintAction('reviewed')}><Eye className="w-4 h-4 ml-2" />تم المراجعة</Button>
+                    )}
+                    {(cStatus === 'pending' || cStatus === 'reviewed') && (
+                      <Button className="flex-1 bg-gradient-to-l from-emerald-500 to-teal-500 text-white rounded-xl shadow-lg shadow-emerald-500/25" onClick={() => handleComplaintAction('resolved')}><CheckCircle className="w-4 h-4 ml-2" />تم الحل</Button>
+                    )}
+                    <Button className="flex-1 bg-gradient-to-l from-red-500 to-rose-500 text-white rounded-xl shadow-lg shadow-red-500/25" onClick={() => handleComplaintAction('rejected')}><XCircle className="w-4 h-4 ml-2" />رفض</Button>
+                  </div>
+                </div>
+              </>
+            )
+          })()}
         </DialogContent>
       </Dialog>
 

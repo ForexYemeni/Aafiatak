@@ -6,7 +6,8 @@ import {
   Stethoscope, ClipboardList, User, LogOut, Loader2, Play, CheckCircle,
   Menu, X, Phone, MapPin, Clock, HelpCircle, Bell, Activity,
   Calendar, Star, Filter, MessageSquare, ChevronDown, ChevronUp,
-  Mail, Shield, Award, Navigation, Info, Sparkles
+  Mail, Shield, Award, Navigation, Info, Sparkles,
+  Briefcase, Check, DollarSign, Camera, Plus, Trash2, Send, Wallet
 } from 'lucide-react'
 import { useAppStore, formatPrice, getStatusLabel, getStatusColor } from '@/lib/store'
 import { openInMaps, getGPSLocation, searchLocation, extractCoordinates, getDisplayLocation, getMapEmbedUrl, getDirectionsUrl } from '@/lib/location-utils'
@@ -85,7 +86,7 @@ function getDateKey(timestamp: any): string {
 
 // ==================== Types ====================
 
-type Tab = 'assignments' | 'schedule' | 'ratings' | 'profile' | 'notifications' | 'help'
+type Tab = 'assignments' | 'schedule' | 'ratings' | 'profile' | 'notifications' | 'help' | 'portfolio' | 'appointments' | 'earnings'
 
 interface Assignment {
   id: string
@@ -163,11 +164,36 @@ interface AdminSettings {
   referralEnabled?: boolean
 }
 
+interface PortfolioData {
+  bio?: string
+  experience?: number
+  specializations?: string[]
+  certifications?: string[]
+  workPhotos?: string[]
+  completedCases?: number
+}
+
+interface Appointment {
+  id: string
+  nurseId: string
+  beneficiaryId?: string
+  beneficiaryName?: string
+  serviceName?: string
+  date: any
+  time?: string
+  status: string
+  notes?: string
+  createdAt?: any
+}
+
 // ==================== Tab Configuration ====================
 
 const tabs: { key: Tab; label: string; icon: any }[] = [
   { key: 'assignments', label: 'المهام', icon: ClipboardList },
   { key: 'schedule', label: 'الجدول', icon: Calendar },
+  { key: 'appointments', label: 'المواعيد', icon: Calendar },
+  { key: 'portfolio', label: 'ملفي الاحترافي', icon: Briefcase },
+  { key: 'earnings', label: 'الأرباح', icon: Wallet },
   { key: 'ratings', label: 'التقييمات', icon: Star },
   { key: 'profile', label: 'الملف الشخصي', icon: User },
   { key: 'notifications', label: 'الإشعارات', icon: Bell },
@@ -287,6 +313,29 @@ export default function NurseDashboard() {
   // Schedule state
   const [selectedScheduleDate, setSelectedScheduleDate] = useState<string>('')
 
+  // Portfolio state
+  const [portfolio, setPortfolio] = useState<PortfolioData>({})
+  const [portfolioLoading, setPortfolioLoading] = useState(false)
+  const [portfolioSaving, setPortfolioSaving] = useState(false)
+  const [newSpecialization, setNewSpecialization] = useState('')
+  const [newCertification, setNewCertification] = useState('')
+
+  // Appointments state
+  const [appointments, setAppointments] = useState<Appointment[]>([])
+  const [appointmentsLoading, setAppointmentsLoading] = useState(false)
+
+  // Location sharing state
+  const [locationSharing, setLocationSharing] = useState(false)
+  const locationWatchIdRef = useRef<number | null>(null)
+  const locationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  // Rating reply state
+  const [replyDialogOpen, setReplyDialogOpen] = useState(false)
+  const [replyRatingId, setReplyRatingId] = useState<string>('')
+  const [replyText, setReplyText] = useState('')
+  const [replySaving, setReplySaving] = useState(false)
+  const [ratingReplies, setRatingReplies] = useState<Record<string, string>>({})
+
   const nurseId = (user as any)?.id
   const nurseName = `${(user as any)?.firstName || ''} ${(user as any)?.lastName || ''}`
 
@@ -365,6 +414,139 @@ export default function NurseDashboard() {
     }
   }, [])
 
+  const fetchPortfolio = useCallback(async () => {
+    if (!nurseId) return
+    setPortfolioLoading(true)
+    try {
+      const res = await fetch(`/api/nurse/portfolio?nurseId=${nurseId}`)
+      if (res.ok) {
+        const data = await res.json()
+        setPortfolio(data || {})
+      } else {
+        setPortfolio({})
+      }
+    } catch {
+      setPortfolio({})
+    } finally {
+      setPortfolioLoading(false)
+    }
+  }, [nurseId])
+
+  const savePortfolio = useCallback(async () => {
+    if (!nurseId) return
+    setPortfolioSaving(true)
+    try {
+      const res = await fetch('/api/nurse/portfolio', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nurseId, ...portfolio }),
+      })
+      if (res.ok) {
+        toast({ title: 'تم الحفظ', description: 'تم حفظ الملف الاحترافي بنجاح' })
+      } else {
+        const data = await res.json()
+        toast({ title: 'خطأ', description: data.error || 'فشل حفظ الملف الاحترافي', variant: 'destructive' })
+      }
+    } catch {
+      toast({ title: 'خطأ', description: 'حدث خطأ في الاتصال', variant: 'destructive' })
+    } finally {
+      setPortfolioSaving(false)
+    }
+  }, [nurseId, portfolio, toast])
+
+  const fetchAppointments = useCallback(async () => {
+    if (!nurseId) return
+    setAppointmentsLoading(true)
+    try {
+      const res = await fetch(`/api/appointments?nurseId=${nurseId}`)
+      if (res.ok) {
+        const data = await res.json()
+        setAppointments(Array.isArray(data) ? data : [])
+      } else {
+        setAppointments([])
+      }
+    } catch {
+      setAppointments([])
+    } finally {
+      setAppointmentsLoading(false)
+    }
+  }, [nurseId])
+
+  const handleAcceptRejectAssignment = useCallback(async (assignmentId: string, action: 'accept' | 'reject') => {
+    setActionLoading(true)
+    try {
+      const res = await fetch('/api/nurse/accept-assignment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ assignmentId, action }),
+      })
+      if (res.ok) {
+        toast({
+          title: action === 'accept' ? 'تم قبول المهمة' : 'تم رفض المهمة',
+          description: action === 'accept' ? 'يمكنك الآن بدء تنفيذ المهمة' : 'تم رفض المهمة بنجاح',
+        })
+        fetchAssignments()
+      } else {
+        const data = await res.json()
+        toast({ title: 'خطأ', description: data.error || 'حدث خطأ', variant: 'destructive' })
+      }
+    } catch {
+      toast({ title: 'خطأ', description: 'حدث خطأ في الاتصال', variant: 'destructive' })
+    } finally {
+      setActionLoading(false)
+    }
+  }, [fetchAssignments, toast])
+
+  const handleAppointmentAction = useCallback(async (appointmentId: string, action: string) => {
+    try {
+      const res = await fetch(`/api/appointments/${appointmentId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      })
+      if (res.ok) {
+        const labels: Record<string, string> = {
+          confirm: 'تم تأكيد الموعد',
+          start: 'تم بدء الموعد',
+          complete: 'تم إكمال الموعد',
+        }
+        toast({ title: labels[action] || 'تم التحديث' })
+        fetchAppointments()
+      } else {
+        const data = await res.json()
+        toast({ title: 'خطأ', description: data.error || 'حدث خطأ', variant: 'destructive' })
+      }
+    } catch {
+      toast({ title: 'خطأ', description: 'حدث خطأ في الاتصال', variant: 'destructive' })
+    }
+  }, [fetchAppointments, toast])
+
+  const handleRatingReply = useCallback(async () => {
+    if (!replyRatingId || !replyText.trim()) return
+    setReplySaving(true)
+    try {
+      const res = await fetch(`/api/ratings/${replyRatingId}/reply`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reply: replyText, nurseId }),
+      })
+      if (res.ok) {
+        toast({ title: 'تم إرسال الرد', description: 'تم الرد على التقييم بنجاح' })
+        setRatingReplies(prev => ({ ...prev, [replyRatingId]: replyText }))
+        setReplyDialogOpen(false)
+        setReplyRatingId('')
+        setReplyText('')
+      } else {
+        const data = await res.json()
+        toast({ title: 'خطأ', description: data.error || 'فشل إرسال الرد', variant: 'destructive' })
+      }
+    } catch {
+      toast({ title: 'خطأ', description: 'حدث خطأ في الاتصال', variant: 'destructive' })
+    } finally {
+      setReplySaving(false)
+    }
+  }, [replyRatingId, replyText, nurseId, toast])
+
   // Build notifications from assignments
   useEffect(() => {
     if (notifTimeoutRef.current) {
@@ -440,8 +622,73 @@ export default function NurseDashboard() {
       fetchRatings()
     } else if (activeTab === 'help') {
       fetchAdminSettings()
+    } else if (activeTab === 'portfolio') {
+      fetchPortfolio()
+    } else if (activeTab === 'appointments') {
+      fetchAppointments()
+    } else if (activeTab === 'earnings') {
+      fetchAssignments()
     }
-  }, [activeTab, fetchAssignments, fetchProfile, fetchRatings, fetchAdminSettings])
+  }, [activeTab, fetchAssignments, fetchProfile, fetchRatings, fetchAdminSettings, fetchPortfolio, fetchAppointments])
+
+  // Location sharing effect
+  useEffect(() => {
+    if (locationSharing && nurseId) {
+      // Start watching position
+      if ('geolocation' in navigator) {
+        const sendLocation = (latitude: number, longitude: number) => {
+          fetch('/api/nurse/location', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ nurseId, latitude, longitude }),
+          }).catch(() => {})
+        }
+
+        locationWatchIdRef.current = navigator.geolocation.watchPosition(
+          (position) => {
+            sendLocation(position.coords.latitude, position.coords.longitude)
+          },
+          () => {
+            toast({ title: 'خطأ في الموقع', description: 'تعذر الوصول إلى موقعك', variant: 'destructive' })
+          },
+          { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
+        )
+
+        // Send updates every 15 seconds
+        locationIntervalRef.current = setInterval(() => {
+          navigator.geolocation.getCurrentPosition(
+            (position) => {
+              sendLocation(position.coords.latitude, position.coords.longitude)
+            },
+            () => {},
+            { enableHighAccuracy: true, timeout: 10000 }
+          )
+        }, 15000)
+      } else {
+        toast({ title: 'غير مدعوم', description: 'متصفحك لا يدعم تحديد الموقع', variant: 'destructive' })
+        setLocationSharing(false)
+      }
+    } else {
+      // Stop watching
+      if (locationWatchIdRef.current !== null) {
+        navigator.geolocation.clearWatch(locationWatchIdRef.current)
+        locationWatchIdRef.current = null
+      }
+      if (locationIntervalRef.current) {
+        clearInterval(locationIntervalRef.current)
+        locationIntervalRef.current = null
+      }
+    }
+
+    return () => {
+      if (locationWatchIdRef.current !== null) {
+        navigator.geolocation.clearWatch(locationWatchIdRef.current)
+      }
+      if (locationIntervalRef.current) {
+        clearInterval(locationIntervalRef.current)
+      }
+    }
+  }, [locationSharing, nurseId, toast])
 
   // ==================== Handlers ====================
 
@@ -742,6 +989,7 @@ export default function NurseDashboard() {
           {[
             { key: 'all', label: 'الكل' },
             { key: 'assigned', label: 'معيّن' },
+            { key: 'accepted', label: 'مقبول' },
             { key: 'in_progress', label: 'قيد التنفيذ' },
             { key: 'completed', label: 'مكتمل' },
           ].map(filter => (
@@ -785,7 +1033,7 @@ export default function NurseDashboard() {
         <div className="grid gap-4">
           <AnimatePresence>
             {filteredAssignments.map((assignment, index) => {
-              const borderColor = assignment.status === 'assigned' ? 'border-r-purple-500' : assignment.status === 'in_progress' ? 'border-r-orange-500' : 'border-r-emerald-500'
+              const borderColor = assignment.status === 'assigned' ? 'border-r-purple-500' : assignment.status === 'accepted' ? 'border-r-blue-500' : assignment.status === 'in_progress' ? 'border-r-orange-500' : 'border-r-emerald-500'
 
               return (
                 <motion.div
@@ -808,7 +1056,7 @@ export default function NurseDashboard() {
                               <h3 className="font-bold truncate text-gray-800">
                                 {assignment.request?.service?.name || 'خدمة'}
                               </h3>
-                              <Badge className={`${assignment.status === 'assigned' ? 'bg-gradient-to-l from-purple-100 to-violet-100 text-purple-700 border-purple-200' : assignment.status === 'in_progress' ? 'bg-gradient-to-l from-orange-100 to-amber-100 text-orange-700 border-orange-200' : 'bg-gradient-to-l from-emerald-100 to-teal-100 text-emerald-700 border-emerald-200'} text-xs border font-bold`}>
+                              <Badge className={`${assignment.status === 'assigned' ? 'bg-gradient-to-l from-purple-100 to-violet-100 text-purple-700 border-purple-200' : assignment.status === 'accepted' ? 'bg-gradient-to-l from-blue-100 to-cyan-100 text-blue-700 border-blue-200' : assignment.status === 'in_progress' ? 'bg-gradient-to-l from-orange-100 to-amber-100 text-orange-700 border-orange-200' : 'bg-gradient-to-l from-emerald-100 to-teal-100 text-emerald-700 border-emerald-200'} text-xs border font-bold`}>
                                 {getStatusLabel(assignment.status)}
                               </Badge>
                             </div>
@@ -887,6 +1135,29 @@ export default function NurseDashboard() {
                         {/* Action Buttons */}
                         <div className="flex flex-col gap-2 shrink-0">
                           {assignment.status === 'assigned' && (
+                            <>
+                              <Button
+                                size="sm"
+                                className="bg-gradient-to-l from-emerald-500 to-green-600 text-white hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-emerald-500/25 transition-all duration-300"
+                                onClick={() => handleAcceptRejectAssignment(assignment.id, 'accept')}
+                                disabled={actionLoading}
+                              >
+                                {actionLoading ? <Loader2 className="w-4 h-4 ml-1 animate-spin" /> : <Check className="w-4 h-4 ml-1" />}
+                                قبول المهمة
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="text-red-600 border-red-300 hover:text-white hover:bg-gradient-to-l hover:from-red-500 hover:to-rose-600 hover:border-transparent hover:shadow-lg hover:shadow-red-500/25 transition-all duration-300"
+                                onClick={() => handleAcceptRejectAssignment(assignment.id, 'reject')}
+                                disabled={actionLoading}
+                              >
+                                {actionLoading ? <Loader2 className="w-4 h-4 ml-1 animate-spin" /> : <X className="w-4 h-4 ml-1" />}
+                                رفض المهمة
+                              </Button>
+                            </>
+                          )}
+                          {assignment.status === 'accepted' && (
                             <Button
                               size="sm"
                               className="bg-gradient-to-l from-violet-500 to-purple-600 text-white hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-violet-500/25 transition-all duration-300"
@@ -917,7 +1188,7 @@ export default function NurseDashboard() {
                               تم الإكمال
                             </Badge>
                           )}
-                          {(assignment.status === 'assigned' || assignment.status === 'in_progress') && (
+                          {(assignment.status === 'assigned' || assignment.status === 'accepted' || assignment.status === 'in_progress') && (
                             <Button
                               size="sm"
                               variant="outline"
@@ -973,6 +1244,7 @@ export default function NurseDashboard() {
       const statusDots: string[] = []
       dayAssignments.forEach(a => {
         if (a.status === 'assigned' && !statusDots.includes('assigned')) statusDots.push('assigned')
+        if (a.status === 'accepted' && !statusDots.includes('accepted')) statusDots.push('accepted')
         if (a.status === 'in_progress' && !statusDots.includes('in_progress')) statusDots.push('in_progress')
         if (a.status === 'completed' && !statusDots.includes('completed')) statusDots.push('completed')
       })
@@ -987,6 +1259,7 @@ export default function NurseDashboard() {
 
     const statusDotColor: Record<string, string> = {
       assigned: 'bg-purple-400',
+      accepted: 'bg-blue-400',
       in_progress: 'bg-orange-400',
       completed: 'bg-emerald-400',
     }
@@ -1076,8 +1349,8 @@ export default function NurseDashboard() {
             <div className="space-y-3">
               <AnimatePresence>
                 {selectedDayAssignments.map((assignment, index) => {
-                  const borderColor = assignment.status === 'assigned' ? 'border-r-purple-500' : assignment.status === 'in_progress' ? 'border-r-orange-500' : 'border-r-emerald-500'
-                  const statusBg = assignment.status === 'assigned' ? 'from-purple-50 to-violet-50' : assignment.status === 'in_progress' ? 'from-orange-50 to-amber-50' : 'from-emerald-50 to-teal-50'
+                  const borderColor = assignment.status === 'assigned' ? 'border-r-purple-500' : assignment.status === 'accepted' ? 'border-r-blue-500' : assignment.status === 'in_progress' ? 'border-r-orange-500' : 'border-r-emerald-500'
+                  const statusBg = assignment.status === 'assigned' ? 'from-purple-50 to-violet-50' : assignment.status === 'accepted' ? 'from-blue-50 to-cyan-50' : assignment.status === 'in_progress' ? 'from-orange-50 to-amber-50' : 'from-emerald-50 to-teal-50'
 
                   return (
                     <motion.div
@@ -1111,7 +1384,7 @@ export default function NurseDashboard() {
                                 </div>
                               </div>
                             </div>
-                            <Badge className={`${assignment.status === 'assigned' ? 'bg-gradient-to-l from-purple-100 to-violet-100 text-purple-700 border-purple-200' : assignment.status === 'in_progress' ? 'bg-gradient-to-l from-orange-100 to-amber-100 text-orange-700 border-orange-200' : 'bg-gradient-to-l from-emerald-100 to-teal-100 text-emerald-700 border-emerald-200'} text-xs border font-bold`}>
+                            <Badge className={`${assignment.status === 'assigned' ? 'bg-gradient-to-l from-purple-100 to-violet-100 text-purple-700 border-purple-200' : assignment.status === 'accepted' ? 'bg-gradient-to-l from-blue-100 to-cyan-100 text-blue-700 border-blue-200' : assignment.status === 'in_progress' ? 'bg-gradient-to-l from-orange-100 to-amber-100 text-orange-700 border-orange-200' : 'bg-gradient-to-l from-emerald-100 to-teal-100 text-emerald-700 border-emerald-200'} text-xs border font-bold`}>
                               {getStatusLabel(assignment.status)}
                             </Badge>
                           </div>
@@ -1262,6 +1535,32 @@ export default function NurseDashboard() {
                                 {formatDate(rating.createdAt)}
                               </p>
                             )}
+                            {/* Reply button */}
+                            <div className="mt-2">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg text-xs h-7 px-2"
+                                onClick={() => {
+                                  setReplyRatingId(rating.id)
+                                  setReplyText(ratingReplies[rating.id] || '')
+                                  setReplyDialogOpen(true)
+                                }}
+                              >
+                                <Send className="w-3 h-3 ml-1" />
+                                رد
+                              </Button>
+                            </div>
+                            {/* Show existing reply */}
+                            {ratingReplies[rating.id] && (
+                              <div className="mt-2 bg-gradient-to-l from-blue-50/50 to-indigo-50/50 rounded-lg p-2.5 ring-1 ring-blue-200/20">
+                                <div className="flex items-center gap-1.5 mb-1">
+                                  <MessageSquare className="w-3 h-3 text-blue-600" />
+                                  <span className="text-xs font-bold text-blue-700">ردك:</span>
+                                </div>
+                                <p className="text-sm text-blue-700">{ratingReplies[rating.id]}</p>
+                              </div>
+                            )}
                           </div>
                         </div>
                       </CardContent>
@@ -1304,6 +1603,8 @@ export default function NurseDashboard() {
 
     const fullName = `${profile.firstName || ''} ${profile.secondName || ''} ${profile.thirdName || ''} ${profile.lastName || ''}`.trim()
 
+    const isVerified = (user as any)?.isVerified || (profile as any)?.isVerified || false
+
     return (
       <div className="space-y-6">
         <div>
@@ -1319,10 +1620,71 @@ export default function NurseDashboard() {
                 <Stethoscope className="w-8 h-8 text-white" />
               </div>
               <div>
-                <h2 className="text-xl font-bold text-gray-800">{fullName}</h2>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-xl font-bold text-gray-800">{fullName}</h2>
+                  {/* Verification Status Badge */}
+                  {isVerified ? (
+                    <Badge className="bg-gradient-to-l from-emerald-100 to-green-100 text-emerald-700 border-emerald-200 border font-bold text-xs flex items-center gap-1">
+                      <CheckCircle className="w-3.5 h-3.5" />
+                      تم التحقق ✓
+                    </Badge>
+                  ) : (
+                    <Badge className="bg-gradient-to-l from-amber-100 to-orange-100 text-amber-700 border-amber-200 border font-bold text-xs flex items-center gap-1">
+                      <Shield className="w-3.5 h-3.5" />
+                      قيد المراجعة
+                    </Badge>
+                  )}
+                </div>
                 <Badge className="mt-1 bg-gradient-to-l from-cyan-100 via-blue-100 to-indigo-100 text-blue-700 border-blue-200 border font-bold">
                   {getStatusLabel(profile.status)}
                 </Badge>
+              </div>
+            </div>
+
+            {/* Verification info */}
+            {!isVerified && (
+              <div className="mb-6 bg-gradient-to-l from-amber-50/50 to-orange-50/50 rounded-xl p-3.5 ring-1 ring-amber-200/30">
+                <div className="flex items-center gap-2">
+                  <Info className="w-4 h-4 text-amber-600 shrink-0" />
+                  <p className="text-sm text-amber-700">
+                    حسابك قيد المراجعة. يرجى تقديم المستندات المطلوبة لإتمام عملية التحقق من حسابك.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Location Sharing Toggle */}
+            <div className="mb-6 bg-gradient-to-l from-cyan-50/50 via-blue-50/50 to-indigo-50/50 rounded-xl p-4 ring-1 ring-blue-200/30">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shadow-md shadow-blue-500/20">
+                    <MapPin className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-sm text-gray-800 flex items-center gap-2">
+                      مشاركة الموقع
+                      {locationSharing && (
+                        <span className="relative flex h-3 w-3">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                          <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500" />
+                        </span>
+                      )}
+                    </h3>
+                    <p className="text-xs text-gray-500">
+                      {locationSharing ? 'يتم مشاركة موقعك في الوقت الفعلي' : 'اسمح بتتبع موقعك أثناء تنفيذ المهام'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setLocationSharing(!locationSharing)}
+                  className={`relative w-12 h-6 rounded-full transition-all duration-300 ${
+                    locationSharing ? 'bg-gradient-to-l from-cyan-500 to-blue-600 shadow-lg shadow-blue-500/25' : 'bg-gray-300'
+                  }`}
+                >
+                  <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-md transition-all duration-300 ${
+                    locationSharing ? 'left-0.5' : 'left-[26px]'
+                  }`} />
+                </button>
               </div>
             </div>
 
@@ -1606,6 +1968,533 @@ export default function NurseDashboard() {
     )
   }
 
+  // ==================== Portfolio Tab ====================
+
+  const PortfolioTab = () => {
+    if (portfolioLoading) {
+      return (
+        <div className="space-y-6">
+          <Skeleton className="h-8 w-48 mb-2" />
+          <Card className="border-0 shadow-lg bg-white/80 backdrop-blur-xl">
+            <CardContent className="p-6 space-y-4">
+              {[1, 2, 3, 4, 5].map(i => (
+                <Skeleton key={i} className="h-12 w-full rounded-xl" />
+              ))}
+            </CardContent>
+          </Card>
+        </div>
+      )
+    }
+
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold bg-gradient-to-l from-cyan-700 via-blue-700 to-indigo-700 bg-clip-text text-transparent">ملفي الاحترافي</h1>
+          <p className="text-gray-500 text-sm mt-1">معلوماتك المهنية والتخصصات</p>
+        </div>
+
+        <Card className="border-0 shadow-lg shadow-blue-500/5 bg-white/80 backdrop-blur-xl">
+          <CardContent className="p-6 space-y-6">
+            {/* Bio */}
+            <div>
+              <Label className="text-sm font-bold text-gray-700 mb-2 block flex items-center gap-1.5">
+                <User className="w-4 h-4 text-blue-500" />
+                نبذة عني
+              </Label>
+              <Textarea
+                value={portfolio.bio || ''}
+                onChange={e => setPortfolio(prev => ({ ...prev, bio: e.target.value }))}
+                placeholder="اكتب نبذة مختصرة عنك وعن خبراتك المهنية..."
+                className="bg-white/80 border-blue-200/50 focus:border-blue-400 rounded-xl min-h-[120px]"
+              />
+            </div>
+
+            {/* Experience */}
+            <div>
+              <Label className="text-sm font-bold text-gray-700 mb-2 block flex items-center gap-1.5">
+                <Clock className="w-4 h-4 text-blue-500" />
+                سنوات الخبرة
+              </Label>
+              <Input
+                type="number"
+                min="0"
+                value={portfolio.experience || ''}
+                onChange={e => setPortfolio(prev => ({ ...prev, experience: parseInt(e.target.value) || 0 }))}
+                placeholder="عدد سنوات الخبرة"
+                className="bg-white/80 border-blue-200/50 focus:border-blue-400 rounded-xl"
+              />
+            </div>
+
+            {/* Specializations */}
+            <div>
+              <Label className="text-sm font-bold text-gray-700 mb-2 block flex items-center gap-1.5">
+                <Stethoscope className="w-4 h-4 text-blue-500" />
+                التخصصات
+              </Label>
+              <div className="flex flex-wrap gap-2 mb-2">
+                {(portfolio.specializations || []).map((spec, idx) => (
+                  <Badge key={idx} className="bg-gradient-to-l from-cyan-100 to-blue-100 text-blue-700 border-blue-200 border font-bold flex items-center gap-1.5 px-3 py-1.5">
+                    {spec}
+                    <button onClick={() => setPortfolio(prev => ({ ...prev, specializations: (prev.specializations || []).filter((_, i) => i !== idx) }))} className="hover:text-red-500 transition-colors">
+                      <X className="w-3 h-3" />
+                    </button>
+                  </Badge>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <Input
+                  value={newSpecialization}
+                  onChange={e => setNewSpecialization(e.target.value)}
+                  placeholder="أضف تخصص جديد..."
+                  className="bg-white/80 border-blue-200/50 focus:border-blue-400 rounded-xl flex-1"
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && newSpecialization.trim()) {
+                      setPortfolio(prev => ({ ...prev, specializations: [...(prev.specializations || []), newSpecialization.trim()] }))
+                      setNewSpecialization('')
+                    }
+                  }}
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="rounded-xl border-blue-200 text-blue-600 hover:bg-blue-50 shrink-0"
+                  onClick={() => {
+                    if (newSpecialization.trim()) {
+                      setPortfolio(prev => ({ ...prev, specializations: [...(prev.specializations || []), newSpecialization.trim()] }))
+                      setNewSpecialization('')
+                    }
+                  }}
+                >
+                  <Plus className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+
+            {/* Certifications */}
+            <div>
+              <Label className="text-sm font-bold text-gray-700 mb-2 block flex items-center gap-1.5">
+                <Award className="w-4 h-4 text-blue-500" />
+                الشهادات
+              </Label>
+              <div className="space-y-2 mb-2">
+                {(portfolio.certifications || []).map((cert, idx) => (
+                  <div key={idx} className="flex items-center gap-2 bg-gradient-to-l from-indigo-50/50 to-blue-50/50 rounded-xl p-2.5 ring-1 ring-blue-200/30">
+                    <Award className="w-4 h-4 text-blue-500 shrink-0" />
+                    <span className="flex-1 text-sm font-medium text-gray-700">{cert}</span>
+                    <button onClick={() => setPortfolio(prev => ({ ...prev, certifications: (prev.certifications || []).filter((_, i) => i !== idx) }))} className="text-gray-400 hover:text-red-500 transition-colors">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <Input
+                  value={newCertification}
+                  onChange={e => setNewCertification(e.target.value)}
+                  placeholder="أضف شهادة جديدة..."
+                  className="bg-white/80 border-blue-200/50 focus:border-blue-400 rounded-xl flex-1"
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && newCertification.trim()) {
+                      setPortfolio(prev => ({ ...prev, certifications: [...(prev.certifications || []), newCertification.trim()] }))
+                      setNewCertification('')
+                    }
+                  }}
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="rounded-xl border-blue-200 text-blue-600 hover:bg-blue-50 shrink-0"
+                  onClick={() => {
+                    if (newCertification.trim()) {
+                      setPortfolio(prev => ({ ...prev, certifications: [...(prev.certifications || []), newCertification.trim()] }))
+                      setNewCertification('')
+                    }
+                  }}
+                >
+                  <Plus className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+
+            {/* Work Photos */}
+            <div>
+              <Label className="text-sm font-bold text-gray-700 mb-2 block flex items-center gap-1.5">
+                <Camera className="w-4 h-4 text-blue-500" />
+                صور الأعمال
+              </Label>
+              <div className="grid grid-cols-3 gap-3 mb-2">
+                {(portfolio.workPhotos || []).map((photo, idx) => (
+                  <div key={idx} className="relative group aspect-square rounded-xl overflow-hidden ring-1 ring-blue-200/30">
+                    <img src={photo} alt={`عمل ${idx + 1}`} className="w-full h-full object-cover" />
+                    <button
+                      onClick={() => setPortfolio(prev => ({ ...prev, workPhotos: (prev.workPhotos || []).filter((_, i) => i !== idx) }))}
+                      className="absolute top-1 left-1 w-6 h-6 rounded-full bg-red-500/80 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="rounded-xl border-blue-200 text-blue-600 hover:bg-blue-50"
+                onClick={() => {
+                  const input = document.createElement('input')
+                  input.type = 'file'
+                  input.accept = 'image/*'
+                  input.onchange = (e) => {
+                    const file = (e.target as HTMLInputElement).files?.[0]
+                    if (file) {
+                      const reader = new FileReader()
+                      reader.onload = (ev) => {
+                        const dataUrl = ev.target?.result as string
+                        setPortfolio(prev => ({ ...prev, workPhotos: [...(prev.workPhotos || []), dataUrl] }))
+                      }
+                      reader.readAsDataURL(file)
+                    }
+                  }
+                  input.click()
+                }}
+              >
+                <Camera className="w-4 h-4 ml-1" />
+                إضافة صورة
+              </Button>
+            </div>
+
+            {/* Completed Cases */}
+            <div>
+              <Label className="text-sm font-bold text-gray-700 mb-2 block flex items-center gap-1.5">
+                <CheckCircle className="w-4 h-4 text-blue-500" />
+                الحالات المنجزة
+              </Label>
+              <div className="flex items-center gap-3">
+                <Input
+                  type="number"
+                  min="0"
+                  value={portfolio.completedCases || ''}
+                  onChange={e => setPortfolio(prev => ({ ...prev, completedCases: parseInt(e.target.value) || 0 }))}
+                  placeholder="عدد الحالات المنجزة"
+                  className="bg-white/80 border-blue-200/50 focus:border-blue-400 rounded-xl w-40"
+                />
+                <span className="text-sm text-gray-400">حالة</span>
+              </div>
+            </div>
+
+            <Separator />
+
+            {/* Save Button */}
+            <Button
+              onClick={savePortfolio}
+              disabled={portfolioSaving}
+              className="bg-gradient-to-l from-cyan-500 via-blue-500 to-indigo-500 text-white hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-blue-500/25 transition-all duration-300 w-full sm:w-auto"
+            >
+              {portfolioSaving ? (
+                <>
+                  <Loader2 className="w-4 h-4 ml-1 animate-spin" />
+                  جاري الحفظ...
+                </>
+              ) : (
+                <>
+                  <Check className="w-4 h-4 ml-1" />
+                  حفظ الملف الاحترافي
+                </>
+              )}
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  // ==================== Appointments Tab ====================
+
+  const AppointmentsTab = () => {
+    const getStatusBadge = (status: string) => {
+      const styles: Record<string, string> = {
+        pending: 'bg-gradient-to-l from-amber-100 to-yellow-100 text-amber-700 border-amber-200',
+        confirmed: 'bg-gradient-to-l from-blue-100 to-cyan-100 text-blue-700 border-blue-200',
+        started: 'bg-gradient-to-l from-orange-100 to-amber-100 text-orange-700 border-orange-200',
+        completed: 'bg-gradient-to-l from-emerald-100 to-teal-100 text-emerald-700 border-emerald-200',
+        cancelled: 'bg-gradient-to-l from-red-100 to-rose-100 text-red-700 border-red-200',
+      }
+      const labels: Record<string, string> = {
+        pending: 'قيد الانتظار',
+        confirmed: 'مؤكد',
+        started: 'جاري التنفيذ',
+        completed: 'مكتمل',
+        cancelled: 'ملغى',
+      }
+      return (
+        <Badge className={`${styles[status] || styles.pending} text-xs border font-bold`}>
+          {labels[status] || status}
+        </Badge>
+      )
+    }
+
+    if (appointmentsLoading) {
+      return (
+        <div className="space-y-6">
+          <Skeleton className="h-8 w-48 mb-2" />
+          <CardSkeleton />
+          <CardSkeleton />
+        </div>
+      )
+    }
+
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold bg-gradient-to-l from-cyan-700 via-blue-700 to-indigo-700 bg-clip-text text-transparent">إدارة المواعيد</h1>
+          <p className="text-gray-500 text-sm mt-1">مواعيدك مع المستفيدين</p>
+        </div>
+
+        {appointments.length === 0 ? (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="text-center py-16"
+          >
+            <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center mx-auto mb-4">
+              <Calendar className="w-10 h-10 text-blue-400" />
+            </div>
+            <p className="text-lg font-bold text-gray-600 mb-2">لا توجد مواعيد حالياً</p>
+            <p className="text-sm text-gray-400">ستظهر المواعيد هنا عند حجزها</p>
+          </motion.div>
+        ) : (
+          <div className="space-y-3">
+            <AnimatePresence>
+              {appointments.map((appointment, index) => (
+                <motion.div
+                  key={appointment.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  transition={{ delay: index * 0.05 }}
+                >
+                  <Card className="border-0 shadow-lg shadow-blue-500/5 hover:shadow-xl hover:shadow-blue-500/10 transition-all duration-300 bg-white/80 backdrop-blur-sm border-r-4 border-r-blue-400">
+                    <CardContent className="p-5">
+                      <div className="flex items-start justify-between flex-wrap gap-4">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-3">
+                            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shrink-0 shadow-lg shadow-blue-500/20">
+                              <Calendar className="w-5 h-5 text-white" />
+                            </div>
+                            <div className="min-w-0">
+                              <h3 className="font-bold truncate text-gray-800">{appointment.serviceName || 'موعد'}</h3>
+                              {getStatusBadge(appointment.status)}
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
+                            {appointment.beneficiaryName && (
+                              <div className="flex items-center gap-1.5">
+                                <User className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                                <span className="font-medium text-gray-700">المستفيد:</span>
+                                <span className="text-gray-500">{appointment.beneficiaryName}</span>
+                              </div>
+                            )}
+                            {appointment.date && (
+                              <div className="flex items-center gap-1.5">
+                                <Clock className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                                <span className="font-medium text-gray-700">التاريخ:</span>
+                                <span className="text-gray-500">{formatDate(appointment.date)}</span>
+                              </div>
+                            )}
+                            {appointment.time && (
+                              <div className="flex items-center gap-1.5">
+                                <Clock className="w-3.5 h-3.5 text-cyan-500 shrink-0" />
+                                <span className="font-medium text-gray-700">الوقت:</span>
+                                <span className="text-gray-500">{appointment.time}</span>
+                              </div>
+                            )}
+                            {appointment.notes && (
+                              <div className="flex items-center gap-1.5">
+                                <MessageSquare className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                                <span className="font-medium text-gray-700">ملاحظات:</span>
+                                <span className="text-gray-500 truncate">{appointment.notes}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Appointment Actions */}
+                        <div className="flex flex-col gap-2 shrink-0">
+                          {appointment.status === 'pending' && (
+                            <Button
+                              size="sm"
+                              className="bg-gradient-to-l from-cyan-500 to-blue-600 text-white hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-blue-500/25 transition-all duration-300"
+                              onClick={() => handleAppointmentAction(appointment.id, 'confirm')}
+                            >
+                              <Check className="w-4 h-4 ml-1" />
+                              تأكيد الموعد
+                            </Button>
+                          )}
+                          {appointment.status === 'confirmed' && (
+                            <Button
+                              size="sm"
+                              className="bg-gradient-to-l from-orange-500 to-amber-600 text-white hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-orange-500/25 transition-all duration-300"
+                              onClick={() => handleAppointmentAction(appointment.id, 'start')}
+                            >
+                              <Play className="w-4 h-4 ml-1" />
+                              بدء الموعد
+                            </Button>
+                          )}
+                          {appointment.status === 'started' && (
+                            <Button
+                              size="sm"
+                              className="bg-gradient-to-l from-emerald-500 to-teal-600 text-white hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-emerald-500/25 transition-all duration-300"
+                              onClick={() => handleAppointmentAction(appointment.id, 'complete')}
+                            >
+                              <CheckCircle className="w-4 h-4 ml-1" />
+                              إكمال الموعد
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // ==================== Earnings Tab ====================
+
+  const EarningsTab = () => {
+    const completedAssignments = assignments.filter(a => a.status === 'completed')
+    const totalEarnings = completedAssignments.reduce((sum, a) => sum + (a.request?.service?.price || 0), 0)
+    const now = new Date()
+    const thisMonthAssignments = completedAssignments.filter(a => {
+      if (!a.updatedAt) return false
+      let date: Date
+      if (typeof a.updatedAt === 'object' && a.updatedAt !== null && 'seconds' in a.updatedAt) {
+        date = new Date(a.updatedAt.seconds * 1000)
+      } else if (typeof a.updatedAt === 'string') {
+        date = new Date(a.updatedAt)
+      } else return false
+      return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear()
+    })
+    const thisMonthEarnings = thisMonthAssignments.reduce((sum, a) => sum + (a.request?.service?.price || 0), 0)
+
+    const stats = [
+      {
+        label: 'إجمالي الأرباح',
+        value: formatPrice(totalEarnings),
+        icon: Wallet,
+        gradient: 'from-emerald-500 to-teal-600',
+        bgGradient: 'from-emerald-50 to-teal-50',
+        shadowColor: 'shadow-emerald-500/15',
+        textColor: 'text-emerald-700',
+        subTextColor: 'text-emerald-600/70',
+      },
+      {
+        label: 'أرباح الشهر',
+        value: formatPrice(thisMonthEarnings),
+        icon: DollarSign,
+        gradient: 'from-cyan-500 to-blue-600',
+        bgGradient: 'from-cyan-50 to-blue-50',
+        shadowColor: 'shadow-blue-500/15',
+        textColor: 'text-blue-700',
+        subTextColor: 'text-blue-600/70',
+      },
+      {
+        label: 'عدد المهام المنجزة',
+        value: completedAssignments.length.toLocaleString('ar-YE'),
+        icon: CheckCircle,
+        gradient: 'from-orange-500 to-amber-600',
+        bgGradient: 'from-orange-50 to-amber-50',
+        shadowColor: 'shadow-orange-500/15',
+        textColor: 'text-orange-700',
+        subTextColor: 'text-orange-600/70',
+      },
+      {
+        label: 'متوسط التقييم',
+        value: averageRating > 0 ? averageRating.toFixed(1) : '-',
+        icon: Star,
+        gradient: 'from-amber-500 to-yellow-600',
+        bgGradient: 'from-amber-50 to-yellow-50',
+        shadowColor: 'shadow-amber-500/15',
+        textColor: 'text-amber-700',
+        subTextColor: 'text-amber-600/70',
+      },
+    ]
+
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold bg-gradient-to-l from-cyan-700 via-blue-700 to-indigo-700 bg-clip-text text-transparent">نظرة عامة على الأرباح</h1>
+          <p className="text-gray-500 text-sm mt-1">ملخص أرباحك والمهام المنجزة</p>
+        </div>
+
+        {/* Stats Cards */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {stats.map((stat, index) => (
+            <motion.div key={stat.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.05 }}>
+              <Card className={`border-0 shadow-lg ${stat.shadowColor} hover:shadow-xl hover:-translate-y-1 transition-all duration-300 bg-gradient-to-br ${stat.bgGradient}`}>
+                <CardContent className="p-4 text-center">
+                  <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${stat.gradient} flex items-center justify-center mx-auto mb-2 shadow-lg shadow-blue-500/25`}>
+                    <stat.icon className="w-5 h-5 text-white" />
+                  </div>
+                  <p className={`text-xl font-bold ${stat.textColor}`}>{stat.value}</p>
+                  <p className={`text-xs ${stat.subTextColor} font-medium`}>{stat.label}</p>
+                </CardContent>
+              </Card>
+            </motion.div>
+          ))}
+        </div>
+
+        {/* Recent Completed Assignments */}
+        <Card className="border-0 shadow-lg shadow-blue-500/5 bg-white/80 backdrop-blur-xl">
+          <CardContent className="p-6">
+            <div className="flex items-center gap-3 mb-5">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center shadow-lg shadow-emerald-500/25">
+                <Wallet className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <h3 className="font-bold text-gray-800">المهام المنجزة مؤخراً</h3>
+                <p className="text-xs text-gray-400">آخر المهام المكتملة وأرباحها</p>
+              </div>
+            </div>
+
+            {completedAssignments.length === 0 ? (
+              <div className="text-center py-8">
+                <Wallet className="w-12 h-12 text-gray-300 mx-auto mb-2" />
+                <p className="text-sm text-gray-400">لا توجد مهام منجزة بعد</p>
+              </div>
+            ) : (
+              <div className="space-y-3 max-h-96 overflow-y-auto">
+                {completedAssignments.map((assignment) => (
+                  <div key={assignment.id} className="flex items-center justify-between gap-3 bg-gradient-to-l from-slate-50/50 to-gray-50/30 rounded-xl p-3.5 ring-1 ring-gray-200/20">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center shrink-0">
+                        <CheckCircle className="w-4 h-4 text-white" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-bold text-gray-700 truncate">{assignment.request?.service?.name || 'خدمة'}</p>
+                        <p className="text-xs text-gray-400">{assignment.request?.beneficiary?.name || ''}</p>
+                      </div>
+                    </div>
+                    <div className="text-left shrink-0">
+                      <p className="text-sm font-bold text-emerald-600">{formatPrice(assignment.request?.service?.price || 0)}</p>
+                      <p className="text-[10px] text-gray-400">{formatDate(assignment.updatedAt)}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
   // ==================== Help Tab ====================
 
   const HelpTab = () => (
@@ -1721,6 +2610,9 @@ export default function NurseDashboard() {
       case 'profile': return <ProfileTab />
       case 'notifications': return <NotificationsTab />
       case 'help': return <HelpTab />
+      case 'portfolio': return <PortfolioTab />
+      case 'appointments': return <AppointmentsTab />
+      case 'earnings': return <EarningsTab />
       default: return <AssignmentsTab />
     }
   }
@@ -1918,7 +2810,7 @@ export default function NurseDashboard() {
             {getMapEmbedUrl(mapPreviewLocation) ? (
               <div className="w-full h-[350px] rounded-xl overflow-hidden border border-gray-200 shadow-sm">
                 <iframe
-                  src={getMapEmbedUrl(mapPreviewLocation)}
+                  src={getMapEmbedUrl(mapPreviewLocation) ?? undefined}
                   width="100%"
                   height="100%"
                   style={{ border: 0 }}
@@ -1964,6 +2856,64 @@ export default function NurseDashboard() {
                 الاتجاهات
               </Button>
             )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Rating Reply Dialog */}
+      <Dialog open={replyDialogOpen} onOpenChange={setReplyDialogOpen}>
+        <DialogContent className="sm:max-w-md" dir="rtl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center">
+                <Send className="w-4 h-4 text-white" />
+              </div>
+              الرد على التقييم
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <Label htmlFor="reply-text" className="text-sm font-medium text-gray-700 mb-2 block">
+                ردك على التقييم
+              </Label>
+              <Textarea
+                id="reply-text"
+                value={replyText}
+                onChange={e => setReplyText(e.target.value)}
+                placeholder="اكتب ردك على هذا التقييم..."
+                className="bg-white/80 border-blue-200/50 focus:border-blue-400 rounded-xl min-h-[100px]"
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setReplyDialogOpen(false)
+                setReplyRatingId('')
+                setReplyText('')
+              }}
+              className="rounded-xl"
+            >
+              إلغاء
+            </Button>
+            <Button
+              onClick={handleRatingReply}
+              disabled={replySaving || !replyText.trim()}
+              className="bg-gradient-to-l from-cyan-500 via-blue-500 to-indigo-500 text-white hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-blue-500/25 transition-all duration-300 rounded-xl"
+            >
+              {replySaving ? (
+                <>
+                  <Loader2 className="w-4 h-4 ml-1 animate-spin" />
+                  جاري الإرسال...
+                </>
+              ) : (
+                <>
+                  <Send className="w-4 h-4 ml-1" />
+                  إرسال الرد
+                </>
+              )}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

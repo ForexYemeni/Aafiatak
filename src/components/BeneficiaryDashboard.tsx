@@ -8,7 +8,7 @@ import {
   Filter, RefreshCw, Calendar, Tag, AlertTriangle,
   Copy, Check, Award, Zap, Share2, MessageCircle, Star, Send,
   Siren, ChevronDown, ChevronUp, Shield, Gift, TrendingUp, Sparkles, Navigation,
-  Flag, Search, Camera, DollarSign, Clock, Eye, FileText, Upload, ImagePlus, Thermometer, Handshake, Mic
+  Flag, Search, Camera, DollarSign, Clock, Eye, FileText, Upload, ImagePlus, Thermometer, Handshake, Mic, Wallet
 } from 'lucide-react'
 import { useAppStore, formatPrice, getStatusLabel, getStatusColor } from '@/lib/store'
 import { openInMaps, getGPSLocation, searchLocation, extractCoordinates, getDisplayLocation, getMapEmbedUrl, getDirectionsUrl } from '@/lib/location-utils'
@@ -286,6 +286,23 @@ export default function BeneficiaryDashboard() {
   const [dynamicPricing, setDynamicPricing] = useState<any>(null)
   const [paymentFilter, setPaymentFilter] = useState<string>('all')
 
+  // Payment flow state
+  const [paymentDialog, setPaymentDialog] = useState(false)
+  const [paymentForm, setPaymentForm] = useState({ method: 'cash', cardNumber: '', cardExpiry: '', cardCvv: '', walletId: '' })
+  const [paymentSubmitting, setPaymentSubmitting] = useState(false)
+  const [lastCreatedRequestId, setLastCreatedRequestId] = useState<string>('')
+  const [paymentTransactions, setPaymentTransactions] = useState<any[]>([])
+
+  // Nurse search state
+  const [nurseSearchResults, setNurseSearchResults] = useState<any[]>([])
+  const [nursePortfolio, setNursePortfolio] = useState<any>(null)
+  const [nursePortfolioDialog, setNursePortfolioDialog] = useState(false)
+  const [nursePortfolioLoading, setNursePortfolioLoading] = useState(false)
+
+  // API notifications state
+  const [apiNotifications, setApiNotifications] = useState<Notification[]>([])
+  const [notificationsRefreshing, setNotificationsRefreshing] = useState(false)
+
   const beneficiaryUser = user as { id: string; name: string; phone: string; location: string } | null
 
   // Fetch admin settings on mount
@@ -375,7 +392,7 @@ export default function BeneficiaryDashboard() {
     fetchData()
   }, [fetchData])
 
-  // Generate notifications from requests
+  // Generate notifications from requests and merge with API notifications
   useEffect(() => {
     const notifs: Notification[] = []
     requests.forEach(req => {
@@ -424,8 +441,11 @@ export default function BeneficiaryDashboard() {
         })
       }
     })
-    setNotifications(notifs)
-  }, [requests])
+    // Merge: API notifications take precedence (by id), then local-derived
+    const localNotifIds = new Set(notifs.map(n => n.id))
+    const mergedApiNotifs = apiNotifications.filter(an => !localNotifIds.has(an.id))
+    setNotifications([...mergedApiNotifs, ...notifs])
+  }, [requests, apiNotifications])
 
   // Load profile data
   useEffect(() => {
@@ -455,6 +475,8 @@ export default function BeneficiaryDashboard() {
           address: requestForm.address || null,
           couponCode: validCoupon?.id || null,
           requestFavoriteNurse: requestFavoriteNurse || null,
+          dynamicPrice: dynamicPricing?.totalPrice || null,
+          pricingBreakdown: dynamicPricing ? { base: dynamicPricing.basePrice, distanceFee: dynamicPricing.distanceFee, timeFee: dynamicPricing.timeFee } : null,
         }),
       })
       const data = await res.json()
@@ -471,12 +493,21 @@ export default function BeneficiaryDashboard() {
           })
         } catch {}
         toast({ title: 'تم إرسال الطلب بنجاح', description: 'سيتم مراجعة طلبك من قبل الإدارة' })
-        setRequestDialog(false)
+        // If payment method is card or wallet, open payment dialog
+        if (requestForm.paymentMethod === 'card' || requestForm.paymentMethod === 'wallet') {
+          setLastCreatedRequestId(data.id || data.requestId || '')
+          setPaymentForm(prev => ({ ...prev, method: requestForm.paymentMethod === 'card' ? 'card' : 'wallet' }))
+          setRequestDialog(false)
+          setPaymentDialog(true)
+        } else {
+          setRequestDialog(false)
+        }
         setSelectedService(null)
         setRequestForm({ paymentMethod: '', notes: '', address: '', couponCode: '' })
         setValidCoupon(null)
         setCouponError('')
         setRequestFavoriteNurse(false)
+        setDynamicPricing(null)
         setActiveTab('requests')
       } else {
         toast({ title: 'خطأ', description: data.error, variant: 'destructive' })
@@ -878,7 +909,7 @@ export default function BeneficiaryDashboard() {
       if (res.ok) {
         const data = await res.json()
         setFavoriteNurse(data.nurse || { id: nurseId })
-        toast({ title: 'تم تعيين الممرض/ة كمفضل/ة' })
+        toast({ title: 'تم تعيين الممرض/ة كممرض عائلة' })
       } else {
         const data = await res.json()
         toast({ title: 'خطأ', description: data.error, variant: 'destructive' })
@@ -941,20 +972,135 @@ export default function BeneficiaryDashboard() {
     } catch {}
   }
 
+  // ===== PAYMENT PROCESSING HANDLER =====
+  const handleProcessPayment = async () => {
+    if (!lastCreatedRequestId) return
+    setPaymentSubmitting(true)
+    try {
+      const amount = dynamicPricing?.totalPrice || selectedService?.price || 0
+      const res = await fetch('/api/payments/process', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          requestId: lastCreatedRequestId,
+          amount,
+          method: paymentForm.method,
+          beneficiaryId: beneficiaryUser?.id,
+        }),
+      })
+      if (res.ok) {
+        toast({ title: 'تم الدفع بنجاح', description: 'تمت معالجة الدفع بنجاح' })
+        setPaymentDialog(false)
+        setPaymentForm({ method: 'cash', cardNumber: '', cardExpiry: '', cardCvv: '', walletId: '' })
+        setLastCreatedRequestId('')
+        fetchData()
+      } else {
+        const data = await res.json()
+        toast({ title: 'خطأ في الدفع', description: data.error || 'فشلت عملية الدفع', variant: 'destructive' })
+      }
+    } catch {
+      toast({ title: 'خطأ', description: 'حدث خطأ أثناء معالجة الدفع', variant: 'destructive' })
+    } finally {
+      setPaymentSubmitting(false)
+    }
+  }
+
+  // ===== HANDLE PAY FOR EXISTING REQUEST =====
+  const handlePayForRequest = (req: any) => {
+    setLastCreatedRequestId(req.id)
+    setSelectedService(req.service || { id: req.serviceId, name: req.service?.name || 'خدمة', price: req.price || req.service?.price || 0 })
+    setPaymentForm({ method: 'cash', cardNumber: '', cardExpiry: '', cardCvv: '', walletId: '' })
+    setPaymentDialog(true)
+  }
+
+  // ===== FETCH NURSE PORTFOLIO =====
+  const handleViewNursePortfolio = async (nurseId: string) => {
+    setNursePortfolioLoading(true)
+    setNursePortfolioDialog(true)
+    try {
+      const res = await fetch(`/api/nurse/portfolio?nurseId=${nurseId}`)
+      if (res.ok) {
+        const data = await res.json()
+        setNursePortfolio(data)
+      } else {
+        setNursePortfolio(null)
+      }
+    } catch {
+      setNursePortfolio(null)
+    } finally {
+      setNursePortfolioLoading(false)
+    }
+  }
+
+  // ===== FETCH API NOTIFICATIONS =====
+  const fetchApiNotifications = useCallback(async () => {
+    if (!beneficiaryUser?.id) return
+    setNotificationsRefreshing(true)
+    try {
+      const res = await fetch(`/api/notifications/list?userId=${beneficiaryUser.id}&userType=beneficiary`)
+      if (res.ok) {
+        const data = await res.json()
+        const apiNotifs: Notification[] = (data.notifications || data || []).map((n: any) => ({
+          id: n.id || `api-${Math.random().toString(36).substr(2, 9)}`,
+          title: n.title || 'إشعار',
+          message: n.message || n.body || '',
+          type: n.type || 'general',
+          read: n.read || false,
+          createdAt: n.createdAt || new Date().toISOString(),
+          requestId: n.requestId || undefined,
+        }))
+        setApiNotifications(apiNotifs)
+      }
+    } catch {}
+    finally {
+      setNotificationsRefreshing(false)
+    }
+  }, [beneficiaryUser?.id])
+
+  // Fetch API notifications when notifications tab is active
+  useEffect(() => {
+    if (activeTab === 'notifications') {
+      fetchApiNotifications()
+    }
+  }, [activeTab, fetchApiNotifications])
+
+  // Fetch payment transactions when payments tab is active
+  useEffect(() => {
+    if (activeTab === 'payments') {
+      fetch('/api/payments/process')
+        .then(res => res.ok ? res.json() : [])
+        .then(data => {
+          const txns = Array.isArray(data) ? data : (data.transactions || [])
+          setPaymentTransactions(txns)
+        })
+        .catch(() => {})
+    }
+  }, [activeTab])
+
   // ===== SEARCH HANDLER =====
   const handleSearch = useCallback(async (query: string) => {
     setSearchQuery(query)
     if (query.length >= 2) {
       try {
-        const res = await fetch(`/api/search?q=${encodeURIComponent(query)}&type=services`)
-        if (res.ok) {
-          const data = await res.json()
+        const [svcRes, nurseRes] = await Promise.all([
+          fetch(`/api/search?q=${encodeURIComponent(query)}&type=services`),
+          fetch(`/api/search?q=${encodeURIComponent(query)}&type=nurses`).catch(() => null)
+        ])
+        if (svcRes.ok) {
+          const data = await svcRes.json()
           setServices(data)
+        }
+        if (nurseRes && nurseRes.ok) {
+          const nurseData = await nurseRes.json()
+          setNurseSearchResults(Array.isArray(nurseData) ? nurseData : (nurseData.nurses || []))
+        } else {
+          setNurseSearchResults([])
         }
       } catch {}
     } else if (query.length === 0) {
       const res = await fetch('/api/beneficiary/services')
       if (res.ok) setServices(await res.json())
+      setNurseSearchResults([])
     }
   }, [])
 
@@ -1406,6 +1552,8 @@ export default function BeneficiaryDashboard() {
                                       setRequestForm({ paymentMethod: '', notes: '', address: beneficiaryUser?.location || '', couponCode: '' })
                                       setValidCoupon(null)
                                       setCouponError('')
+                                      setDynamicPricing(null)
+                                      setRequestFavoriteNurse(false)
                                       setRequestDialog(true)
                                     }}
                                   >
@@ -1418,7 +1566,7 @@ export default function BeneficiaryDashboard() {
                           </motion.div>
                         ))}
                       </motion.div>
-                    ) : (
+                    ) : !searchQuery || nurseSearchResults.length === 0 ? (
                       <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
@@ -1430,6 +1578,66 @@ export default function BeneficiaryDashboard() {
                         <p className="text-muted-foreground text-lg font-medium">لا توجد خدمات متاحة حالياً</p>
                         <p className="text-muted-foreground text-sm mt-1">يرجى التحقق لاحقاً</p>
                       </motion.div>
+                    ) : null}
+
+                    {/* Nurse Search Results */}
+                    {nurseSearchResults.length > 0 && (
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-2">
+                          <User className="w-5 h-5 text-violet-600" />
+                          <h2 className="text-lg font-bold bg-gradient-to-l from-violet-700 to-fuchsia-600 bg-clip-text text-transparent">الممرضون</h2>
+                        </div>
+                        <motion.div
+                          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
+                          variants={containerVariants}
+                          initial="hidden"
+                          animate="visible"
+                        >
+                          {nurseSearchResults.map((nurse: any) => (
+                            <motion.div key={nurse.id} variants={itemVariants} whileHover={{ y: -6 }} transition={{ duration: 0.2 }}>
+                              <Card className="border-0 bg-white/80 backdrop-blur-sm shadow-lg hover:shadow-xl transition-all duration-300 h-full flex flex-col overflow-hidden relative group">
+                                <div className="absolute inset-0 bg-gradient-to-br from-fuchsia-400 to-violet-500 opacity-0 group-hover:opacity-5 transition-opacity duration-300" />
+                                <CardContent className="p-5 flex flex-col flex-1 relative z-10">
+                                  <div className="flex items-center gap-3 mb-3">
+                                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-fuchsia-500 to-violet-500 flex items-center justify-center shadow-md">
+                                      <span className="text-white font-bold text-sm">{nurse.firstName?.charAt(0) || nurse.name?.charAt(0) || '?'}</span>
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <h3 className="font-semibold text-sm truncate">{nurse.firstName} {nurse.lastName || ''}</h3>
+                                      {nurse.specializations && (
+                                        <p className="text-xs text-muted-foreground truncate">{Array.isArray(nurse.specializations) ? nurse.specializations.join('، ') : nurse.specializations}</p>
+                                      )}
+                                    </div>
+                                  </div>
+                                  {nurse.rating && (
+                                    <div className="flex items-center gap-1 mb-2">
+                                      <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                                      <span className="text-xs text-amber-600 font-medium">{nurse.rating}</span>
+                                    </div>
+                                  )}
+                                  {nurse.location && (
+                                    <div className="flex items-center gap-1 mb-3">
+                                      <MapPin className="w-3.5 h-3.5 text-muted-foreground" />
+                                      <span className="text-xs text-muted-foreground truncate">{nurse.location}</span>
+                                    </div>
+                                  )}
+                                  <div className="mt-auto pt-3 border-t border-gray-100">
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="w-full rounded-xl text-xs border-violet-200 hover:bg-violet-50 text-violet-600"
+                                      onClick={() => handleViewNursePortfolio(nurse.id)}
+                                    >
+                                      <Eye className="w-3.5 h-3.5 ml-1" />
+                                      عرض الملف
+                                    </Button>
+                                  </div>
+                                </CardContent>
+                              </Card>
+                            </motion.div>
+                          ))}
+                        </motion.div>
+                      </div>
                     )}
                   </div>
                 )}
@@ -1590,7 +1798,18 @@ export default function BeneficiaryDashboard() {
                                         onClick={() => handleSetFavoriteNurse(nurseId)}
                                       >
                                         <Heart className="w-3.5 h-3.5 ml-1" />
-                                        تعيين كممرض مفضل
+                                        تعيين كممرض عائلة
+                                      </Button>
+                                    )}
+
+                                    {isCompleted && !req.paymentStatus && (
+                                      <Button
+                                        size="sm"
+                                        className="bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl text-xs hover:shadow-md"
+                                        onClick={() => handlePayForRequest(req)}
+                                      >
+                                        <CreditCard className="w-3.5 h-3.5 ml-1" />
+                                        دفع
                                       </Button>
                                     )}
 
@@ -1701,15 +1920,16 @@ export default function BeneficiaryDashboard() {
                       if (paymentFilter === 'pending') return r.paymentStatus === 'pending'
                       if (paymentFilter === 'refunded') return r.paymentStatus === 'refunded'
                       return true
-                    })).length > 0 ? (
+                    })).length > 0 || paymentTransactions.length > 0 ? (
                       <motion.div className="space-y-3" variants={containerVariants} initial="hidden" animate="visible">
+                        {/* Existing payment history */}
                         {(paymentFilter === 'all' ? paymentHistory : paymentHistory.filter(r => {
                           if (paymentFilter === 'paid') return true
                           if (paymentFilter === 'pending') return r.paymentStatus === 'pending'
                           if (paymentFilter === 'refunded') return r.paymentStatus === 'refunded'
                           return true
                         })).map((req, i) => (
-                          <motion.div key={req.id} variants={itemVariants}>
+                          <motion.div key={`req-${req.id}`} variants={itemVariants}>
                             <Card className="border-0 bg-white/80 backdrop-blur-sm shadow-lg">
                               <CardContent className="p-5">
                                 <div className="flex items-start justify-between gap-3">
@@ -1730,7 +1950,7 @@ export default function BeneficiaryDashboard() {
                                   </div>
                                   <div className="text-left">
                                     <span className="text-lg font-bold text-emerald-600">
-                                      {formatPrice(req.price || req.service?.price || 0)}
+                                      {formatPrice(req.dynamicPrice || req.price || req.service?.price || 0)}
                                     </span>
                                     <Badge className={`block mt-1 text-[10px] border-0 ${
                                       req.paymentStatus === 'pending' ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white' :
@@ -1746,6 +1966,42 @@ export default function BeneficiaryDashboard() {
                             </Card>
                           </motion.div>
                         ))}
+                        {/* API Payment Transactions */}
+                        {paymentTransactions.length > 0 && (
+                          <>
+                            <div className="flex items-center gap-2 mt-4 mb-2">
+                              <DollarSign className="w-4 h-4 text-violet-600" />
+                              <span className="text-sm font-semibold text-violet-700">معاملات الدفع الإلكتروني</span>
+                            </div>
+                            {paymentTransactions.map((txn: any, i: number) => (
+                              <motion.div key={`txn-${txn.id || i}`} variants={itemVariants}>
+                                <Card className="border-0 bg-white/80 backdrop-blur-sm shadow-lg">
+                                  <CardContent className="p-5">
+                                    <div className="flex items-start justify-between gap-3">
+                                      <div className="flex-1 min-w-0">
+                                        <h3 className="font-semibold text-base">{txn.serviceName || 'خدمة'}</h3>
+                                        <p className="text-xs text-muted-foreground mt-1">{formatDate(txn.createdAt)}</p>
+                                        <p className="text-xs text-muted-foreground mt-0.5">
+                                          طريقة الدفع: {txn.method === 'cash' ? 'نقدي' : txn.method === 'card' ? 'بطاقة' : txn.method === 'wallet' ? 'محفظة إلكترونية' : txn.method === 'transfer' ? 'تحويل بنكي' : txn.method}
+                                        </p>
+                                      </div>
+                                      <div className="text-left">
+                                        <span className="text-lg font-bold text-emerald-600">{formatPrice(txn.amount || 0)}</span>
+                                        <Badge className={`block mt-1 text-[10px] border-0 ${
+                                          txn.status === 'failed' ? 'bg-gradient-to-r from-red-500 to-rose-500 text-white' :
+                                          txn.status === 'pending' ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white' :
+                                          'bg-gradient-to-r from-emerald-500 to-teal-500 text-white'
+                                        }`}>
+                                          {txn.status === 'failed' ? 'فشل' : txn.status === 'pending' ? 'قيد الانتظار' : 'مكتمل'}
+                                        </Badge>
+                                      </div>
+                                    </div>
+                                  </CardContent>
+                                </Card>
+                              </motion.div>
+                            ))}
+                          </>
+                        )}
                       </motion.div>
                     ) : (
                       <motion.div
@@ -1898,27 +2154,51 @@ export default function BeneficiaryDashboard() {
                           </div>
                         )}
 
-                        {/* Favorite Nurse Section */}
+                        {/* Favorite Nurse Section - ممرض/ة العائلة */}
                         {favoriteNurse && (
                           <div className="space-y-2">
                             <Label className="text-sm font-medium text-fuchsia-700">
                               <Heart className="w-3.5 h-3.5 inline ml-1" />
-                              الممرض/ة المفضلة
+                              ممرض/ة العائلة
                             </Label>
                             <div className="p-4 rounded-xl bg-gradient-to-l from-fuchsia-50/80 to-violet-50/80 border border-fuchsia-100">
                               <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-fuchsia-500 to-violet-500 flex items-center justify-center shadow-md">
-                                  <span className="text-white font-bold text-sm">{favoriteNurse.firstName?.charAt(0) || '?'}</span>
+                                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-fuchsia-500 to-violet-500 flex items-center justify-center shadow-md">
+                                  <span className="text-white font-bold text-lg">{favoriteNurse.firstName?.charAt(0) || '?'}</span>
                                 </div>
                                 <div className="flex-1 min-w-0">
                                   <p className="font-semibold text-sm">{favoriteNurse.firstName} {favoriteNurse.lastName}</p>
                                   {favoriteNurse.phone && (
-                                    <p className="text-xs text-muted-foreground" dir="ltr">{favoriteNurse.phone}</p>
+                                    <p className="text-xs text-muted-foreground flex items-center gap-1" dir="ltr">
+                                      <Phone className="w-3 h-3" />
+                                      {favoriteNurse.phone}
+                                    </p>
+                                  )}
+                                  {favoriteNurse.rating && (
+                                    <div className="flex items-center gap-1 mt-0.5">
+                                      <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                                      <span className="text-xs text-amber-600">{favoriteNurse.rating}</span>
+                                    </div>
                                   )}
                                 </div>
                                 <Badge className="bg-gradient-to-r from-fuchsia-500 to-violet-500 text-white border-0 text-[10px]">
-                                  <Heart className="w-3 h-3 ml-0.5" /> مفضل
+                                  <Heart className="w-3 h-3 ml-0.5" /> عائلة
                                 </Badge>
+                              </div>
+                              <div className="flex gap-2 mt-3">
+                                <Button
+                                  size="sm"
+                                  className="bg-gradient-to-r from-fuchsia-500 to-violet-500 text-white rounded-xl text-xs flex-1"
+                                  onClick={() => {
+                                    setSelectedService(null)
+                                    setRequestForm({ paymentMethod: '', notes: '', address: beneficiaryUser?.location || '', couponCode: '' })
+                                    setRequestFavoriteNurse(true)
+                                    setRequestDialog(true)
+                                  }}
+                                >
+                                  <Plus className="w-3.5 h-3.5 ml-1" />
+                                  طلب خدمة مع ممرض/ة العائلة
+                                </Button>
                               </div>
                             </div>
                           </div>
@@ -1951,11 +2231,17 @@ export default function BeneficiaryDashboard() {
                           {unreadNotifications > 0 ? `لديك ${unreadNotifications} إشعار جديد` : 'لا توجد إشعارات جديدة'}
                         </p>
                       </div>
-                      {unreadNotifications > 0 && (
-                        <Button variant="outline" size="sm" onClick={markAllNotificationsRead} className="rounded-xl text-xs">
-                          تعيين الكل كمقروء
+                      <div className="flex gap-2">
+                        <Button variant="outline" size="sm" onClick={fetchApiNotifications} disabled={notificationsRefreshing} className="rounded-xl text-xs gap-1.5">
+                          {notificationsRefreshing ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                          تحديث
                         </Button>
-                      )}
+                        {unreadNotifications > 0 && (
+                          <Button variant="outline" size="sm" onClick={markAllNotificationsRead} className="rounded-xl text-xs">
+                            تعيين الكل كمقروء
+                          </Button>
+                        )}
+                      </div>
                     </div>
 
                     {notifications.length > 0 ? (
@@ -2674,6 +2960,249 @@ export default function BeneficiaryDashboard() {
         />
       )}
 
+      {/* ===== PAYMENT DIALOG ===== */}
+      <Dialog open={paymentDialog} onOpenChange={setPaymentDialog}>
+        <DialogContent className="sm:max-w-md border-0 shadow-2xl p-0 max-h-[90vh] overflow-y-auto" dir="rtl">
+          {/* Gradient Header */}
+          <div className="bg-gradient-to-l from-emerald-600 via-teal-600 to-emerald-700 p-5 text-white relative overflow-hidden">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.1)_0%,transparent_70%)]" />
+            <div className="relative flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
+                <CreditCard className="w-5 h-5" />
+              </div>
+              <div>
+                <DialogTitle className="text-lg font-bold">ادفع الآن</DialogTitle>
+                <p className="text-emerald-100 text-xs mt-0.5">أكمل عملية الدفع لطلبك</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="p-6 space-y-4">
+            {/* Service Info */}
+            <div className="p-4 rounded-xl bg-gradient-to-l from-emerald-50/50 to-teal-50/50 border border-emerald-100">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-semibold text-sm">{selectedService?.name || 'خدمة'}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">رقم الطلب: {lastCreatedRequestId.slice(0, 8)}...</p>
+                </div>
+                <span className="text-lg font-bold text-emerald-600">{formatPrice(dynamicPricing?.totalPrice || selectedService?.price || 0)}</span>
+              </div>
+            </div>
+
+            {/* Payment Method Selection */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">
+                <CreditCard className="w-3.5 h-3.5 inline ml-1" />
+                طريقة الدفع
+              </Label>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { key: 'cash', label: 'نقدي', icon: DollarSign },
+                  { key: 'card', label: 'بطاقة', icon: CreditCard },
+                  { key: 'wallet', label: 'محفظة إلكترونية', icon: Wallet },
+                  { key: 'transfer', label: 'تحويل بنكي', icon: Send },
+                ].map(m => (
+                  <button
+                    key={m.key}
+                    onClick={() => setPaymentForm(prev => ({ ...prev, method: m.key }))}
+                    className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-medium transition-all duration-200 ${
+                      paymentForm.method === m.key
+                        ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-md'
+                        : 'bg-gray-50 text-gray-600 border border-gray-200 hover:border-emerald-300'
+                    }`}
+                  >
+                    <m.icon className="w-4 h-4" />
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Card Inputs */}
+            {paymentForm.method === 'card' && (
+              <div className="space-y-3 p-3 rounded-xl bg-gray-50 border border-gray-100">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">رقم البطاقة</Label>
+                  <Input
+                    value={paymentForm.cardNumber}
+                    onChange={(e) => setPaymentForm(prev => ({ ...prev, cardNumber: e.target.value }))}
+                    placeholder="0000 0000 0000 0000"
+                    className="rounded-xl text-sm"
+                    dir="ltr"
+                    maxLength={19}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">تاريخ الانتهاء</Label>
+                    <Input
+                      value={paymentForm.cardExpiry}
+                      onChange={(e) => setPaymentForm(prev => ({ ...prev, cardExpiry: e.target.value }))}
+                      placeholder="MM/YY"
+                      className="rounded-xl text-sm"
+                      dir="ltr"
+                      maxLength={5}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">CVV</Label>
+                    <Input
+                      value={paymentForm.cardCvv}
+                      onChange={(e) => setPaymentForm(prev => ({ ...prev, cardCvv: e.target.value }))}
+                      placeholder="123"
+                      className="rounded-xl text-sm"
+                      dir="ltr"
+                      maxLength={4}
+                      type="password"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Wallet Input */}
+            {paymentForm.method === 'wallet' && (
+              <div className="space-y-3 p-3 rounded-xl bg-gray-50 border border-gray-100">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">معرف المحفظة</Label>
+                  <Input
+                    value={paymentForm.walletId}
+                    onChange={(e) => setPaymentForm(prev => ({ ...prev, walletId: e.target.value }))}
+                    placeholder="أدخل معرف المحفظة الإلكترونية"
+                    className="rounded-xl text-sm"
+                    dir="ltr"
+                  />
+                </div>
+              </div>
+            )}
+
+            <Button
+              onClick={handleProcessPayment}
+              disabled={paymentSubmitting}
+              className="w-full bg-gradient-to-r from-emerald-500 to-teal-500 text-white hover:shadow-lg rounded-xl"
+            >
+              {paymentSubmitting ? (
+                <Loader2 className="w-5 h-5 animate-spin ml-2" />
+              ) : (
+                <CreditCard className="w-5 h-5 ml-2" />
+              )}
+              تأكيد الدفع
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ===== NURSE PORTFOLIO DIALOG ===== */}
+      <Dialog open={nursePortfolioDialog} onOpenChange={setNursePortfolioDialog}>
+        <DialogContent className="sm:max-w-md border-0 shadow-2xl p-0 max-h-[90vh] overflow-y-auto" dir="rtl">
+          {/* Gradient Header */}
+          <div className="bg-gradient-to-l from-violet-600 via-purple-600 to-fuchsia-600 p-5 text-white relative overflow-hidden">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.1)_0%,transparent_70%)]" />
+            <div className="relative flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
+                <User className="w-5 h-5" />
+              </div>
+              <div>
+                <DialogTitle className="text-lg font-bold">ملف الممرض/ة</DialogTitle>
+                <p className="text-violet-100 text-xs mt-0.5">عرض التفاصيل والخبرات</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="p-6">
+            {nursePortfolioLoading ? (
+              <div className="flex flex-col items-center justify-center py-10">
+                <Loader2 className="w-8 h-8 animate-spin text-violet-600 mb-3" />
+                <p className="text-sm text-muted-foreground">جارٍ تحميل الملف...</p>
+              </div>
+            ) : nursePortfolio ? (
+              <div className="space-y-4">
+                {/* Nurse Info */}
+                <div className="flex items-center gap-4">
+                  <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-fuchsia-500 to-violet-500 flex items-center justify-center shadow-lg">
+                    <span className="text-white font-bold text-xl">{nursePortfolio.firstName?.charAt(0) || '?'}</span>
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-lg">{nursePortfolio.firstName} {nursePortfolio.lastName}</h3>
+                    {nursePortfolio.phone && (
+                      <p className="text-xs text-muted-foreground flex items-center gap-1" dir="ltr">
+                        <Phone className="w-3 h-3" /> {nursePortfolio.phone}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Rating */}
+                {nursePortfolio.rating && (
+                  <div className="flex items-center gap-2">
+                    <Star className="w-5 h-5 fill-amber-400 text-amber-400" />
+                    <span className="text-sm font-bold text-amber-600">{nursePortfolio.rating}</span>
+                    {nursePortfolio.reviewCount && (
+                      <span className="text-xs text-muted-foreground">({nursePortfolio.reviewCount} تقييم)</span>
+                    )}
+                  </div>
+                )}
+
+                {/* Specializations */}
+                {nursePortfolio.specializations && (
+                  <div className="space-y-1.5">
+                    <Label className="text-sm font-medium text-violet-700">التخصصات</Label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {(Array.isArray(nursePortfolio.specializations) ? nursePortfolio.specializations : [nursePortfolio.specializations]).map((spec: string, i: number) => (
+                        <Badge key={i} className="bg-violet-100 text-violet-700 border-0 text-xs">{spec}</Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Experience */}
+                {nursePortfolio.experience && (
+                  <div className="space-y-1.5">
+                    <Label className="text-sm font-medium text-violet-700">الخبرة</Label>
+                    <p className="text-sm text-muted-foreground">{nursePortfolio.experience}</p>
+                  </div>
+                )}
+
+                {/* Bio */}
+                {nursePortfolio.bio && (
+                  <div className="space-y-1.5">
+                    <Label className="text-sm font-medium text-violet-700">نبذة</Label>
+                    <p className="text-sm text-muted-foreground leading-relaxed">{nursePortfolio.bio}</p>
+                  </div>
+                )}
+
+                {/* Location */}
+                {nursePortfolio.location && (
+                  <div className="flex items-center gap-2">
+                    <MapPin className="w-4 h-4 text-violet-500" />
+                    <span className="text-sm text-muted-foreground">{nursePortfolio.location}</span>
+                  </div>
+                )}
+
+                {/* Quick Actions */}
+                <div className="flex gap-2 pt-2">
+                  <Button
+                    className="flex-1 bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white rounded-xl"
+                    onClick={() => {
+                      setNursePortfolioDialog(false)
+                      handleSetFavoriteNurse(nursePortfolio.id)
+                    }}
+                  >
+                    <Heart className="w-4 h-4 ml-1" />
+                    تعيين كممرض عائلة
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-10">
+                <User className="w-12 h-12 text-violet-300 mx-auto mb-3" />
+                <p className="text-muted-foreground">لم يتم العثور على بيانات الممرض/ة</p>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* ===== EMERGENCY DIALOG ===== */}
       <Dialog open={emergencyDialog} onOpenChange={setEmergencyDialog}>
         <DialogContent className="sm:max-w-md border-0 shadow-2xl p-0 max-h-[90vh] overflow-y-auto" dir="rtl">
@@ -2851,7 +3380,7 @@ export default function BeneficiaryDashboard() {
               {selectedService && (
                 <div className="mt-2 flex items-center justify-between">
                   <p className="text-violet-100 text-sm">{selectedService.name}</p>
-                  <span className="text-white font-bold">{formatPrice(selectedService.price)}</span>
+                  <span className="text-white font-bold">{formatPrice(dynamicPricing?.totalPrice || selectedService.price)}</span>
                 </div>
               )}
             </div>
@@ -2872,6 +3401,10 @@ export default function BeneficiaryDashboard() {
                       setRequestForm(prev => ({ ...prev, address: e.target.value }))
                       if (e.target.value.length >= 3) {
                         searchLocation(e.target.value).then(results => setRequestLocationSearchResults(results))
+                        // Fetch dynamic pricing when service and address are available
+                        if (selectedService?.id) {
+                          fetchDynamicPricing(selectedService.id, e.target.value)
+                        }
                       } else {
                         setRequestLocationSearchResults([])
                       }
@@ -2946,6 +3479,7 @@ export default function BeneficiaryDashboard() {
                 <SelectContent>
                   <SelectItem value="cash">نقدي عند الاستلام</SelectItem>
                   <SelectItem value="card">بطاقة</SelectItem>
+                  <SelectItem value="wallet">محفظة إلكترونية</SelectItem>
                   <SelectItem value="transfer">تحويل بنكي</SelectItem>
                 </SelectContent>
               </Select>
@@ -3017,7 +3551,7 @@ export default function BeneficiaryDashboard() {
                 >
                   <Heart className={`w-5 h-5 ${requestFavoriteNurse ? 'fill-fuchsia-500 text-fuchsia-500' : 'text-gray-400'}`} />
                   <div className="text-right flex-1">
-                    <p className="text-sm font-medium">طلب الممرض/ة المفضلة</p>
+                    <p className="text-sm font-medium">طلب ممرض/ة العائلة</p>
                     <p className="text-xs text-muted-foreground">{favoriteNurse.firstName} {favoriteNurse.lastName}</p>
                   </div>
                   <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
@@ -3026,6 +3560,12 @@ export default function BeneficiaryDashboard() {
                     {requestFavoriteNurse && <Check className="w-3 h-3 text-white" />}
                   </div>
                 </button>
+                {requestFavoriteNurse && (
+                  <p className="text-xs text-fuchsia-600 flex items-center gap-1 mr-8">
+                    <Navigation className="w-3 h-3" />
+                    سيتم توجيه طلبك لممرض/ة العائلة الخاص بك أولاً
+                  </p>
+                )}
               </div>
             )}
 
@@ -3033,6 +3573,31 @@ export default function BeneficiaryDashboard() {
 
             {/* Price Summary */}
             <div className="p-4 rounded-xl bg-gradient-to-l from-violet-50/50 to-fuchsia-50/50 border border-violet-100/50">
+              {/* Dynamic Pricing Breakdown */}
+              {dynamicPricing && (
+                <div className="mb-3 pb-3 border-b border-violet-200/50">
+                  <div className="flex items-center gap-2 mb-2">
+                    <DollarSign className="w-4 h-4 text-violet-600" />
+                    <span className="text-xs font-semibold text-violet-700">التسعير الديناميكي</span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs mb-1">
+                    <span className="text-muted-foreground">السعر الأساسي</span>
+                    <span>{formatPrice(dynamicPricing.basePrice || 0)}</span>
+                  </div>
+                  {dynamicPricing.distanceFee > 0 && (
+                    <div className="flex items-center justify-between text-xs mb-1">
+                      <span className="text-amber-600">رسوم المسافة</span>
+                      <span className="text-amber-600">+{formatPrice(dynamicPricing.distanceFee)}</span>
+                    </div>
+                  )}
+                  {dynamicPricing.timeFee > 0 && (
+                    <div className="flex items-center justify-between text-xs mb-1">
+                      <span className="text-blue-600">رسوم الوقت</span>
+                      <span className="text-blue-600">+{formatPrice(dynamicPricing.timeFee)}</span>
+                    </div>
+                  )}
+                </div>
+              )}
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-foreground">السعر الأصلي</span>
                 <span>{formatPrice(selectedService?.price || 0)}</span>
@@ -3045,8 +3610,8 @@ export default function BeneficiaryDashboard() {
               )}
               <Separator className="my-2" />
               <div className="flex items-center justify-between font-bold">
-                <span>المجموع</span>
-                <span className="text-violet-700 text-lg">{formatPrice(getDiscountedPrice())}</span>
+                <span>السعر الإجمالي</span>
+                <span className="text-violet-700 text-lg">{formatPrice(dynamicPricing?.totalPrice || getDiscountedPrice())}</span>
               </div>
             </div>
 
