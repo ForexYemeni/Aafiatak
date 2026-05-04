@@ -259,8 +259,25 @@ export default function BeneficiaryDashboard() {
         const res = await fetch('/api/beneficiary/services')
         if (res.ok) setServices(await res.json())
       } else if (activeTab === 'requests') {
-        const res = await fetch(`/api/beneficiary/requests?beneficiaryId=${beneficiaryUser?.id}`)
-        if (res.ok) setRequests(await res.json())
+        const [reqRes, emRes] = await Promise.all([
+          fetch(`/api/beneficiary/requests?beneficiaryId=${beneficiaryUser?.id}`),
+          fetch(`/api/beneficiary/emergency?beneficiaryId=${beneficiaryUser?.id}`)
+        ])
+        const normalRequests = reqRes.ok ? await reqRes.json() : []
+        const emergencyRequests = emRes.ok ? await emRes.json() : []
+        // Merge and sort by createdAt, marking emergency requests
+        const allRequests = [
+          ...normalRequests,
+          ...emergencyRequests.map((e: any) => ({ ...e, isEmergency: true }))
+        ].sort((a: any, b: any) => {
+          const getTime = (t: any) => {
+            if (!t) return 0
+            if (typeof t === 'object' && 'seconds' in t) return t.seconds * 1000
+            return new Date(t).getTime() || 0
+          }
+          return getTime(b.createdAt) - getTime(a.createdAt)
+        })
+        setRequests(allRequests)
       } else if (activeTab === 'payments') {
         const res = await fetch('/api/beneficiary/payments')
         if (res.ok) setPayments(await res.json())
@@ -1079,17 +1096,24 @@ export default function BeneficiaryDashboard() {
 
                           return (
                             <motion.div key={req.id} variants={itemVariants}>
-                              <Card className={`border-0 bg-white/80 backdrop-blur-sm shadow-lg hover:shadow-xl transition-all duration-300 ${statusBorderColor[req.status] || ''}`}>
+                              <Card className={`border-0 bg-white/80 backdrop-blur-sm shadow-lg hover:shadow-xl transition-all duration-300 ${req.isEmergency ? 'ring-2 ring-red-400' : ''} ${statusBorderColor[req.status] || ''}`}>
                                 <CardContent className="p-5">
                                   <div className="flex items-start justify-between gap-3 mb-3">
                                     <div className="flex-1 min-w-0">
-                                      <h3 className="font-semibold text-base truncate">{req.service?.name || 'خدمة'}</h3>
+                                      <div className="flex items-center gap-2">
+                                        <h3 className="font-semibold text-base truncate">{req.service?.name || req.serviceType || 'خدمة'}</h3>
+                                        {req.isEmergency && (
+                                          <Badge className="bg-gradient-to-r from-red-500 to-orange-500 text-white border-0 text-[10px] px-1.5 py-0 shrink-0">
+                                            <AlertTriangle className="w-3 h-3 ml-0.5" />طوارئ
+                                          </Badge>
+                                        )}
+                                      </div>
                                       <p className="text-xs text-muted-foreground mt-1">
                                         {formatDateTime(req.createdAt)}
                                       </p>
                                     </div>
-                                    <Badge className={`text-xs shrink-0 ${statusGradientBadge[req.status] || 'bg-gray-200 text-gray-700'} border-0`}>
-                                      {getStatusLabel(req.status)}
+                                    <Badge className={`text-xs shrink-0 ${req.isEmergency ? (req.status === 'pending' ? 'bg-gradient-to-r from-red-500 to-orange-500 text-white border-0' : statusGradientBadge[req.status] || 'bg-gray-200 text-gray-700') : statusGradientBadge[req.status] || 'bg-gray-200 text-gray-700'} border-0`}>
+                                      {req.isEmergency ? (req.status === 'pending' ? 'بانتظار الطوارئ' : req.status === 'in_progress' ? 'قيد المعالجة' : req.status === 'completed' ? 'تم المعالجة' : getStatusLabel(req.status)) : getStatusLabel(req.status)}
                                     </Badge>
                                   </div>
 

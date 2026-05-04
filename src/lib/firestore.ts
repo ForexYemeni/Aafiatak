@@ -897,10 +897,20 @@ export async function createEmergencyRequest(data: {
     ...data,
     beneficiaryName,
     status: 'pending',
+    isEmergency: true,
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   })
-  return { id: docRef.id, ...data, beneficiaryName, status: 'pending' }
+  return { id: docRef.id, ...data, beneficiaryName, status: 'pending', isEmergency: true }
+}
+
+export async function getEmergencyRequestsByBeneficiary(beneficiaryId: string) {
+  checkFirebase()
+  const snapshot = await firestore.collection('emergencyRequests')
+    .where('beneficiaryId', '==', beneficiaryId)
+    .orderBy('createdAt', 'desc')
+    .get()
+  return snapshot.docs.map(docToObject)
 }
 
 // ==================== REFERRAL SYSTEM ====================

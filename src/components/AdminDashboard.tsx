@@ -9,7 +9,7 @@ import {
   FileText, Activity, Search, Filter, BarChart3,
   TrendingUp, Tag, Sparkles, Star, Phone, Mail, Gift,
   Ban, Unlock, Eye, AlertTriangle, UsersRound, Settings,
-  ChevronDown, AlertCircle, MessageSquare
+  ChevronDown, AlertCircle, MessageSquare, Clock
 } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RTooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts'
 import { useAppStore, formatPrice, getStatusLabel, getStatusColor } from '@/lib/store'
@@ -49,7 +49,7 @@ function formatDateTime(ts: any): string {
 }
 
 // ─── Types ─────────────────────────────────────────────────────
-type Tab = 'dashboard' | 'services' | 'nurses' | 'beneficiaries' | 'requests' | 'payments' | 'coupons' | 'ratings' | 'reports' | 'activity' | 'settings'
+type Tab = 'dashboard' | 'services' | 'nurses' | 'beneficiaries' | 'requests' | 'emergency' | 'payments' | 'coupons' | 'ratings' | 'reports' | 'activity' | 'settings'
 
 interface DashboardStats {
   totalNurses: number
@@ -194,6 +194,9 @@ export default function AdminDashboard() {
       } else if (activeTab === 'requests') {
         const res = await fetch('/api/admin/requests')
         if (res.ok) setRequests(await res.json())
+      } else if (activeTab === 'emergency') {
+        const res = await fetch('/api/admin/emergency')
+        if (res.ok) { const data = await res.json(); setEmergencyRequests(Array.isArray(data) ? data : []) }
       } else if (activeTab === 'payments') {
         const res = await fetch('/api/admin/payments')
         if (res.ok) setPayments(await res.json())
@@ -512,6 +515,7 @@ export default function AdminDashboard() {
     { key: 'nurses', label: 'الممرضين', icon: Users },
     { key: 'beneficiaries', label: 'المستفيدين', icon: Heart },
     { key: 'requests', label: 'الطلبات', icon: ClipboardList },
+    { key: 'emergency', label: 'الطوارئ', icon: AlertTriangle, badge: emergencyRequests.filter((e: any) => e.status === 'pending').length || undefined },
     { key: 'payments', label: 'المدفوعات', icon: CreditCard },
     { key: 'coupons', label: 'الكوبونات', icon: Tag },
     { key: 'ratings', label: 'التقييمات', icon: Star },
@@ -908,6 +912,105 @@ export default function AdminDashboard() {
                       ))}
                     </div>
                     {filteredRequests.length === 0 && <div className="text-center py-16"><ClipboardList className="w-12 h-12 text-gray-300 mx-auto mb-3" /><p className="text-gray-400">لا توجد طلبات</p></div>}
+                  </div>
+                )}
+
+                {/* ═══════════════════════════════════════════════════
+                    TAB 5.5: الطوارئ (Emergency)
+                ═══════════════════════════════════════════════════ */}
+                {activeTab === 'emergency' && (
+                  <div className="space-y-6">
+                    <div>
+                      <h1 className="text-2xl font-bold bg-gradient-to-l from-red-600 via-orange-600 to-amber-600 bg-clip-text text-transparent">طلبات الطوارئ</h1>
+                      <p className="text-gray-500 text-sm mt-1">الطلبات العاجلة التي تتطلب اهتمام فوري</p>
+                    </div>
+
+                    {/* Stats */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      {[
+                        { label: 'إجمالي الطلبات', value: emergencyRequests.length, gradient: 'from-red-400 to-orange-500', icon: AlertTriangle },
+                        { label: 'بانتظار المعالجة', value: emergencyRequests.filter((e: any) => e.status === 'pending').length, gradient: 'from-amber-400 to-yellow-500', icon: Clock },
+                        { label: 'قيد التنفيذ', value: emergencyRequests.filter((e: any) => e.status === 'in_progress').length, gradient: 'from-blue-400 to-indigo-500', icon: Activity },
+                        { label: 'تم المعالجة', value: emergencyRequests.filter((e: any) => e.status === 'completed').length, gradient: 'from-emerald-400 to-teal-500', icon: CheckCircle },
+                      ].map((item, i) => (
+                        <motion.div key={i} variants={cardVariants} initial="hidden" animate="visible" transition={{ delay: i * 0.05, duration: 0.4 }}>
+                          <Card className="border-0 shadow-lg hover:-translate-y-1 hover:shadow-xl transition-all duration-300">
+                            <CardContent className="p-4">
+                              <div className="flex items-center gap-3 mb-3">
+                                <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${item.gradient} flex items-center justify-center shadow-md`}><item.icon className="w-5 h-5 text-white" /></div>
+                                <p className="text-xs text-gray-500 leading-tight">{item.label}</p>
+                              </div>
+                              <p className={`text-2xl font-bold bg-gradient-to-l ${item.gradient} bg-clip-text text-transparent`}>{item.value}</p>
+                            </CardContent>
+                          </Card>
+                        </motion.div>
+                      ))}
+                    </div>
+
+                    {/* Emergency Requests List */}
+                    <div className="space-y-3 max-h-[70vh] overflow-y-auto">
+                      {emergencyRequests.length === 0 ? (
+                        <div className="text-center py-16">
+                          <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-green-100 to-emerald-100 flex items-center justify-center mx-auto mb-4">
+                            <CheckCircle className="w-10 h-10 text-emerald-400" />
+                          </div>
+                          <p className="text-lg font-bold text-gray-600 mb-2">لا توجد طلبات طوارئ</p>
+                          <p className="text-sm text-gray-400">جميع الطلبات العاجلة تم معالجتها</p>
+                        </div>
+                      ) : (
+                        emergencyRequests.map((req: any) => (
+                          <motion.div key={req.id} variants={cardVariants} initial="hidden" animate="visible">
+                            <Card className={`border-0 shadow-lg hover:shadow-xl transition-all duration-300 ${req.status === 'pending' ? 'ring-2 ring-red-400 animate-pulse' : req.status === 'in_progress' ? 'ring-2 ring-blue-400' : ''}`}>
+                              <CardContent className="p-4">
+                                <div className="flex items-start gap-3">
+                                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-red-500 to-orange-500 flex items-center justify-center shrink-0 shadow-lg shadow-red-500/25">
+                                    <AlertTriangle className="w-6 h-6 text-white" />
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <p className="font-bold text-lg">{req.serviceType || 'طلب طوارئ'}</p>
+                                      <Badge className={`${req.status === 'pending' ? 'bg-red-100 text-red-700 border-red-300' : req.status === 'in_progress' ? 'bg-blue-100 text-blue-700 border-blue-300' : 'bg-emerald-100 text-emerald-700 border-emerald-300'} border text-xs font-bold`}>
+                                        {req.status === 'pending' ? 'بانتظار المعالجة' : req.status === 'in_progress' ? 'قيد التنفيذ' : req.status === 'completed' ? 'تم المعالجة' : req.status === 'rejected' ? 'مرفوض' : req.status}
+                                      </Badge>
+                                      <Badge className="bg-gradient-to-l from-red-500 to-orange-500 text-white border-0 text-xs"><AlertTriangle className="w-3 h-3 ml-1" />طوارئ</Badge>
+                                    </div>
+                                    <div className="mt-2 space-y-1 text-sm">
+                                      <p className="text-gray-600"><span className="font-medium">المستفيد:</span> {req.beneficiaryName || 'غير معروف'}</p>
+                                      {req.address && <p className="text-gray-600"><span className="font-medium">العنوان:</span> {req.address}</p>}
+                                      {req.notes && <p className="text-gray-500"><span className="font-medium">ملاحظات:</span> {req.notes}</p>}
+                                      <p className="text-gray-400 text-xs">{formatDateTime(req.createdAt)}</p>
+                                    </div>
+                                  </div>
+                                  <div className="flex flex-col gap-2 shrink-0">
+                                    {req.status === 'pending' && (
+                                      <>
+                                        <Button size="sm" className="bg-gradient-to-l from-blue-500 to-indigo-500 text-white shadow-lg shadow-blue-500/25" onClick={async () => {
+                                          await fetch('/api/admin/emergency', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: req.id, status: 'in_progress' }) })
+                                          toast({ title: 'تم بدء المعالجة' })
+                                          fetchData()
+                                        }}><Activity className="w-3.5 h-3.5 ml-1" />بدء المعالجة</Button>
+                                        <Button size="sm" variant="outline" className="text-red-500 hover:bg-red-50" onClick={async () => {
+                                          await fetch('/api/admin/emergency', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: req.id, status: 'rejected' }) })
+                                          toast({ title: 'تم رفض الطلب' })
+                                          fetchData()
+                                        }}><XCircle className="w-3.5 h-3.5 ml-1" />رفض</Button>
+                                      </>
+                                    )}
+                                    {req.status === 'in_progress' && (
+                                      <Button size="sm" className="bg-gradient-to-l from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-500/25" onClick={async () => {
+                                        await fetch('/api/admin/emergency', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: req.id, status: 'completed' }) })
+                                        toast({ title: 'تم إكمال المعالجة' })
+                                        fetchData()
+                                      }}><CheckCircle className="w-3.5 h-3.5 ml-1" />تم المعالجة</Button>
+                                    )}
+                                  </div>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          </motion.div>
+                        ))
+                      )}
+                    </div>
                   </div>
                 )}
 
