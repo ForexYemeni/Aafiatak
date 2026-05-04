@@ -1128,12 +1128,18 @@ export default function NurseDashboard() {
                                 <button onClick={() => { setMapPreviewLocation(assignment.request!.beneficiary!.location); setMapPreviewLabel(getDisplayLocation(assignment.request!.beneficiary!.location)); setMapPreviewDialog(true) }} className="text-blue-600 hover:text-blue-800 hover:underline truncate transition-colors">{getDisplayLocation(assignment.request.beneficiary.location)}</button>
                               </div>
                             )}
-                            {assignment.request?.service?.price !== undefined && (
-                              <div className="flex items-center gap-1.5">
-                                <span className="font-medium text-gray-700">السعر:</span>
-                                <span className="text-emerald-600 font-bold">{formatPrice(assignment.request.service.price)}</span>
-                              </div>
-                            )}
+                            {assignment.request?.service?.price !== undefined && (() => {
+                              const totalPrice = assignment.request?.dynamicPrice || assignment.request?.service?.price || 0
+                              const commissionPercent = 15
+                              const nurseFee = Math.round(totalPrice * (100 - commissionPercent) / 100)
+                              return (
+                                <div className="flex items-center gap-1.5">
+                                  <span className="font-medium text-gray-700">رسومك:</span>
+                                  <span className="text-emerald-600 font-bold">{formatPrice(nurseFee)}</span>
+                                  <span className="text-[10px] text-gray-400">({commissionPercent}% عمولة المنصة)</span>
+                                </div>
+                              )
+                            })()}
                             <div className="flex items-center gap-1.5">
                               <Clock className="w-3.5 h-3.5 text-gray-400 shrink-0" />
                               <span className="font-medium text-gray-700">تاريخ التعيين:</span>
@@ -2409,8 +2415,13 @@ export default function NurseDashboard() {
   // ==================== Earnings Tab ====================
 
   const EarningsTab = () => {
+    const commissionPercent = 15
     const completedAssignments = assignments.filter(a => a.status === 'completed')
-    const totalEarnings = completedAssignments.reduce((sum, a) => sum + (a.request?.service?.price || 0), 0)
+    const totalEarnings = completedAssignments.reduce((sum, a) => {
+      const totalPrice = a.request?.dynamicPrice || a.request?.service?.price || 0
+      const nurseFee = Math.round(totalPrice * (100 - commissionPercent) / 100)
+      return sum + nurseFee
+    }, 0)
     const now = new Date()
     const thisMonthAssignments = completedAssignments.filter(a => {
       if (!a.updatedAt) return false
@@ -2422,7 +2433,11 @@ export default function NurseDashboard() {
       } else return false
       return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear()
     })
-    const thisMonthEarnings = thisMonthAssignments.reduce((sum, a) => sum + (a.request?.service?.price || 0), 0)
+    const thisMonthEarnings = thisMonthAssignments.reduce((sum, a) => {
+      const totalPrice = a.request?.dynamicPrice || a.request?.service?.price || 0
+      const nurseFee = Math.round(totalPrice * (100 - commissionPercent) / 100)
+      return sum + nurseFee
+    }, 0)
 
     const stats = [
       {
@@ -2523,7 +2538,7 @@ export default function NurseDashboard() {
                       </div>
                     </div>
                     <div className="text-left shrink-0">
-                      <p className="text-sm font-bold text-emerald-600">{formatPrice(assignment.request?.service?.price || 0)}</p>
+                      <p className="text-sm font-bold text-emerald-600">{formatPrice(Math.round((assignment.request?.dynamicPrice || assignment.request?.service?.price || 0) * (100 - commissionPercent) / 100))}</p>
                       <p className="text-[10px] text-gray-400">{formatDate(assignment.updatedAt)}</p>
                     </div>
                   </div>

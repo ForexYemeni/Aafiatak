@@ -1364,7 +1364,16 @@ export default function AdminDashboard() {
                                 <div className="flex gap-2 flex-wrap">
                                   {r.status === 'pending' && (<><Button size="sm" className="bg-gradient-to-l from-amber-500 via-orange-500 to-rose-500 text-white" onClick={() => handleRequestAction(r.id, 'approved')}><CheckCircle className="w-3.5 h-3.5 ml-1" />قبول</Button><Button size="sm" variant="outline" className="text-red-500 hover:bg-red-50" onClick={() => handleRequestAction(r.id, 'rejected')}><XCircle className="w-3.5 h-3.5 ml-1" />رفض</Button></>)}
                                   {r.status === 'pending_confirmation' && (<><Button size="sm" className="bg-gradient-to-l from-amber-500 via-orange-500 to-rose-500 text-white" onClick={() => handleRequestAction(r.id, 'approved')}><CheckCircle className="w-3.5 h-3.5 ml-1" />قبول</Button><Button size="sm" variant="outline" className="text-red-500 hover:bg-red-50" onClick={() => handleRequestAction(r.id, 'rejected')}><XCircle className="w-3.5 h-3.5 ml-1" />رفض</Button></>)}
-                                  {r.status === 'pending_payment' && (<><Badge className="bg-orange-100 text-orange-700 border border-orange-300 text-xs">بانتظار الدفع</Badge><Button size="sm" className="bg-emerald-500 hover:bg-emerald-600 text-white" onClick={() => { if (confirm('هل أنت متأكد من تأكيد استلام الدفع لهذا الطلب؟')) handleConfirmRequestPayment(r.id) }}><CheckCircle className="w-3.5 h-3.5 ml-1" />تأكيد الدفع</Button></>)}
+                                  {r.status === 'pending_payment' && (<>
+                                    <div className="flex flex-col gap-2">
+                                      <Badge className="bg-orange-100 text-orange-700 border border-orange-300 text-xs w-fit">بانتظار الدفع</Badge>
+                                      <div className="flex items-center gap-1.5 text-xs">
+                                        <span className="text-gray-500">المبلغ:</span>
+                                        <span className="font-bold text-emerald-600">{formatPrice(r.dynamicPrice || r.service?.price || r.totalPrice || 0)}</span>
+                                      </div>
+                                    </div>
+                                    <Button size="sm" className="bg-gradient-to-l from-emerald-500 to-teal-600 text-white shadow-lg shadow-emerald-500/25" onClick={() => showConfirmDialog('تأكيد الدفع', `هل أنت متأكد من تأكيد استلام الدفع لهذا الطلب بمبلغ ${formatPrice(r.dynamicPrice || r.service?.price || r.totalPrice || 0)}؟ سيتم تحويل حالة الطلب إلى "بانتظار القبول" ويمكن بعدها قبول الطلب وتعيين ممرض.`, CheckCircle, 'text-emerald-500', () => handleConfirmRequestPayment(r.id))}><CheckCircle className="w-3.5 h-3.5 ml-1" />تأكيد الدفع</Button>
+                                  </>)}
                                   {r.status === 'approved' && <Button size="sm" className="bg-blue-500 hover:bg-blue-600 text-white" onClick={() => handleOpenApproveDialog(r)}><UserPlus className="w-3.5 h-3.5 ml-1" />تعيين ممرض</Button>}
                                   {r.status === 'in_progress' && <Button size="sm" className="bg-emerald-500 hover:bg-emerald-600 text-white" onClick={async () => { await fetch(`/api/admin/requests/${r.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'completed' }) }); toast({ title: 'تم إكمال الطلب' }); fetchData() }}><CheckCircle className="w-3.5 h-3.5 ml-1" />إكمال</Button>}
                                 </div>
@@ -1501,30 +1510,48 @@ export default function AdminDashboard() {
                 ═══════════════════════════════════════════════════ */}
                 {activeTab === 'payments' && (
                   <div className="space-y-6">
-                    {/* Header */}
-                    <div><h1 className="text-2xl font-bold bg-gradient-to-l from-amber-600 via-orange-600 to-rose-600 bg-clip-text text-transparent">المالية والمدفوعات</h1><p className="text-gray-500 text-sm mt-1">إدارة طرق الدفع والمعاملات والإعدادات المالية</p></div>
+                    {/* Header with gradient background */}
+                    <div className="relative overflow-hidden rounded-2xl bg-gradient-to-l from-amber-600 via-orange-600 to-rose-600 p-6 text-white shadow-xl shadow-amber-500/20">
+                      <div className="absolute top-0 left-0 w-40 h-40 bg-white/10 rounded-full -translate-x-1/2 -translate-y-1/2" />
+                      <div className="absolute bottom-0 right-0 w-32 h-32 bg-white/5 rounded-full translate-x-1/3 translate-y-1/3" />
+                      <div className="relative flex items-center gap-4">
+                        <div className="w-14 h-14 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center shadow-lg">
+                          <CreditCard className="w-7 h-7 text-white" />
+                        </div>
+                        <div>
+                          <h1 className="text-2xl font-bold">المالية والمدفوعات</h1>
+                          <p className="text-amber-100 text-sm mt-0.5">إدارة طرق الدفع والمعاملات والإعدادات المالية</p>
+                        </div>
+                      </div>
+                    </div>
 
-                    {/* Finance Sub-Tabs */}
-                    <div className="flex gap-2 p-1 bg-gray-100/80 rounded-2xl">
+                    {/* Finance Sub-Tabs - Professional Pill Design */}
+                    <div className="flex gap-1 p-1.5 bg-gradient-to-l from-gray-100 to-gray-50 rounded-2xl shadow-inner border border-gray-200/50">
                       {[
-                        { key: 'methods' as FinanceSubTab, label: 'طرق الدفع', icon: Wallet, count: payments.length },
-                        { key: 'transactions' as FinanceSubTab, label: 'المعاملات', icon: CreditCard, count: transactions.filter((t: any) => t.status === 'pending_confirmation' || t.status === 'pending').length, countColor: 'text-red-500' },
-                        { key: 'settings' as FinanceSubTab, label: 'إعدادات الدفع', icon: Settings },
-                        { key: 'pricing' as FinanceSubTab, label: 'التسعير الديناميكي', icon: TrendingUp },
-                      ].map(({ key, label, icon: Icon, count, countColor }) => (
+                        { key: 'methods' as FinanceSubTab, label: 'طرق الدفع', icon: Wallet, count: payments.length, activeGradient: 'from-blue-500 to-indigo-600', activeShadow: 'shadow-blue-500/25' },
+                        { key: 'transactions' as FinanceSubTab, label: 'المعاملات', icon: CreditCard, count: transactions.filter((t: any) => t.status === 'pending_confirmation' || t.status === 'pending').length, countColor: true, activeGradient: 'from-amber-500 to-orange-600', activeShadow: 'shadow-amber-500/25' },
+                        { key: 'settings' as FinanceSubTab, label: 'إعدادات الدفع', icon: Settings, activeGradient: 'from-emerald-500 to-teal-600', activeShadow: 'shadow-emerald-500/25' },
+                        { key: 'pricing' as FinanceSubTab, label: 'التسعير الديناميكي', icon: TrendingUp, activeGradient: 'from-violet-500 to-purple-600', activeShadow: 'shadow-violet-500/25' },
+                      ].map(({ key, label, icon: Icon, count, countColor, activeGradient, activeShadow }) => (
                         <button
                           key={key}
                           onClick={() => setFinanceSubTab(key)}
-                          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all flex-1 justify-center ${
+                          className={`relative flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-bold transition-all duration-300 flex-1 justify-center ${
                             financeSubTab === key
-                              ? 'bg-white shadow-md text-amber-700'
-                              : 'text-gray-500 hover:text-gray-700 hover:bg-white/50'
+                              ? `bg-gradient-to-l ${activeGradient} text-white shadow-lg ${activeShadow} scale-[1.02]`
+                              : 'text-gray-500 hover:text-gray-700 hover:bg-white/60'
                           }`}
                         >
                           <Icon className="w-4 h-4" />
                           {label}
                           {count !== undefined && count > 0 && (
-                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${countColor ? `bg-red-100 ${countColor}` : 'bg-amber-100 text-amber-700'}`}>{count}</span>
+                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                              financeSubTab === key
+                                ? 'bg-white/25 text-white'
+                                : countColor
+                                  ? 'bg-red-100 text-red-600'
+                                  : 'bg-amber-100 text-amber-700'
+                            }`}>{count}</span>
                           )}
                         </button>
                       ))}
@@ -2604,32 +2631,85 @@ export default function AdminDashboard() {
         </DialogContent>
       </Dialog>
 
-      {/* Approve Request Dialog — with TWO options + Nearby Nurses */}
+      {/* Approve Request Dialog — Professional Design with Nurse Fee */}
       <Dialog open={approveDialog} onOpenChange={setApproveDialog}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader><DialogTitle>قبول الطلب</DialogTitle></DialogHeader>
-          <div className="space-y-4 py-2">
-            {selectedRequest && (
-              <div className="p-3 bg-amber-50/50 rounded-xl">
-                <p className="font-medium">{selectedRequest.service?.name || 'خدمة'}</p>
-                <p className="text-sm text-gray-500">المستفيد: {selectedRequest.beneficiary?.name || 'غير محدد'}</p>
-                {(selectedRequest.beneficiary?.location || selectedRequest.address || selectedRequest.location) && (
-                  <button
-                    onClick={() => showMapPreview(selectedRequest.beneficiary?.location || selectedRequest.address || selectedRequest.location)}
-                    className="flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-800 hover:underline mt-1 transition-colors"
-                  >
-                    <MapPin className="w-3.5 h-3.5 shrink-0" />
-                    <span className="truncate">{getDisplayLocation(selectedRequest.beneficiary?.location || selectedRequest.address || selectedRequest.location)}</span>
-                    <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full">فتح الخريطة</span>
-                  </button>
-                )}
+        <DialogContent className="sm:max-w-lg border-0 shadow-2xl">
+          <DialogHeader>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-lg">
+                <CheckCircle className="w-5 h-5 text-white" />
               </div>
-            )}
+              <div>
+                <DialogTitle className="text-lg font-bold">قبول الطلب</DialogTitle>
+                <p className="text-xs text-gray-400">اختر طريقة التنفيذ</p>
+              </div>
+            </div>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            {selectedRequest && (() => {
+              const reqTotalPrice = selectedRequest.dynamicPrice || selectedRequest.service?.price || selectedRequest.totalPrice || 0
+              const commissionPercent = settings?.commissionPercent ?? 15
+              const commissionAmount = Math.round(reqTotalPrice * commissionPercent / 100)
+              const nurseFee = reqTotalPrice - commissionAmount
+              return (
+                <div className="space-y-3">
+                  {/* Request Info Card */}
+                  <div className="p-4 bg-gradient-to-l from-amber-50 to-orange-50/50 rounded-xl border border-amber-200/50 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center">
+                        <ClipboardList className="w-4 h-4 text-white" />
+                      </div>
+                      <p className="font-bold text-gray-800">{selectedRequest.service?.name || 'خدمة'}</p>
+                    </div>
+                    <p className="text-sm text-gray-500">المستفيد: {selectedRequest.beneficiary?.name || 'غير محدد'}</p>
+                    {(selectedRequest.beneficiary?.location || selectedRequest.address || selectedRequest.location) && (
+                      <button
+                        onClick={() => showMapPreview(selectedRequest.beneficiary?.location || selectedRequest.address || selectedRequest.location)}
+                        className="flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-800 hover:underline transition-colors"
+                      >
+                        <MapPin className="w-3.5 h-3.5 shrink-0" />
+                        <span className="truncate">{getDisplayLocation(selectedRequest.beneficiary?.location || selectedRequest.address || selectedRequest.location)}</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Price Breakdown Card */}
+                  <div className="p-4 bg-gradient-to-l from-emerald-50 to-teal-50/50 rounded-xl border border-emerald-200/50 space-y-3">
+                    <div className="flex items-center gap-2 mb-1">
+                      <DollarSign className="w-4 h-4 text-emerald-600" />
+                      <p className="font-bold text-emerald-700 text-sm">تفاصيل التسعير</p>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="text-gray-500">إجمالي الطلب</span>
+                        <span className="font-bold text-gray-800">{formatPrice(reqTotalPrice)}</span>
+                      </div>
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="text-gray-500">عمولة المنصة ({commissionPercent}%)</span>
+                        <span className="font-medium text-rose-600">- {formatPrice(commissionAmount)}</span>
+                      </div>
+                      <div className="border-t border-emerald-200 pt-2 flex justify-between items-center">
+                        <span className="font-bold text-emerald-700">رسوم الممرض</span>
+                        <span className="text-xl font-black text-emerald-600">{formatPrice(nurseFee)}</span>
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-emerald-600/70">الممرض سيستلم {formatPrice(nurseFee)} بعد خصم عمولة المنصة {formatPrice(commissionAmount)}</p>
+                  </div>
+                </div>
+              )
+            })()}
 
             {/* Option A: Assign Nurse */}
-            <div className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${approveMode === 'assign' ? 'border-amber-500 bg-amber-50/50' : 'border-gray-200'}`} onClick={() => setApproveMode('assign')}>
-              <div className="flex items-center gap-2 mb-2"><UserPlus className="w-5 h-5 text-amber-500" /><p className="font-bold">تعيين ممرض</p></div>
-              <p className="text-sm text-gray-500">اختيار ممرض معتمد وتعيينه للطلب</p>
+            <div className={`p-4 rounded-xl border-2 cursor-pointer transition-all duration-300 ${approveMode === 'assign' ? 'border-amber-400 bg-gradient-to-l from-amber-50 to-orange-50/30 shadow-md shadow-amber-500/10' : 'border-gray-200 hover:border-amber-200'}`} onClick={() => setApproveMode('assign')}>
+              <div className="flex items-center gap-3 mb-2">
+                <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${approveMode === 'assign' ? 'bg-gradient-to-br from-amber-400 to-orange-500 shadow-md' : 'bg-gray-100'}`}>
+                  <UserPlus className={`w-4.5 h-4.5 ${approveMode === 'assign' ? 'text-white' : 'text-gray-400'}`} />
+                </div>
+                <div>
+                  <p className="font-bold">تعيين ممرض</p>
+                  <p className="text-xs text-gray-400">اختيار ممرض معتمد وتعيينه للطلب</p>
+                </div>
+              </div>
               {approveMode === 'assign' && (
                 <div className="mt-3 space-y-3">
                   {/* Nearby Nurses Suggestions */}
@@ -2673,14 +2753,25 @@ export default function AdminDashboard() {
             </div>
 
             {/* Option B: Direct Execution */}
-            <div className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${approveMode === 'direct' ? 'border-rose-500 bg-rose-50/50' : 'border-gray-200'}`} onClick={() => setApproveMode('direct')}>
-              <div className="flex items-center gap-2 mb-2"><AlertCircle className="w-5 h-5 text-rose-500" /><p className="font-bold">تنفيذ مباشر</p></div>
-              <p className="text-sm text-gray-500">تنفيذ الطلب مباشرة من قبل الإدارة</p>
+            <div className={`p-4 rounded-xl border-2 cursor-pointer transition-all duration-300 ${approveMode === 'direct' ? 'border-rose-400 bg-gradient-to-l from-rose-50 to-pink-50/30 shadow-md shadow-rose-500/10' : 'border-gray-200 hover:border-rose-200'}`} onClick={() => setApproveMode('direct')}>
+              <div className="flex items-center gap-3">
+                <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${approveMode === 'direct' ? 'bg-gradient-to-br from-rose-400 to-pink-500 shadow-md' : 'bg-gray-100'}`}>
+                  <AlertCircle className={`w-4.5 h-4.5 ${approveMode === 'direct' ? 'text-white' : 'text-gray-400'}`} />
+                </div>
+                <div>
+                  <p className="font-bold">تنفيذ مباشر</p>
+                  <p className="text-xs text-gray-400">تنفيذ الطلب مباشرة من قبل الإدارة بدون تعيين ممرض</p>
+                </div>
+              </div>
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setApproveDialog(false)}>إلغاء</Button>
-            <Button className="bg-gradient-to-l from-amber-500 via-orange-500 to-rose-500 text-white" onClick={handleConfirmApprove}>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" className="flex-1" onClick={() => setApproveDialog(false)}>إلغاء</Button>
+            <Button className={`flex-1 text-white shadow-lg ${
+              approveMode === 'assign' 
+                ? 'bg-gradient-to-l from-amber-500 via-orange-500 to-rose-500 shadow-amber-500/25' 
+                : 'bg-gradient-to-l from-rose-500 via-pink-500 to-red-500 shadow-rose-500/25'
+            }`} onClick={handleConfirmApprove}>
               {approveMode === 'assign' ? 'تعيين وتأكيد' : 'تنفيذ مباشر'}
             </Button>
           </DialogFooter>

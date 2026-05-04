@@ -21,7 +21,7 @@ export async function PUT(
 
     const updateData: Record<string, any> = {}
     if (status) {
-      if (!['approved', 'rejected', 'pending', 'pending_confirmation', 'pending_payment', 'completed', 'cancelled'].includes(status)) {
+      if (!['approved', 'rejected', 'pending', 'pending_confirmation', 'pending_payment', 'in_progress', 'completed', 'cancelled'].includes(status)) {
         return NextResponse.json({ error: 'حالة غير صالحة' }, { status: 400 })
       }
       updateData.status = status
