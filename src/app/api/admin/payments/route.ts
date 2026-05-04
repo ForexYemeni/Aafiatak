@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
       accountNumber,  // Account/phone number
       bankName,       // Bank name (for bank-transfer)
       exchangeName,   // Exchange shop name (for exchange-transfer)
-      walletType,     // 'zain-cash' | 'hala-cash' | 'mtn-momo' | 'y-cash' | 'flous' | 'other'
+      walletType,     // 'one-cash' | 'cash-wallet' | 'jawali' | 'yemen-wallet' | 'saba-cash' | 'mahfathati' | 'pyes' | 'floosak' | 'jaib' | 'shamil-money' | 'em-pay' | 'bin-dowal-pay' | 'national-wallet' | 'other'
       instructions,   // Payment instructions for beneficiary
       isActive,
     } = body

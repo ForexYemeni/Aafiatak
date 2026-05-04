@@ -1571,11 +1571,19 @@ export default function AdminDashboard() {
                                   {p.bankName && <p className="text-gray-600"><span className="text-gray-400">البنك:</span> {p.bankName}</p>}
                                   {p.exchangeName && <p className="text-gray-600"><span className="text-gray-400">الصراف:</span> {p.exchangeName}</p>}
                                   {p.walletType && <p className="text-gray-600"><span className="text-gray-400">المحفظة:</span> {
-                                    p.walletType === 'zain-cash' ? 'زين كاش' :
-                                    p.walletType === 'hala-cash' ? 'هلا كاش' :
-                                    p.walletType === 'mtn-momo' ? 'إم تي إن' :
-                                    p.walletType === 'y-cash' ? 'واي كاش' :
-                                    p.walletType === 'flous' ? 'فلوس' : p.walletType
+                                    p.walletType === 'one-cash' ? 'ون كاش' :
+                                    p.walletType === 'cash-wallet' ? 'محفظة كاش' :
+                                    p.walletType === 'jawali' ? 'جوالي' :
+                                    p.walletType === 'yemen-wallet' ? 'يمن والت' :
+                                    p.walletType === 'saba-cash' ? 'سبأكاش' :
+                                    p.walletType === 'mahfathati' ? 'محفظتي' :
+                                    p.walletType === 'pyes' ? 'بيس' :
+                                    p.walletType === 'floosak' ? 'فلوسك' :
+                                    p.walletType === 'jaib' ? 'جيب' :
+                                    p.walletType === 'shamil-money' ? 'شامل مالي' :
+                                    p.walletType === 'em-pay' ? 'إم باي' :
+                                    p.walletType === 'bin-dowal-pay' ? 'بن دول باي' :
+                                    p.walletType === 'national-wallet' ? 'المحفظة الوطنية' : p.walletType
                                   }</p>}
                                   {p.instructions && <p className="text-gray-400 text-xs italic">{p.instructions}</p>}
                                 </div>
@@ -2257,11 +2265,19 @@ export default function AdminDashboard() {
                   <Select value={paymentForm.walletType} onValueChange={v => setPaymentForm(prev => ({ ...prev, walletType: v }))}>
                     <SelectTrigger className="border-amber-200 mt-1"><SelectValue placeholder="اختر نوع المحفظة" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="zain-cash">زين كاش</SelectItem>
-                      <SelectItem value="hala-cash">هلا كاش</SelectItem>
-                      <SelectItem value="mtn-momo">إم تي إن موبايل موني</SelectItem>
-                      <SelectItem value="y-cash">واي كاش</SelectItem>
-                      <SelectItem value="flous">فلوس</SelectItem>
+                      <SelectItem value="one-cash">ون كاش</SelectItem>
+                      <SelectItem value="cash-wallet">محفظة كاش</SelectItem>
+                      <SelectItem value="jawali">جوالي</SelectItem>
+                      <SelectItem value="yemen-wallet">يمن والت</SelectItem>
+                      <SelectItem value="saba-cash">سبأكاش</SelectItem>
+                      <SelectItem value="mahfathati">محفظتي</SelectItem>
+                      <SelectItem value="pyes">بيس</SelectItem>
+                      <SelectItem value="floosak">فلوسك</SelectItem>
+                      <SelectItem value="jaib">جيب</SelectItem>
+                      <SelectItem value="shamil-money">شامل مالي</SelectItem>
+                      <SelectItem value="em-pay">إم باي</SelectItem>
+                      <SelectItem value="bin-dowal-pay">بن دول باي</SelectItem>
+                      <SelectItem value="national-wallet">المحفظة الوطنية</SelectItem>
                       <SelectItem value="other">أخرى</SelectItem>
                     </SelectContent>
                   </Select>

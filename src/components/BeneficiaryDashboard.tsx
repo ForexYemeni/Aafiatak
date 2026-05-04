@@ -3127,11 +3127,19 @@ export default function BeneficiaryDashboard() {
                             </div>
                             {pm.walletType && (
                               <p className="text-xs text-gray-500 mt-0.5">{
-                                pm.walletType === 'zain-cash' ? 'زين كاش' :
-                                pm.walletType === 'hala-cash' ? 'هلا كاش' :
-                                pm.walletType === 'mtn-momo' ? 'إم تي إن' :
-                                pm.walletType === 'y-cash' ? 'واي كاش' :
-                                pm.walletType === 'flous' ? 'فلوس' : pm.walletType
+                                pm.walletType === 'one-cash' ? 'ون كاش' :
+                                pm.walletType === 'cash-wallet' ? 'محفظة كاش' :
+                                pm.walletType === 'jawali' ? 'جوالي' :
+                                pm.walletType === 'yemen-wallet' ? 'يمن والت' :
+                                pm.walletType === 'saba-cash' ? 'سبأكاش' :
+                                pm.walletType === 'mahfathati' ? 'محفظتي' :
+                                pm.walletType === 'pyes' ? 'بيس' :
+                                pm.walletType === 'floosak' ? 'فلوسك' :
+                                pm.walletType === 'jaib' ? 'جيب' :
+                                pm.walletType === 'shamil-money' ? 'شامل مالي' :
+                                pm.walletType === 'em-pay' ? 'إم باي' :
+                                pm.walletType === 'bin-dowal-pay' ? 'بن دول باي' :
+                                pm.walletType === 'national-wallet' ? 'المحفظة الوطنية' : pm.walletType
                               }</p>
                             )}
                             {pm.accountNumber && (
@@ -3722,11 +3730,19 @@ export default function BeneficiaryDashboard() {
                                       <div className="flex items-center gap-2 flex-wrap">
                                         {pm.walletType && (
                                           <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full">{
-                                            pm.walletType === 'zain-cash' ? 'زين كاش' :
-                                            pm.walletType === 'hala-cash' ? 'هلا كاش' :
-                                            pm.walletType === 'mtn-momo' ? 'إم تي إن' :
-                                            pm.walletType === 'y-cash' ? 'واي كاش' :
-                                            pm.walletType === 'flous' ? 'فلوس' : pm.walletType
+                                            pm.walletType === 'one-cash' ? 'ون كاش' :
+                                            pm.walletType === 'cash-wallet' ? 'محفظة كاش' :
+                                            pm.walletType === 'jawali' ? 'جوالي' :
+                                            pm.walletType === 'yemen-wallet' ? 'يمن والت' :
+                                            pm.walletType === 'saba-cash' ? 'سبأكاش' :
+                                            pm.walletType === 'mahfathati' ? 'محفظتي' :
+                                            pm.walletType === 'pyes' ? 'بيس' :
+                                            pm.walletType === 'floosak' ? 'فلوسك' :
+                                            pm.walletType === 'jaib' ? 'جيب' :
+                                            pm.walletType === 'shamil-money' ? 'شامل مالي' :
+                                            pm.walletType === 'em-pay' ? 'إم باي' :
+                                            pm.walletType === 'bin-dowal-pay' ? 'بن دول باي' :
+                                            pm.walletType === 'national-wallet' ? 'المحفظة الوطنية' : pm.walletType
                                           }</span>
                                         )}
                                         {pm.accountNumber && (
