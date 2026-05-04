@@ -7,7 +7,8 @@ import {
   ShoppingBag, User, Menu, X, Bell, MapPin, Phone, Home, HelpCircle,
   Filter, RefreshCw, Calendar, Tag, AlertTriangle,
   Copy, Check, Award, Zap, Share2, MessageCircle, Star, Send,
-  Siren, ChevronDown, ChevronUp, Shield, Gift, TrendingUp, Sparkles, Navigation
+  Siren, ChevronDown, ChevronUp, Shield, Gift, TrendingUp, Sparkles, Navigation,
+  Flag, Search, Camera, DollarSign, Clock, Eye, FileText, Upload, ImagePlus, Thermometer, Handshake, Mic
 } from 'lucide-react'
 import { useAppStore, formatPrice, getStatusLabel, getStatusColor } from '@/lib/store'
 import { openInMaps, getGPSLocation, searchLocation, extractCoordinates, getDisplayLocation, getMapEmbedUrl, getDirectionsUrl } from '@/lib/location-utils'
@@ -63,7 +64,7 @@ function formatDateTime(timestamp: any): string {
   }
 }
 
-type Tab = 'services' | 'requests' | 'payments' | 'profile' | 'notifications' | 'loyalty' | 'referral' | 'help'
+type Tab = 'services' | 'requests' | 'payments' | 'profile' | 'notifications' | 'loyalty' | 'referral' | 'help' | 'appointments' | 'tracking' | 'reports'
 
 interface Notification {
   id: string
@@ -248,6 +249,43 @@ export default function BeneficiaryDashboard() {
   // Admin settings
   const [adminSettings, setAdminSettings] = useState<AdminSettings>({})
 
+  // Appointments state
+  const [appointments, setAppointments] = useState<any[]>([])
+  const [appointmentDialog, setAppointmentDialog] = useState(false)
+  const [appointmentForm, setAppointmentForm] = useState({ serviceId: '', date: '', time: '', notes: '' })
+  const [appointmentSubmitting, setAppointmentSubmitting] = useState(false)
+  const [rescheduleDialog, setRescheduleDialog] = useState(false)
+  const [rescheduleId, setRescheduleId] = useState('')
+  const [rescheduleForm, setRescheduleForm] = useState({ date: '', time: '' })
+
+  // Tracking state
+  const [trackingData, setTrackingData] = useState<any>(null)
+  const [trackingLoading, setTrackingLoading] = useState(false)
+  const [trackingAssignmentId, setTrackingAssignmentId] = useState<string>('')
+
+  // Reports state
+  const [reports, setReports] = useState<any[]>([])
+  const [reportDialog, setReportDialog] = useState(false)
+  const [reportForm, setReportForm] = useState({ type: '', description: '', images: '' })
+  const [reportSubmitting, setReportSubmitting] = useState(false)
+
+  // Favorite nurse state
+  const [favoriteNurse, setFavoriteNurse] = useState<any>(null)
+  const [requestFavoriteNurse, setRequestFavoriteNurse] = useState(false)
+
+  // Enhanced rating state
+  const [ratingCriteria, setRatingCriteria] = useState({ punctuality: 0, professionalism: 0, cleanliness: 0, communication: 0 })
+  const [ratingPhotos, setRatingPhotos] = useState<string[]>([])
+
+  // Search state
+  const [searchQuery, setSearchQuery] = useState('')
+  const [priceRangeFilter, setPriceRangeFilter] = useState<{ min: number; max: number }>({ min: 0, max: 999999 })
+  const [showSearchFilters, setShowSearchFilters] = useState(false)
+
+  // Payment enhanced state
+  const [dynamicPricing, setDynamicPricing] = useState<any>(null)
+  const [paymentFilter, setPaymentFilter] = useState<string>('all')
+
   const beneficiaryUser = user as { id: string; name: string; phone: string; location: string } | null
 
   // Fetch admin settings on mount
@@ -309,6 +347,22 @@ export default function BeneficiaryDashboard() {
           setProfileData(data)
           setProfileLocation(data.location || beneficiaryUser?.location || '')
         }
+        // Also fetch favorite nurse
+        try {
+          const fnRes = await fetch(`/api/favorite-nurse?beneficiaryId=${beneficiaryUser?.id}`)
+          if (fnRes.ok) {
+            const fnData = await fnRes.json()
+            setFavoriteNurse(fnData.nurse || null)
+          }
+        } catch {}
+      } else if (activeTab === 'appointments') {
+        const res = await fetch(`/api/appointments?beneficiaryId=${beneficiaryUser?.id}`)
+        if (res.ok) setAppointments(await res.json())
+      } else if (activeTab === 'tracking') {
+        // tracking is fetched on-demand when user selects a request
+      } else if (activeTab === 'reports') {
+        const res = await fetch(`/api/reports/list?beneficiaryId=${beneficiaryUser?.id}`)
+        if (res.ok) setReports(await res.json())
       }
     } catch {
       toast({ title: 'خطأ', description: 'فشل تحميل البيانات', variant: 'destructive' })
@@ -400,6 +454,7 @@ export default function BeneficiaryDashboard() {
           notes: requestForm.notes || null,
           address: requestForm.address || null,
           couponCode: validCoupon?.id || null,
+          requestFavoriteNurse: requestFavoriteNurse || null,
         }),
       })
       const data = await res.json()
@@ -421,6 +476,7 @@ export default function BeneficiaryDashboard() {
         setRequestForm({ paymentMethod: '', notes: '', address: '', couponCode: '' })
         setValidCoupon(null)
         setCouponError('')
+        setRequestFavoriteNurse(false)
         setActiveTab('requests')
       } else {
         toast({ title: 'خطأ', description: data.error, variant: 'destructive' })
@@ -664,7 +720,257 @@ export default function BeneficiaryDashboard() {
     setRatingNurseId(nurseId)
     setRatingValue(0)
     setRatingComment('')
+    setRatingCriteria({ punctuality: 0, professionalism: 0, cleanliness: 0, communication: 0 })
+    setRatingPhotos([])
     setRatingDialog(true)
+  }
+
+  // ===== APPOINTMENT HANDLERS =====
+  const handleCreateAppointment = async () => {
+    if (!appointmentForm.serviceId || !appointmentForm.date || !appointmentForm.time) {
+      toast({ title: 'خطأ', description: 'يرجى ملء جميع الحقول المطلوبة', variant: 'destructive' })
+      return
+    }
+    setAppointmentSubmitting(true)
+    try {
+      const res = await fetch('/api/appointments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          beneficiaryId: beneficiaryUser?.id,
+          serviceId: appointmentForm.serviceId,
+          date: appointmentForm.date,
+          time: appointmentForm.time,
+          notes: appointmentForm.notes || undefined,
+        }),
+      })
+      if (res.ok) {
+        toast({ title: 'تم حجز الموعد بنجاح' })
+        setAppointmentDialog(false)
+        setAppointmentForm({ serviceId: '', date: '', time: '', notes: '' })
+        fetchData()
+      } else {
+        const data = await res.json()
+        toast({ title: 'خطأ', description: data.error, variant: 'destructive' })
+      }
+    } catch {
+      toast({ title: 'خطأ', description: 'حدث خطأ أثناء حجز الموعد', variant: 'destructive' })
+    } finally {
+      setAppointmentSubmitting(false)
+    }
+  }
+
+  const handleRescheduleAppointment = async () => {
+    if (!rescheduleForm.date || !rescheduleForm.time) {
+      toast({ title: 'خطأ', description: 'يرجى اختيار التاريخ والوقت الجديد', variant: 'destructive' })
+      return
+    }
+    try {
+      const res = await fetch(`/api/appointments/${rescheduleId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date: rescheduleForm.date, time: rescheduleForm.time, action: 'reschedule' }),
+      })
+      if (res.ok) {
+        toast({ title: 'تم إعادة جدولة الموعد' })
+        setRescheduleDialog(false)
+        setRescheduleForm({ date: '', time: '' })
+        fetchData()
+      } else {
+        const data = await res.json()
+        toast({ title: 'خطأ', description: data.error, variant: 'destructive' })
+      }
+    } catch {
+      toast({ title: 'خطأ', description: 'حدث خطأ', variant: 'destructive' })
+    }
+  }
+
+  const handleCancelAppointment = async (id: string) => {
+    if (!confirm('هل أنت متأكد من إلغاء هذا الموعد؟')) return
+    try {
+      const res = await fetch(`/api/appointments/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'cancel' }),
+      })
+      if (res.ok) {
+        toast({ title: 'تم إلغاء الموعد' })
+        fetchData()
+      } else {
+        const data = await res.json()
+        toast({ title: 'خطأ', description: data.error, variant: 'destructive' })
+      }
+    } catch {
+      toast({ title: 'خطأ', description: 'حدث خطأ', variant: 'destructive' })
+    }
+  }
+
+  // ===== TRACKING HANDLER =====
+  const fetchTrackingData = useCallback(async (assignmentId: string) => {
+    if (!assignmentId) return
+    setTrackingLoading(true)
+    try {
+      const res = await fetch(`/api/beneficiary/track-nurse?assignmentId=${assignmentId}`)
+      if (res.ok) {
+        const data = await res.json()
+        setTrackingData(data)
+      } else {
+        setTrackingData(null)
+      }
+    } catch {
+      setTrackingData(null)
+    } finally {
+      setTrackingLoading(false)
+    }
+  }, [])
+
+  // Auto-refresh tracking every 30 seconds
+  useEffect(() => {
+    if (activeTab === 'tracking' && trackingAssignmentId) {
+      fetchTrackingData(trackingAssignmentId)
+      const interval = setInterval(() => fetchTrackingData(trackingAssignmentId), 30000)
+      return () => clearInterval(interval)
+    }
+  }, [activeTab, trackingAssignmentId, fetchTrackingData])
+
+  // ===== REPORT HANDLER =====
+  const handleSubmitReport = async () => {
+    if (!reportForm.type || !reportForm.description.trim()) {
+      toast({ title: 'خطأ', description: 'يرجى ملء نوع البلاغ والوصف', variant: 'destructive' })
+      return
+    }
+    setReportSubmitting(true)
+    try {
+      const res = await fetch('/api/reports', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          beneficiaryId: beneficiaryUser?.id,
+          type: reportForm.type,
+          description: reportForm.description,
+          images: reportForm.images || undefined,
+        }),
+      })
+      if (res.ok) {
+        toast({ title: 'تم إرسال البلاغ بنجاح', description: 'سيتم مراجعته من قبل الإدارة' })
+        setReportDialog(false)
+        setReportForm({ type: '', description: '', images: '' })
+        fetchData()
+      } else {
+        const data = await res.json()
+        toast({ title: 'خطأ', description: data.error, variant: 'destructive' })
+      }
+    } catch {
+      toast({ title: 'خطأ', description: 'حدث خطأ أثناء إرسال البلاغ', variant: 'destructive' })
+    } finally {
+      setReportSubmitting(false)
+    }
+  }
+
+  // ===== FAVORITE NURSE HANDLER =====
+  const handleSetFavoriteNurse = async (nurseId: string) => {
+    try {
+      const res = await fetch('/api/favorite-nurse', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ beneficiaryId: beneficiaryUser?.id, nurseId }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setFavoriteNurse(data.nurse || { id: nurseId })
+        toast({ title: 'تم تعيين الممرض/ة كمفضل/ة' })
+      } else {
+        const data = await res.json()
+        toast({ title: 'خطأ', description: data.error, variant: 'destructive' })
+      }
+    } catch {
+      toast({ title: 'خطأ', description: 'حدث خطأ', variant: 'destructive' })
+    }
+  }
+
+  // ===== ENHANCED RATING HANDLER =====
+  const handleSubmitEnhancedRating = async () => {
+    const { punctuality, professionalism, cleanliness, communication } = ratingCriteria
+    const overallRating = Math.round((punctuality + professionalism + cleanliness + communication) / 4)
+    if (overallRating < 1) {
+      toast({ title: 'خطأ', description: 'يرجى تقييم معايير الخدمة', variant: 'destructive' })
+      return
+    }
+    setRatingSubmitting(true)
+    try {
+      const res = await fetch('/api/ratings/enhanced', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          requestId: ratingRequestId,
+          nurseId: ratingNurseId,
+          beneficiaryId: beneficiaryUser?.id,
+          rating: overallRating,
+          criteria: ratingCriteria,
+          comment: ratingComment || undefined,
+          photos: ratingPhotos.length > 0 ? ratingPhotos : undefined,
+        }),
+      })
+      if (res.ok) {
+        toast({ title: 'شكراً لتقييمك!', description: 'تم إرسال تقييمك التفصيلي بنجاح' })
+        setRatedRequests(prev => new Set(prev).add(ratingRequestId))
+        setRatingDialog(false)
+        setRatingValue(0)
+        setRatingComment('')
+        setRatingCriteria({ punctuality: 0, professionalism: 0, cleanliness: 0, communication: 0 })
+        setRatingPhotos([])
+      } else {
+        const data = await res.json()
+        toast({ title: 'خطأ', description: data.error, variant: 'destructive' })
+      }
+    } catch {
+      toast({ title: 'خطأ', description: 'حدث خطأ أثناء إرسال التقييم', variant: 'destructive' })
+    } finally {
+      setRatingSubmitting(false)
+    }
+  }
+
+  // ===== DYNAMIC PRICING HANDLER =====
+  const fetchDynamicPricing = async (serviceId: string, address: string) => {
+    try {
+      const res = await fetch(`/api/dynamic-pricing?serviceId=${serviceId}&address=${encodeURIComponent(address)}`)
+      if (res.ok) {
+        const data = await res.json()
+        setDynamicPricing(data)
+      }
+    } catch {}
+  }
+
+  // ===== SEARCH HANDLER =====
+  const handleSearch = useCallback(async (query: string) => {
+    setSearchQuery(query)
+    if (query.length >= 2) {
+      try {
+        const res = await fetch(`/api/search?q=${encodeURIComponent(query)}&type=services`)
+        if (res.ok) {
+          const data = await res.json()
+          setServices(data)
+        }
+      } catch {}
+    } else if (query.length === 0) {
+      const res = await fetch('/api/beneficiary/services')
+      if (res.ok) setServices(await res.json())
+    }
+  }, [])
+
+  // ===== PHOTO UPLOAD HANDLER =====
+  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files) return
+    Array.from(files).forEach(file => {
+      const reader = new FileReader()
+      reader.onload = (ev) => {
+        if (ev.target?.result) {
+          setRatingPhotos(prev => [...prev, String(ev.target!.result)])
+        }
+      }
+      reader.readAsDataURL(file as Blob)
+    })
   }
 
   // Mark notification as read
@@ -695,8 +1001,17 @@ export default function BeneficiaryDashboard() {
   const unreadNotifications = notifications.filter(n => !n.read).length
 
   const filteredServices = selectedCategory === 'all'
-    ? services
-    : services.filter(s => s.category === selectedCategory)
+    ? services.filter(s => {
+        const matchesSearch = !searchQuery || s.name?.toLowerCase().includes(searchQuery.toLowerCase()) || s.description?.toLowerCase().includes(searchQuery.toLowerCase())
+        const matchesPrice = (s.price || 0) >= priceRangeFilter.min && (s.price || 0) <= priceRangeFilter.max
+        return matchesSearch && matchesPrice
+      })
+    : services.filter(s => {
+        const matchesCategory = s.category === selectedCategory
+        const matchesSearch = !searchQuery || s.name?.toLowerCase().includes(searchQuery.toLowerCase()) || s.description?.toLowerCase().includes(searchQuery.toLowerCase())
+        const matchesPrice = (s.price || 0) >= priceRangeFilter.min && (s.price || 0) <= priceRangeFilter.max
+        return matchesCategory && matchesSearch && matchesPrice
+      })
 
   const filteredRequests = statusFilter === 'all'
     ? requests
@@ -719,7 +1034,10 @@ export default function BeneficiaryDashboard() {
   const tabs: { key: Tab; label: string; icon: any; badge?: number }[] = [
     { key: 'services', label: 'الخدمات', icon: ShoppingBag },
     { key: 'requests', label: 'طلباتي', icon: ClipboardList, badge: pendingRequests },
+    { key: 'appointments', label: 'المواعيد', icon: Calendar },
+    { key: 'tracking', label: 'تتبع الممرض', icon: MapPin },
     { key: 'payments', label: 'المدفوعات', icon: CreditCard },
+    { key: 'reports', label: 'البلاغات', icon: Flag },
     { key: 'profile', label: 'الملف الشخصي', icon: User },
     { key: 'notifications', label: 'الإشعارات', icon: Bell, badge: unreadNotifications },
     { key: 'loyalty', label: 'النقاط', icon: Award },
@@ -975,6 +1293,60 @@ export default function BeneficiaryDashboard() {
                       </Button>
                     </div>
 
+                    {/* Search Bar */}
+                    <Card className="border-0 bg-white/80 backdrop-blur-sm shadow-lg">
+                      <CardContent className="p-4">
+                        <div className="flex gap-2">
+                          <div className="relative flex-1">
+                            <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                            <Input
+                              value={searchQuery}
+                              onChange={(e) => handleSearch(e.target.value)}
+                              placeholder="ابحث عن خدمة..."
+                              className="pr-9 rounded-xl border-violet-200 focus:border-violet-400"
+                            />
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            className="shrink-0 rounded-xl border-violet-200"
+                            onClick={() => setShowSearchFilters(!showSearchFilters)}
+                          >
+                            <Filter className="w-4 h-4 text-violet-600" />
+                          </Button>
+                        </div>
+                        {showSearchFilters && (
+                          <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: 'auto' }}
+                            exit={{ opacity: 0, height: 0 }}
+                            className="mt-3 pt-3 border-t border-gray-100 grid grid-cols-2 gap-3"
+                          >
+                            <div>
+                              <Label className="text-xs text-muted-foreground">الحد الأدنى للسعر</Label>
+                              <Input
+                                type="number"
+                                value={priceRangeFilter.min || ''}
+                                onChange={(e) => setPriceRangeFilter(prev => ({ ...prev, min: Number(e.target.value) || 0 }))}
+                                placeholder="0"
+                                className="rounded-xl text-sm mt-1"
+                              />
+                            </div>
+                            <div>
+                              <Label className="text-xs text-muted-foreground">الحد الأقصى للسعر</Label>
+                              <Input
+                                type="number"
+                                value={priceRangeFilter.max === 999999 ? '' : priceRangeFilter.max}
+                                onChange={(e) => setPriceRangeFilter(prev => ({ ...prev, max: Number(e.target.value) || 999999 }))}
+                                placeholder="بدون حد"
+                                className="rounded-xl text-sm mt-1"
+                              />
+                            </div>
+                          </motion.div>
+                        )}
+                      </CardContent>
+                    </Card>
+
                     {/* Category Filter Pills */}
                     {categories.length > 1 && (
                       <div className="flex gap-2 flex-wrap">
@@ -1209,6 +1581,33 @@ export default function BeneficiaryDashboard() {
                                         تقييم الخدمة
                                       </Button>
                                     )}
+
+                                    {isCompleted && nurseId && (
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="rounded-xl text-xs border-fuchsia-200 hover:bg-fuchsia-50 text-fuchsia-600"
+                                        onClick={() => handleSetFavoriteNurse(nurseId)}
+                                      >
+                                        <Heart className="w-3.5 h-3.5 ml-1" />
+                                        تعيين كممرض مفضل
+                                      </Button>
+                                    )}
+
+                                    {req.status === 'in_progress' && req.assignment?.id && (
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="rounded-xl text-xs border-emerald-200 hover:bg-emerald-50 text-emerald-600"
+                                        onClick={() => {
+                                          setTrackingAssignmentId(req.assignment.id)
+                                          setActiveTab('tracking')
+                                        }}
+                                      >
+                                        <MapPin className="w-3.5 h-3.5 ml-1" />
+                                        تتبع الممرض
+                                      </Button>
+                                    )}
                                   </div>
                                 </CardContent>
                               </Card>
@@ -1232,7 +1631,7 @@ export default function BeneficiaryDashboard() {
                   </div>
                 )}
 
-                {/* ===== PAYMENTS TAB ===== */}
+                {/* ===== PAYMENTS TAB (ENHANCED) ===== */}
                 {activeTab === 'payments' && (
                   <div className="space-y-6">
                     <div>
@@ -1240,9 +1639,76 @@ export default function BeneficiaryDashboard() {
                       <p className="text-muted-foreground text-sm mt-1">عرض سجل المدفوعات والمعاملات المالية</p>
                     </div>
 
-                    {paymentHistory.length > 0 ? (
+                    {/* Payment Filter */}
+                    <div className="flex gap-2 flex-wrap">
+                      {[
+                        { key: 'all', label: 'الكل' },
+                        { key: 'paid', label: 'مدفوع' },
+                        { key: 'pending', label: 'قيد الانتظار' },
+                        { key: 'refunded', label: 'مسترد' },
+                      ].map(f => (
+                        <button
+                          key={f.key}
+                          onClick={() => setPaymentFilter(f.key)}
+                          className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200 ${
+                            paymentFilter === f.key
+                              ? 'bg-gradient-to-l from-violet-500 to-fuchsia-500 text-white shadow-md shadow-violet-500/25'
+                              : 'bg-white/80 backdrop-blur-sm text-gray-600 border border-gray-200 hover:border-violet-300'
+                          }`}
+                        >
+                          {f.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Dynamic Pricing Info Card */}
+                    {dynamicPricing && (
+                      <Card className="border-0 bg-gradient-to-l from-violet-50/80 to-fuchsia-50/80 backdrop-blur-sm shadow-lg">
+                        <CardContent className="p-5">
+                          <div className="flex items-center gap-2 mb-2">
+                            <DollarSign className="w-5 h-5 text-violet-600" />
+                            <h3 className="font-semibold text-violet-700">التسعير الديناميكي</h3>
+                          </div>
+                          <p className="text-sm text-muted-foreground">السعر المقدر بناءً على الوقت والمسافة</p>
+                          <div className="mt-2 flex items-center gap-4">
+                            <div>
+                              <p className="text-xs text-muted-foreground">السعر الأساسي</p>
+                              <p className="text-lg font-bold text-emerald-600">{formatPrice(dynamicPricing.basePrice || 0)}</p>
+                            </div>
+                            {dynamicPricing.distanceFee > 0 && (
+                              <div>
+                                <p className="text-xs text-muted-foreground">رسوم المسافة</p>
+                                <p className="text-lg font-bold text-amber-600">+{formatPrice(dynamicPricing.distanceFee)}</p>
+                              </div>
+                            )}
+                            {dynamicPricing.timeFee > 0 && (
+                              <div>
+                                <p className="text-xs text-muted-foreground">رسوم الوقت</p>
+                                <p className="text-lg font-bold text-blue-600">+{formatPrice(dynamicPricing.timeFee)}</p>
+                              </div>
+                            )}
+                            <div className="mr-auto">
+                              <p className="text-xs text-muted-foreground">الإجمالي</p>
+                              <p className="text-xl font-black text-violet-700">{formatPrice(dynamicPricing.totalPrice || 0)}</p>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    {(paymentFilter === 'all' ? paymentHistory : paymentHistory.filter(r => {
+                      if (paymentFilter === 'paid') return true
+                      if (paymentFilter === 'pending') return r.paymentStatus === 'pending'
+                      if (paymentFilter === 'refunded') return r.paymentStatus === 'refunded'
+                      return true
+                    })).length > 0 ? (
                       <motion.div className="space-y-3" variants={containerVariants} initial="hidden" animate="visible">
-                        {paymentHistory.map((req, i) => (
+                        {(paymentFilter === 'all' ? paymentHistory : paymentHistory.filter(r => {
+                          if (paymentFilter === 'paid') return true
+                          if (paymentFilter === 'pending') return r.paymentStatus === 'pending'
+                          if (paymentFilter === 'refunded') return r.paymentStatus === 'refunded'
+                          return true
+                        })).map((req, i) => (
                           <motion.div key={req.id} variants={itemVariants}>
                             <Card className="border-0 bg-white/80 backdrop-blur-sm shadow-lg">
                               <CardContent className="p-5">
@@ -1255,13 +1721,24 @@ export default function BeneficiaryDashboard() {
                                         طريقة الدفع: {req.paymentMethod}
                                       </p>
                                     )}
+                                    {req.paymentMethod === 'الدفع عند الاستلام' && (
+                                      <div className="mt-2 flex items-center gap-1.5">
+                                        <FileText className="w-3.5 h-3.5 text-violet-500" />
+                                        <span className="text-xs text-violet-600">إيصال رقمي متاح</span>
+                                      </div>
+                                    )}
                                   </div>
                                   <div className="text-left">
                                     <span className="text-lg font-bold text-emerald-600">
                                       {formatPrice(req.price || req.service?.price || 0)}
                                     </span>
-                                    <Badge className="block mt-1 text-[10px] bg-gradient-to-r from-emerald-500 to-teal-500 text-white border-0">
-                                      مدفوع
+                                    <Badge className={`block mt-1 text-[10px] border-0 ${
+                                      req.paymentStatus === 'pending' ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white' :
+                                      req.paymentStatus === 'refunded' ? 'bg-gradient-to-r from-red-500 to-rose-500 text-white' :
+                                      'bg-gradient-to-r from-emerald-500 to-teal-500 text-white'
+                                    }`}>
+                                      {req.paymentStatus === 'pending' ? 'قيد الانتظار' :
+                                       req.paymentStatus === 'refunded' ? 'مسترد' : 'مدفوع'}
                                     </Badge>
                                   </div>
                                 </div>
@@ -1417,6 +1894,32 @@ export default function BeneficiaryDashboard() {
                             </Label>
                             <div className="p-3 rounded-xl bg-violet-50 border border-violet-100 text-violet-700 font-mono font-bold text-center tracking-wider">
                               {referralCode}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Favorite Nurse Section */}
+                        {favoriteNurse && (
+                          <div className="space-y-2">
+                            <Label className="text-sm font-medium text-fuchsia-700">
+                              <Heart className="w-3.5 h-3.5 inline ml-1" />
+                              الممرض/ة المفضلة
+                            </Label>
+                            <div className="p-4 rounded-xl bg-gradient-to-l from-fuchsia-50/80 to-violet-50/80 border border-fuchsia-100">
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-fuchsia-500 to-violet-500 flex items-center justify-center shadow-md">
+                                  <span className="text-white font-bold text-sm">{favoriteNurse.firstName?.charAt(0) || '?'}</span>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="font-semibold text-sm">{favoriteNurse.firstName} {favoriteNurse.lastName}</p>
+                                  {favoriteNurse.phone && (
+                                    <p className="text-xs text-muted-foreground" dir="ltr">{favoriteNurse.phone}</p>
+                                  )}
+                                </div>
+                                <Badge className="bg-gradient-to-r from-fuchsia-500 to-violet-500 text-white border-0 text-[10px]">
+                                  <Heart className="w-3 h-3 ml-0.5" /> مفضل
+                                </Badge>
+                              </div>
                             </div>
                           </div>
                         )}
@@ -1711,6 +2214,324 @@ export default function BeneficiaryDashboard() {
                         </div>
                       </CardContent>
                     </Card>
+                  </div>
+                )}
+
+                {/* ===== APPOINTMENTS TAB ===== */}
+                {activeTab === 'appointments' && (
+                  <div className="space-y-6">
+                    <div className="flex items-center justify-between flex-wrap gap-3">
+                      <div>
+                        <h1 className="text-2xl font-bold bg-gradient-to-l from-violet-700 to-fuchsia-600 bg-clip-text text-transparent">المواعيد</h1>
+                        <p className="text-muted-foreground text-sm mt-1">احجز المواعيد وأدرها بسهولة</p>
+                      </div>
+                      <Button
+                        className="bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white rounded-xl hover:shadow-md"
+                        onClick={() => setAppointmentDialog(true)}
+                      >
+                        <Plus className="w-4 h-4 ml-1" />
+                        حجز موعد جديد
+                      </Button>
+                    </div>
+
+                    {appointments.length > 0 ? (
+                      <motion.div className="space-y-3" variants={containerVariants} initial="hidden" animate="visible">
+                        {appointments.map((apt: any) => (
+                          <motion.div key={apt.id} variants={itemVariants}>
+                            <Card className={`border-0 bg-white/80 backdrop-blur-sm shadow-lg hover:shadow-xl transition-all duration-300 ${
+                              apt.status === 'scheduled' ? 'border-r-4 border-r-emerald-400' :
+                              apt.status === 'completed' ? 'border-r-4 border-r-violet-400' :
+                              apt.status === 'cancelled' ? 'border-r-4 border-r-gray-400' :
+                              'border-r-4 border-r-amber-400'
+                            }`}>
+                              <CardContent className="p-5">
+                                <div className="flex items-start justify-between gap-3 mb-3">
+                                  <div className="flex-1 min-w-0">
+                                    <h3 className="font-semibold text-base">{apt.service?.name || 'خدمة'}</h3>
+                                    <div className="flex items-center gap-2 mt-1">
+                                      <Calendar className="w-3.5 h-3.5 text-muted-foreground" />
+                                      <span className="text-sm text-muted-foreground">{apt.date}</span>
+                                      <Clock className="w-3.5 h-3.5 text-muted-foreground mr-2" />
+                                      <span className="text-sm text-muted-foreground">{apt.time}</span>
+                                    </div>
+                                  </div>
+                                  <Badge className={`text-xs shrink-0 border-0 ${
+                                    apt.status === 'scheduled' ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white' :
+                                    apt.status === 'completed' ? 'bg-gradient-to-r from-violet-500 to-purple-500 text-white' :
+                                    apt.status === 'cancelled' ? 'bg-gradient-to-r from-gray-400 to-gray-500 text-white' :
+                                    'bg-gradient-to-r from-amber-500 to-orange-500 text-white'
+                                  }`}>
+                                    {apt.status === 'scheduled' ? 'مجدول' :
+                                     apt.status === 'completed' ? 'مكتمل' :
+                                     apt.status === 'cancelled' ? 'ملغي' : apt.status}
+                                  </Badge>
+                                </div>
+                                {apt.notes && (
+                                  <p className="text-sm text-muted-foreground mb-3">
+                                    <span className="font-medium">ملاحظات:</span> {apt.notes}
+                                  </p>
+                                )}
+                                {apt.status === 'scheduled' && (
+                                  <div className="flex items-center gap-2 mt-3">
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="rounded-xl text-xs border-violet-200 hover:bg-violet-50 text-violet-600"
+                                      onClick={() => {
+                                        setRescheduleId(apt.id)
+                                        setRescheduleForm({ date: '', time: '' })
+                                        setRescheduleDialog(true)
+                                      }}
+                                    >
+                                      <RefreshCw className="w-3.5 h-3.5 ml-1" />
+                                      إعادة جدولة
+                                    </Button>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="rounded-xl text-xs border-red-200 hover:bg-red-50 text-red-600"
+                                      onClick={() => handleCancelAppointment(apt.id)}
+                                    >
+                                      <XCircle className="w-3.5 h-3.5 ml-1" />
+                                      إلغاء الموعد
+                                    </Button>
+                                  </div>
+                                )}
+                              </CardContent>
+                            </Card>
+                          </motion.div>
+                        ))}
+                      </motion.div>
+                    ) : (
+                      <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="text-center py-20"
+                      >
+                        <div className="w-20 h-20 bg-violet-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                          <Calendar className="w-10 h-10 text-violet-300" />
+                        </div>
+                        <p className="text-muted-foreground text-lg font-medium">لا توجد مواعيد</p>
+                        <p className="text-muted-foreground text-sm mt-1">احجز موعدك الأول من زر "حجز موعد جديد"</p>
+                      </motion.div>
+                    )}
+                  </div>
+                )}
+
+                {/* ===== TRACKING TAB ===== */}
+                {activeTab === 'tracking' && (
+                  <div className="space-y-6">
+                    <div>
+                      <h1 className="text-2xl font-bold bg-gradient-to-l from-violet-700 to-fuchsia-600 bg-clip-text text-transparent">تتبع الممرض</h1>
+                      <p className="text-muted-foreground text-sm mt-1">تتبع موقع الممرض/ة المعين/ة لطلبك</p>
+                    </div>
+
+                    {/* Select in-progress request for tracking */}
+                    {requests.filter(r => r.status === 'in_progress' && r.assignment?.id).length > 0 && !trackingAssignmentId && (
+                      <Card className="border-0 bg-white/80 backdrop-blur-sm shadow-lg">
+                        <CardContent className="p-6">
+                          <h3 className="font-semibold text-base mb-4 flex items-center gap-2">
+                            <MapPin className="w-5 h-5 text-violet-600" />
+                            اختر طلباً للتتبع
+                          </h3>
+                          <div className="space-y-3">
+                            {requests.filter(r => r.status === 'in_progress' && r.assignment?.id).map(req => (
+                              <button
+                                key={req.id}
+                                className="w-full text-right p-3 rounded-xl border border-violet-100 hover:bg-violet-50 transition-colors"
+                                onClick={() => setTrackingAssignmentId(req.assignment.id)}
+                              >
+                                <p className="font-medium text-sm">{req.service?.name || 'خدمة'}</p>
+                                <p className="text-xs text-muted-foreground mt-0.5">
+                                  الممرض/ة: {req.assignment?.nurse?.firstName} {req.assignment?.nurse?.lastName}
+                                </p>
+                              </button>
+                            ))}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    {trackingAssignmentId && trackingData && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 12 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="space-y-4"
+                      >
+                        {/* Map Embed */}
+                        {trackingData.nurseLocation && (
+                          <Card className="border-0 shadow-lg overflow-hidden">
+                            <iframe
+                              width="100%"
+                              height="350"
+                              frameBorder="0"
+                              scrolling="no"
+                              src={`https://www.openstreetmap.org/export/embed.html?bbox=${trackingData.nurseLocation.lng - 0.01},${trackingData.nurseLocation.lat - 0.01},${trackingData.nurseLocation.lng + 0.01},${trackingData.nurseLocation.lat + 0.01}&layer=mapnik&marker=${trackingData.nurseLocation.lat},${trackingData.nurseLocation.lng}`}
+                              title="موقع الممرض/ة"
+                              className="rounded-xl"
+                            />
+                          </Card>
+                        )}
+
+                        {/* Nurse Info Card */}
+                        <Card className="border-0 bg-white/80 backdrop-blur-sm shadow-lg">
+                          <CardContent className="p-5">
+                            <div className="flex items-center gap-4">
+                              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center shadow-lg shadow-emerald-500/25">
+                                <span className="text-white font-bold text-xl">
+                                  {trackingData.nurse?.firstName?.charAt(0) || '?'}
+                                </span>
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <h3 className="font-semibold text-lg">
+                                  {trackingData.nurse?.firstName} {trackingData.nurse?.lastName}
+                                </h3>
+                                {trackingData.nurse?.phone && (
+                                  <a
+                                    href={`tel:${trackingData.nurse.phone}`}
+                                    className="flex items-center gap-1.5 text-sm text-emerald-600 hover:text-emerald-800 hover:underline mt-1"
+                                    dir="ltr"
+                                  >
+                                    <Phone className="w-3.5 h-3.5" />
+                                    {trackingData.nurse.phone}
+                                  </a>
+                                )}
+                              </div>
+                              <Badge className="bg-gradient-to-r from-emerald-500 to-teal-500 text-white border-0">
+                                في الطريق
+                              </Badge>
+                            </div>
+
+                            {trackingData.estimatedArrival && (
+                              <div className="mt-4 p-3 rounded-xl bg-emerald-50 border border-emerald-100">
+                                <div className="flex items-center gap-2">
+                                  <Clock className="w-4 h-4 text-emerald-600" />
+                                  <span className="text-sm font-medium text-emerald-700">
+                                    الوقت المتوقع للوصول: {trackingData.estimatedArrival}
+                                  </span>
+                                </div>
+                              </div>
+                            )}
+                          </CardContent>
+                        </Card>
+
+                        {/* Auto-refresh notice */}
+                        <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
+                          <RefreshCw className="w-3 h-3 animate-spin" />
+                          <span>يتم تحديث الموقع كل 30 ثانية</span>
+                        </div>
+                      </motion.div>
+                    )}
+
+                    {trackingAssignmentId && trackingLoading && (
+                      <div className="flex flex-col items-center justify-center py-20">
+                        <Loader2 className="w-10 h-10 animate-spin text-violet-600 mb-4" />
+                        <p className="text-muted-foreground text-sm">جارٍ تحميل بيانات التتبع...</p>
+                      </div>
+                    )}
+
+                    {trackingAssignmentId && !trackingLoading && !trackingData && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="text-center py-20"
+                      >
+                        <div className="w-20 h-20 bg-violet-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                          <MapPin className="w-10 h-10 text-violet-300" />
+                        </div>
+                        <p className="text-muted-foreground text-lg font-medium">لم يتم العثور على بيانات تتبع</p>
+                        <p className="text-muted-foreground text-sm mt-1">قد لا يكون الممرض/ة في الطريق بعد</p>
+                      </motion.div>
+                    )}
+
+                    {!trackingAssignmentId && requests.filter(r => r.status === 'in_progress' && r.assignment?.id).length === 0 && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="text-center py-20"
+                      >
+                        <div className="w-20 h-20 bg-violet-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                          <MapPin className="w-10 h-10 text-violet-300" />
+                        </div>
+                        <p className="text-muted-foreground text-lg font-medium">لا توجد طلبات نشطة للتتبع</p>
+                        <p className="text-muted-foreground text-sm mt-1">عندما يتم تعيين ممرض/ة لطلبك، يمكنك تتبع موقعه هنا</p>
+                      </motion.div>
+                    )}
+                  </div>
+                )}
+
+                {/* ===== REPORTS TAB ===== */}
+                {activeTab === 'reports' && (
+                  <div className="space-y-6">
+                    <div className="flex items-center justify-between flex-wrap gap-3">
+                      <div>
+                        <h1 className="text-2xl font-bold bg-gradient-to-l from-violet-700 to-fuchsia-600 bg-clip-text text-transparent">البلاغات</h1>
+                        <p className="text-muted-foreground text-sm mt-1">قدّم بلاغاً أو شكوى وسيتم مراجعتها</p>
+                      </div>
+                      <Button
+                        className="bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white rounded-xl hover:shadow-md"
+                        onClick={() => setReportDialog(true)}
+                      >
+                        <Flag className="w-4 h-4 ml-1" />
+                        بلاغ جديد
+                      </Button>
+                    </div>
+
+                    {reports.length > 0 ? (
+                      <motion.div className="space-y-3" variants={containerVariants} initial="hidden" animate="visible">
+                        {reports.map((report: any) => (
+                          <motion.div key={report.id} variants={itemVariants}>
+                            <Card className={`border-0 bg-white/80 backdrop-blur-sm shadow-lg hover:shadow-xl transition-all duration-300 ${
+                              report.status === 'open' ? 'border-r-4 border-r-amber-400' :
+                              report.status === 'resolved' ? 'border-r-4 border-r-emerald-400' :
+                              'border-r-4 border-r-gray-400'
+                            }`}>
+                              <CardContent className="p-5">
+                                <div className="flex items-start justify-between gap-3 mb-2">
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2">
+                                      <Badge className="text-[10px] bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white border-0 shrink-0">
+                                        {report.type === 'nurse_issue' ? 'مشكلة ممرض' :
+                                         report.type === 'service_issue' ? 'مشكلة خدمة' : 'أخرى'}
+                                      </Badge>
+                                    </div>
+                                    <p className="text-sm mt-2 leading-relaxed">{report.description}</p>
+                                    <p className="text-xs text-muted-foreground mt-2">{formatDateTime(report.createdAt)}</p>
+                                  </div>
+                                  <Badge className={`text-xs shrink-0 border-0 ${
+                                    report.status === 'open' ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white' :
+                                    report.status === 'resolved' ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white' :
+                                    'bg-gradient-to-r from-gray-400 to-gray-500 text-white'
+                                  }`}>
+                                    {report.status === 'open' ? 'مفتوح' :
+                                     report.status === 'resolved' ? 'تم الحل' :
+                                     report.status === 'in_review' ? 'قيد المراجعة' : report.status}
+                                  </Badge>
+                                </div>
+                                {report.adminResponse && (
+                                  <div className="mt-3 p-3 rounded-xl bg-violet-50 border border-violet-100">
+                                    <p className="text-xs font-medium text-violet-600 mb-1">رد الإدارة:</p>
+                                    <p className="text-sm text-violet-800">{report.adminResponse}</p>
+                                  </div>
+                                )}
+                              </CardContent>
+                            </Card>
+                          </motion.div>
+                        ))}
+                      </motion.div>
+                    ) : (
+                      <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="text-center py-20"
+                      >
+                        <div className="w-20 h-20 bg-violet-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                          <Flag className="w-10 h-10 text-violet-300" />
+                        </div>
+                        <p className="text-muted-foreground text-lg font-medium">لا توجد بلاغات</p>
+                        <p className="text-muted-foreground text-sm mt-1">إذا واجهت مشكلة، قم بتقديم بلاغ جديد</p>
+                      </motion.div>
+                    )}
                   </div>
                 )}
 
@@ -2182,6 +3003,32 @@ export default function BeneficiaryDashboard() {
               )}
             </div>
 
+            {/* Favorite Nurse Request */}
+            {favoriteNurse && (
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  onClick={() => setRequestFavoriteNurse(!requestFavoriteNurse)}
+                  className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all duration-200 ${
+                    requestFavoriteNurse
+                      ? 'bg-gradient-to-l from-fuchsia-50 to-violet-50 border-2 border-fuchsia-300'
+                      : 'bg-gray-50 border border-gray-200 hover:border-fuchsia-200'
+                  }`}
+                >
+                  <Heart className={`w-5 h-5 ${requestFavoriteNurse ? 'fill-fuchsia-500 text-fuchsia-500' : 'text-gray-400'}`} />
+                  <div className="text-right flex-1">
+                    <p className="text-sm font-medium">طلب الممرض/ة المفضلة</p>
+                    <p className="text-xs text-muted-foreground">{favoriteNurse.firstName} {favoriteNurse.lastName}</p>
+                  </div>
+                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                    requestFavoriteNurse ? 'border-fuchsia-500 bg-fuchsia-500' : 'border-gray-300'
+                  }`}>
+                    {requestFavoriteNurse && <Check className="w-3 h-3 text-white" />}
+                  </div>
+                </button>
+              </div>
+            )}
+
             <Separator />
 
             {/* Price Summary */}
@@ -2220,9 +3067,9 @@ export default function BeneficiaryDashboard() {
         </DialogContent>
       </Dialog>
 
-      {/* ===== RATING DIALOG ===== */}
+      {/* ===== RATING DIALOG (ENHANCED) ===== */}
       <Dialog open={ratingDialog} onOpenChange={setRatingDialog}>
-        <DialogContent className="sm:max-w-md border-0 shadow-2xl p-0 max-h-[90vh] overflow-y-auto" dir="rtl">
+        <DialogContent className="sm:max-w-lg border-0 shadow-2xl p-0 max-h-[90vh] overflow-y-auto" dir="rtl">
           {/* Gradient Header */}
           <div className="bg-gradient-to-l from-amber-500 via-orange-500 to-amber-600 p-5 text-white relative overflow-hidden">
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.1)_0%,transparent_70%)]" />
@@ -2238,35 +3085,90 @@ export default function BeneficiaryDashboard() {
           </div>
 
           <div className="p-6 space-y-5">
-            {/* Stars */}
-            <div className="flex items-center justify-center gap-2">
-              {[1, 2, 3, 4, 5].map(star => (
-                <motion.button
-                  key={star}
-                  whileHover={{ scale: 1.2 }}
-                  whileTap={{ scale: 0.9 }}
-                  onClick={() => setRatingValue(star)}
-                  className="focus:outline-none"
-                >
-                  <Star
-                    className={`w-10 h-10 transition-colors duration-150 ${
-                      star <= ratingValue
-                        ? 'fill-amber-400 text-amber-400'
-                        : 'text-gray-300'
-                    }`}
-                  />
-                </motion.button>
+            {/* Multi-Criteria Rating */}
+            <div className="space-y-4">
+              {[
+                { key: 'punctuality' as const, label: 'الالتزام بالمواعيد', icon: Clock },
+                { key: 'professionalism' as const, label: 'الاحترافية', icon: Shield },
+                { key: 'cleanliness' as const, label: 'النظافة', icon: Sparkles },
+                { key: 'communication' as const, label: 'التواصل', icon: MessageCircle },
+              ].map(({ key, label, icon: Icon }) => (
+                <div key={key} className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Icon className="w-4 h-4 text-violet-500" />
+                      <Label className="text-sm font-medium">{label}</Label>
+                    </div>
+                    <span className="text-xs text-muted-foreground">{ratingCriteria[key]}/5</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    {[1, 2, 3, 4, 5].map(star => (
+                      <motion.button
+                        key={star}
+                        whileHover={{ scale: 1.15 }}
+                        whileTap={{ scale: 0.9 }}
+                        onClick={() => setRatingCriteria(prev => ({ ...prev, [key]: star }))}
+                        className="focus:outline-none"
+                      >
+                        <Star
+                          className={`w-7 h-7 transition-colors duration-150 ${
+                            star <= ratingCriteria[key]
+                              ? 'fill-amber-400 text-amber-400'
+                              : 'text-gray-300'
+                          }`}
+                        />
+                      </motion.button>
+                    ))}
+                  </div>
+                </div>
               ))}
             </div>
-            {ratingValue > 0 && (
-              <p className="text-center text-sm text-muted-foreground">
-                {ratingValue === 1 ? 'سيء' :
-                 ratingValue === 2 ? 'مقبول' :
-                 ratingValue === 3 ? 'جيد' :
-                 ratingValue === 4 ? 'جيد جداً' :
-                 'ممتاز'}
-              </p>
+
+            {/* Overall Rating Auto-Calculated */}
+            {Object.values(ratingCriteria).some((v: number) => v > 0) && (
+              <div className="p-3 rounded-xl bg-amber-50 border border-amber-100 text-center">
+                <p className="text-xs text-amber-600 mb-1">التقييم العام</p>
+                <div className="flex items-center justify-center gap-1">
+                  {[1, 2, 3, 4, 5].map(star => {
+                    const overall = Math.round(Object.values(ratingCriteria).reduce((a: number, b: number) => a + b, 0) / 4)
+                    return (
+                      <Star
+                        key={star}
+                        className={`w-5 h-5 ${star <= overall ? 'fill-amber-400 text-amber-400' : 'text-gray-300'}`}
+                      />
+                    )
+                  })}
+                  <span className="text-sm font-bold text-amber-700 mr-2">
+                    {Math.round(Object.values(ratingCriteria).reduce((a: number, b: number) => a + b, 0) / 4)}/5
+                  </span>
+                </div>
+              </div>
             )}
+
+            {/* Photo Upload */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium flex items-center gap-2">
+                <Camera className="w-4 h-4 text-violet-500" />
+                صور قبل/بعد (اختياري)
+              </Label>
+              <div className="flex gap-2 flex-wrap">
+                {ratingPhotos.map((photo, idx) => (
+                  <div key={idx} className="relative w-16 h-16 rounded-xl overflow-hidden border border-gray-200">
+                    <img src={photo} alt={`صورة ${idx + 1}`} className="w-full h-full object-cover" />
+                    <button
+                      className="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center"
+                      onClick={() => setRatingPhotos(prev => prev.filter((_, i) => i !== idx))}
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+                <label className="w-16 h-16 rounded-xl border-2 border-dashed border-violet-300 flex items-center justify-center cursor-pointer hover:bg-violet-50 transition-colors">
+                  <Upload className="w-5 h-5 text-violet-400" />
+                  <input type="file" accept="image/*" multiple className="hidden" onChange={handlePhotoUpload} />
+                </label>
+              </div>
+            </div>
 
             {/* Comment */}
             <div className="space-y-2">
@@ -2282,8 +3184,8 @@ export default function BeneficiaryDashboard() {
 
             {/* Submit */}
             <Button
-              onClick={handleSubmitRating}
-              disabled={ratingSubmitting || ratingValue === 0}
+              onClick={handleSubmitEnhancedRating}
+              disabled={ratingSubmitting || (ratingCriteria.punctuality + ratingCriteria.professionalism + ratingCriteria.cleanliness + ratingCriteria.communication === 0)}
               className="w-full bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:shadow-lg rounded-xl"
             >
               {ratingSubmitting ? (
@@ -2291,7 +3193,209 @@ export default function BeneficiaryDashboard() {
               ) : (
                 <Star className="w-5 h-5 ml-2" />
               )}
-              إرسال التقييم
+              إرسال التقييم التفصيلي
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ===== APPOINTMENT DIALOG ===== */}
+      <Dialog open={appointmentDialog} onOpenChange={setAppointmentDialog}>
+        <DialogContent className="sm:max-w-md border-0 shadow-2xl p-0 max-h-[90vh] overflow-y-auto" dir="rtl">
+          <div className="bg-gradient-to-l from-violet-600 via-purple-600 to-fuchsia-600 p-5 text-white relative overflow-hidden">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.1)_0%,transparent_70%)]" />
+            <div className="relative flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
+                <Calendar className="w-5 h-5" />
+              </div>
+              <div>
+                <DialogTitle className="text-lg font-bold">حجز موعد جديد</DialogTitle>
+                <p className="text-violet-100 text-xs mt-0.5">اختر الخدمة والوقت المناسب</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="p-6 space-y-4">
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">الخدمة</Label>
+              <Select value={appointmentForm.serviceId} onValueChange={v => setAppointmentForm(prev => ({ ...prev, serviceId: v }))}>
+                <SelectTrigger className="rounded-xl">
+                  <SelectValue placeholder="اختر الخدمة" />
+                </SelectTrigger>
+                <SelectContent>
+                  {services.map(s => (
+                    <SelectItem key={s.id} value={s.id}>{s.name} - {formatPrice(s.price)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">التاريخ</Label>
+                <Input
+                  type="date"
+                  value={appointmentForm.date}
+                  onChange={e => setAppointmentForm(prev => ({ ...prev, date: e.target.value }))}
+                  className="rounded-xl"
+                  min={new Date().toISOString().split('T')[0]}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">الوقت</Label>
+                <Input
+                  type="time"
+                  value={appointmentForm.time}
+                  onChange={e => setAppointmentForm(prev => ({ ...prev, time: e.target.value }))}
+                  className="rounded-xl"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">ملاحظات (اختياري)</Label>
+              <Textarea
+                value={appointmentForm.notes}
+                onChange={e => setAppointmentForm(prev => ({ ...prev, notes: e.target.value }))}
+                placeholder="أي ملاحظات إضافية..."
+                className="rounded-xl resize-none"
+                rows={2}
+              />
+            </div>
+
+            <Button
+              onClick={handleCreateAppointment}
+              disabled={appointmentSubmitting}
+              className="w-full bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white hover:shadow-lg rounded-xl"
+            >
+              {appointmentSubmitting ? <Loader2 className="w-5 h-5 animate-spin ml-2" /> : <Calendar className="w-5 h-5 ml-2" />}
+              حجز الموعد
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ===== RESCHEDULE DIALOG ===== */}
+      <Dialog open={rescheduleDialog} onOpenChange={setRescheduleDialog}>
+        <DialogContent className="sm:max-w-sm border-0 shadow-2xl p-0 max-h-[90vh] overflow-y-auto" dir="rtl">
+          <div className="bg-gradient-to-l from-violet-600 via-purple-600 to-fuchsia-600 p-5 text-white relative overflow-hidden">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.1)_0%,transparent_70%)]" />
+            <div className="relative flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
+                <RefreshCw className="w-5 h-5" />
+              </div>
+              <div>
+                <DialogTitle className="text-lg font-bold">إعادة جدولة الموعد</DialogTitle>
+                <p className="text-violet-100 text-xs mt-0.5">اختر التاريخ والوقت الجديد</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="p-6 space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">التاريخ الجديد</Label>
+                <Input
+                  type="date"
+                  value={rescheduleForm.date}
+                  onChange={e => setRescheduleForm(prev => ({ ...prev, date: e.target.value }))}
+                  className="rounded-xl"
+                  min={new Date().toISOString().split('T')[0]}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">الوقت الجديد</Label>
+                <Input
+                  type="time"
+                  value={rescheduleForm.time}
+                  onChange={e => setRescheduleForm(prev => ({ ...prev, time: e.target.value }))}
+                  className="rounded-xl"
+                />
+              </div>
+            </div>
+
+            <Button
+              onClick={handleRescheduleAppointment}
+              className="w-full bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white hover:shadow-lg rounded-xl"
+            >
+              <RefreshCw className="w-5 h-5 ml-2" />
+              تأكيد إعادة الجدولة
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ===== REPORT DIALOG ===== */}
+      <Dialog open={reportDialog} onOpenChange={setReportDialog}>
+        <DialogContent className="sm:max-w-md border-0 shadow-2xl p-0 max-h-[90vh] overflow-y-auto" dir="rtl">
+          <div className="bg-gradient-to-l from-red-600 via-rose-600 to-red-700 p-5 text-white relative overflow-hidden">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.1)_0%,transparent_70%)]" />
+            <div className="relative flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
+                <Flag className="w-5 h-5" />
+              </div>
+              <div>
+                <DialogTitle className="text-lg font-bold">تقديم بلاغ</DialogTitle>
+                <p className="text-red-100 text-xs mt-0.5">سيتم مراجعة بلاغك من قبل الإدارة</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="p-6 space-y-4">
+            <div className="space-y-2">
+              <Label className="text-sm font-medium text-red-700">نوع البلاغ</Label>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { key: 'nurse_issue', label: 'مشكلة ممرض' },
+                  { key: 'service_issue', label: 'مشكلة خدمة' },
+                  { key: 'other', label: 'أخرى' },
+                ].map(t => (
+                  <button
+                    key={t.key}
+                    onClick={() => setReportForm(prev => ({ ...prev, type: t.key }))}
+                    className={`px-3 py-2 rounded-xl text-xs font-medium transition-all duration-200 ${
+                      reportForm.type === t.key
+                        ? 'bg-gradient-to-r from-red-500 to-rose-500 text-white shadow-md'
+                        : 'bg-gray-50 text-gray-600 border border-gray-200 hover:border-red-300'
+                    }`}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">الوصف</Label>
+              <Textarea
+                value={reportForm.description}
+                onChange={e => setReportForm(prev => ({ ...prev, description: e.target.value }))}
+                placeholder="اشرح المشكلة بالتفصيل..."
+                className="rounded-xl resize-none"
+                rows={4}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-sm font-medium flex items-center gap-2">
+                <Camera className="w-4 h-4 text-red-500" />
+                صور (اختياري - روابط)
+              </Label>
+              <Input
+                value={reportForm.images}
+                onChange={e => setReportForm(prev => ({ ...prev, images: e.target.value }))}
+                placeholder="روابط الصور مفصولة بفواصل"
+                className="rounded-xl"
+              />
+            </div>
+
+            <Button
+              onClick={handleSubmitReport}
+              disabled={reportSubmitting}
+              className="w-full bg-gradient-to-r from-red-500 to-rose-500 text-white hover:shadow-lg rounded-xl"
+            >
+              {reportSubmitting ? <Loader2 className="w-5 h-5 animate-spin ml-2" /> : <Flag className="w-5 h-5 ml-2" />}
+              إرسال البلاغ
             </Button>
           </div>
         </DialogContent>

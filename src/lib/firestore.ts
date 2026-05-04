@@ -1303,3 +1303,549 @@ export async function createEmergencyAssignment(data: {
       : null,
   }
 }
+
+// ==================== NURSE PORTFOLIO ====================
+
+export async function updateNursePortfolio(id: string, portfolio: {
+  bio?: string
+  experience?: number
+  specializations?: string[]
+  certifications?: string[]
+  workPhotos?: string[]
+  completedCases?: number
+}) {
+  checkFirebase()
+  await firestore.collection('nurses').doc(id).update({
+    portfolio,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  })
+  const doc = await firestore.collection('nurses').doc(id).get()
+  return docToObject(doc)
+}
+
+// ==================== NURSE LIVE LOCATION ====================
+
+export async function updateNurseLocation(nurseId: string, latitude: number, longitude: number) {
+  checkFirebase()
+  await firestore.collection('nurses').doc(nurseId).update({
+    currentLocation: { latitude, longitude, updatedAt: admin.firestore.FieldValue.serverTimestamp() },
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  })
+  const doc = await firestore.collection('nurses').doc(nurseId).get()
+  return docToObject(doc)
+}
+
+export async function getNurseLocation(nurseId: string) {
+  checkFirebase()
+  const doc = await firestore.collection('nurses').doc(nurseId).get()
+  if (!doc.exists) return null
+  const data = doc.data()
+  return data.currentLocation || null
+}
+
+// ==================== APPOINTMENTS ====================
+
+export async function createAppointment(data: {
+  beneficiaryId: string
+  serviceId: string
+  nurseId?: string
+  date: string
+  time: string
+  notes?: string
+}) {
+  checkFirebase()
+  const docRef = await firestore.collection('appointments').add({
+    ...data,
+    status: 'scheduled',
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  })
+  return { id: docRef.id, ...data, status: 'scheduled' }
+}
+
+export async function getAppointmentsByBeneficiary(beneficiaryId: string) {
+  checkFirebase()
+  const snapshot = await firestore.collection('appointments')
+    .where('beneficiaryId', '==', beneficiaryId)
+    .get()
+  const docs = snapshot.docs.map(docToObject)
+  docs.sort((a: any, b: any) => {
+    const getTime = (t: any) => {
+      if (!t) return 0
+      if (typeof t === 'object' && t !== null && 'seconds' in t) return t.seconds * 1000
+      return new Date(t).getTime() || 0
+    }
+    return getTime(b.createdAt) - getTime(a.createdAt)
+  })
+  return docs
+}
+
+export async function getAppointmentsByNurse(nurseId: string) {
+  checkFirebase()
+  const snapshot = await firestore.collection('appointments')
+    .where('nurseId', '==', nurseId)
+    .get()
+  const docs = snapshot.docs.map(docToObject)
+  docs.sort((a: any, b: any) => {
+    const getTime = (t: any) => {
+      if (!t) return 0
+      if (typeof t === 'object' && t !== null && 'seconds' in t) return t.seconds * 1000
+      return new Date(t).getTime() || 0
+    }
+    return getTime(b.createdAt) - getTime(a.createdAt)
+  })
+  return docs
+}
+
+export async function getAppointmentById(id: string) {
+  checkFirebase()
+  const doc = await firestore.collection('appointments').doc(id).get()
+  if (!doc.exists) return null
+  return docToObject(doc)
+}
+
+export async function updateAppointment(id: string, data: Record<string, any>) {
+  checkFirebase()
+  await firestore.collection('appointments').doc(id).update({
+    ...data,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  })
+  const doc = await firestore.collection('appointments').doc(id).get()
+  return docToObject(doc)
+}
+
+export async function deleteAppointment(id: string) {
+  checkFirebase()
+  await firestore.collection('appointments').doc(id).delete()
+}
+
+// ==================== REPORTS / COMPLAINTS ====================
+
+export async function createReport(data: {
+  reporterId: string
+  reporterType: 'beneficiary' | 'nurse'
+  reportedId: string
+  reportedType: 'nurse' | 'beneficiary'
+  type: string
+  description: string
+  images?: string[]
+}) {
+  checkFirebase()
+  const docRef = await firestore.collection('reports').add({
+    ...data,
+    status: 'open',
+    adminResponse: null,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  })
+  return { id: docRef.id, ...data, status: 'open' }
+}
+
+export async function getReports(status?: string) {
+  checkFirebase()
+  let snapshot
+  if (status) {
+    snapshot = await firestore.collection('reports').where('status', '==', status).get()
+  } else {
+    snapshot = await firestore.collection('reports').orderBy('createdAt', 'desc').get()
+  }
+  return snapshot.docs.map(docToObject)
+}
+
+export async function updateReport(id: string, data: Record<string, any>) {
+  checkFirebase()
+  await firestore.collection('reports').doc(id).update({
+    ...data,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  })
+  const doc = await firestore.collection('reports').doc(id).get()
+  return docToObject(doc)
+}
+
+// ==================== PAYMENT TRANSACTIONS ====================
+
+export async function createTransaction(data: {
+  requestId: string
+  beneficiaryId: string
+  amount: number
+  paymentMethod: string
+  transactionRef?: string
+  status: string
+}) {
+  checkFirebase()
+  const docRef = await firestore.collection('transactions').add({
+    ...data,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  })
+  return { id: docRef.id, ...data }
+}
+
+export async function getTransactionsByBeneficiary(beneficiaryId: string) {
+  checkFirebase()
+  const snapshot = await firestore.collection('transactions')
+    .where('beneficiaryId', '==', beneficiaryId)
+    .get()
+  const docs = snapshot.docs.map(docToObject)
+  docs.sort((a: any, b: any) => {
+    const getTime = (t: any) => {
+      if (!t) return 0
+      if (typeof t === 'object' && t !== null && 'seconds' in t) return t.seconds * 1000
+      return new Date(t).getTime() || 0
+    }
+    return getTime(b.createdAt) - getTime(a.createdAt)
+  })
+  return docs
+}
+
+export async function updateTransaction(id: string, data: Record<string, any>) {
+  checkFirebase()
+  await firestore.collection('transactions').doc(id).update({
+    ...data,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  })
+  const doc = await firestore.collection('transactions').doc(id).get()
+  return docToObject(doc)
+}
+
+// ==================== PUSH NOTIFICATIONS ====================
+
+export async function createPushNotification(data: {
+  userId: string
+  userType: 'nurse' | 'beneficiary' | 'admin'
+  title: string
+  message: string
+  type: string
+  data?: Record<string, any>
+}) {
+  checkFirebase()
+  const docRef = await firestore.collection('pushNotifications').add({
+    ...data,
+    read: false,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  })
+  return { id: docRef.id, ...data, read: false }
+}
+
+export async function getUserNotifications(userId: string, userType: string, limitCount: number = 50) {
+  checkFirebase()
+  const snapshot = await firestore.collection('pushNotifications')
+    .where('userId', '==', userId)
+    .where('userType', '==', userType)
+    .limit(limitCount)
+    .get()
+  const docs = snapshot.docs.map(docToObject)
+  docs.sort((a: any, b: any) => {
+    const getTime = (t: any) => {
+      if (!t) return 0
+      if (typeof t === 'object' && t !== null && 'seconds' in t) return t.seconds * 1000
+      return new Date(t).getTime() || 0
+    }
+    return getTime(b.createdAt) - getTime(a.createdAt)
+  })
+  return docs
+}
+
+export async function markNotificationRead(notificationId: string) {
+  checkFirebase()
+  await firestore.collection('pushNotifications').doc(notificationId).update({
+    read: true,
+  })
+}
+
+// ==================== ENHANCED RATINGS ====================
+
+export async function createEnhancedRating(data: {
+  requestId: string
+  nurseId: string
+  beneficiaryId: string
+  beneficiaryName: string
+  nurseName: string
+  serviceName: string
+  criteria: {
+    punctuality: number
+    professionalism: number
+    cleanliness: number
+    communication: number
+  }
+  overallRating: number
+  comment?: string
+  beforePhotos?: string[]
+  afterPhotos?: string[]
+}) {
+  checkFirebase()
+  const docRef = await firestore.collection('ratings').add({
+    ...data,
+    rating: data.overallRating,
+    nurseReply: null,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  })
+  return { id: docRef.id, ...data }
+}
+
+export async function addNurseReplyToRating(ratingId: string, nurseId: string, reply: string) {
+  checkFirebase()
+  await firestore.collection('ratings').doc(ratingId).update({
+    nurseReply: { text: reply, createdAt: admin.firestore.FieldValue.serverTimestamp() },
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  })
+  const doc = await firestore.collection('ratings').doc(ratingId).get()
+  return docToObject(doc)
+}
+
+// ==================== FAVORITE NURSE (FAMILY DOCTOR) ====================
+
+export async function setFavoriteNurse(beneficiaryId: string, nurseId: string) {
+  checkFirebase()
+  await firestore.collection('beneficiaries').doc(beneficiaryId).update({
+    favoriteNurseId: nurseId,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  })
+  const doc = await firestore.collection('beneficiaries').doc(beneficiaryId).get()
+  return docToObject(doc)
+}
+
+export async function removeFavoriteNurse(beneficiaryId: string) {
+  checkFirebase()
+  await firestore.collection('beneficiaries').doc(beneficiaryId).update({
+    favoriteNurseId: admin.firestore.FieldValue.delete(),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  })
+}
+
+export async function getFavoriteNurse(beneficiaryId: string) {
+  checkFirebase()
+  const doc = await firestore.collection('beneficiaries').doc(beneficiaryId).get()
+  if (!doc.exists) return null
+  const favoriteNurseId = doc.data()!.favoriteNurseId
+  if (!favoriteNurseId) return null
+  const nurseDoc = await firestore.collection('nurses').doc(favoriteNurseId).get()
+  if (!nurseDoc.exists) return null
+  const { password, ...nurseData } = nurseDoc.data()!
+  return { id: nurseDoc.id, ...nurseData }
+}
+
+// ==================== NURSE EARNINGS ====================
+
+export async function getNurseEarnings(nurseId: string, period?: 'week' | 'month') {
+  checkFirebase()
+  const snapshot = await firestore.collection('serviceAssignments')
+    .where('nurseId', '==', nurseId)
+    .where('status', '==', 'completed')
+    .get()
+  
+  const now = new Date()
+  const periodStart = period === 'week'
+    ? new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+    : new Date(now.getFullYear(), now.getMonth(), 1)
+  
+  let totalEarnings = 0
+  const assignments = []
+  
+  for (const doc of snapshot.docs) {
+    const data = doc.data()
+    const updatedAt = data.updatedAt
+    let assignDate: Date | null = null
+    
+    if (typeof updatedAt === 'object' && updatedAt !== null && 'seconds' in updatedAt) {
+      assignDate = new Date(updatedAt.seconds * 1000)
+    } else if (typeof updatedAt === 'string') {
+      assignDate = new Date(updatedAt)
+    }
+    
+    if (assignDate && assignDate >= periodStart) {
+      const requestDoc = await firestore.collection('serviceRequests').doc(data.requestId).get()
+      if (requestDoc.exists) {
+        const requestData = requestDoc.data()!
+        const serviceDoc = await firestore.collection('services').doc(requestData.serviceId).get()
+        if (serviceDoc.exists) {
+          const price = serviceDoc.data()!.price || 0
+          totalEarnings += price
+          assignments.push({
+            id: doc.id,
+            ...data,
+            service: { name: serviceDoc.data()!.name, price },
+          })
+        }
+      }
+    }
+  }
+  
+  return { totalEarnings, assignments, period }
+}
+
+// ==================== DYNAMIC PRICING ====================
+
+export async function calculateDynamicPrice(serviceId: string, hour?: number, distanceKm?: number) {
+  checkFirebase()
+  const serviceDoc = await firestore.collection('services').doc(serviceId).get()
+  if (!serviceDoc.exists) throw new Error('الخدمة غير موجودة')
+  
+  const service = serviceDoc.data()!
+  let basePrice = service.price || 0
+  
+  // Time multiplier: night hours (10pm-6am) cost 30% more
+  const currentHour = hour ?? new Date().getHours()
+  const timeMultiplier = (currentHour >= 22 || currentHour < 6) ? 1.3 : 1.0
+  
+  // Distance surcharge: after 5km, add 5% per km
+  let distanceSurcharge = 0
+  if (distanceKm && distanceKm > 5) {
+    distanceSurcharge = basePrice * 0.05 * (distanceKm - 5)
+  }
+  
+  const finalPrice = Math.round(basePrice * timeMultiplier + distanceSurcharge)
+  
+  return {
+    basePrice,
+    timeMultiplier,
+    distanceSurcharge: Math.round(distanceSurcharge),
+    finalPrice,
+    breakdown: {
+      base: basePrice,
+      nightFee: Math.round(basePrice * (timeMultiplier - 1)),
+      distanceFee: Math.round(distanceSurcharge),
+    }
+  }
+}
+
+// ==================== SEARCH ====================
+
+export async function searchNurses(query: string, specialization?: string) {
+  checkFirebase()
+  const snapshot = await firestore.collection('nurses')
+    .where('status', '==', 'approved')
+    .get()
+  
+  const results = snapshot.docs
+    .map(doc => {
+      const data = doc.data()
+      const { password, ...rest } = data
+      return { id: doc.id, ...rest }
+    })
+    .filter(nurse => {
+      const fullName = `${nurse.firstName} ${nurse.secondName} ${nurse.thirdName} ${nurse.lastName}`
+      const matchesQuery = !query || 
+        fullName.includes(query) || 
+        (nurse.portfolio?.specializations || []).some((s: string) => s.includes(query))
+      const matchesSpec = !specialization || 
+        (nurse.portfolio?.specializations || []).some((s: string) => s.includes(specialization))
+      return matchesQuery && matchesSpec
+    })
+  
+  return results
+}
+
+export async function searchServices(query: string, category?: string) {
+  checkFirebase()
+  const snapshot = await firestore.collection('services')
+    .where('isActive', '==', true)
+    .get()
+  
+  return snapshot.docs
+    .map(docToObject)
+    .filter(service => {
+      const matchesQuery = !query || 
+        service.name.includes(query) || 
+        service.description?.includes(query)
+      const matchesCategory = !category || service.category === category
+      return matchesQuery && matchesCategory
+    })
+}
+
+// ==================== WHATSAPP INTEGRATION ====================
+
+export async function queueWhatsAppMessage(data: {
+  phone: string
+  message: string
+  type: string
+  userId?: string
+}) {
+  checkFirebase()
+  const docRef = await firestore.collection('whatsappQueue').add({
+    ...data,
+    status: 'pending',
+    attempts: 0,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  })
+  return { id: docRef.id, ...data, status: 'pending' }
+}
+
+// ==================== DETAILED AUDIT LOG ====================
+
+export async function getDetailedAuditLogs(filters?: {
+  userId?: string
+  type?: string
+  startDate?: string
+  endDate?: string
+  limitCount?: number
+}) {
+  checkFirebase()
+  let query: FirebaseFirestore.Query = firestore.collection('activityLog')
+  
+  if (filters?.userId) {
+    query = query.where('userId', '==', filters.userId)
+  }
+  if (filters?.type) {
+    query = query.where('type', '==', filters.type)
+  }
+  
+  const snapshot = await query
+    .orderBy('createdAt', 'desc')
+    .limit(filters?.limitCount || 100)
+    .get()
+  
+  let docs = snapshot.docs.map(docToObject)
+  
+  // Client-side date filtering if needed
+  if (filters?.startDate || filters?.endDate) {
+    docs = docs.filter((doc: any) => {
+      const getTime = (t: any) => {
+        if (!t) return 0
+        if (typeof t === 'object' && t !== null && 'seconds' in t) return t.seconds * 1000
+        return new Date(t).getTime() || 0
+      }
+      const docTime = getTime(doc.createdAt)
+      const start = filters.startDate ? new Date(filters.startDate).getTime() : 0
+      const end = filters.endDate ? new Date(filters.endDate).getTime() : Infinity
+      return docTime >= start && docTime <= end
+    })
+  }
+  
+  return docs
+}
+
+export async function exportAuditLogs(format: string = 'json') {
+  checkFirebase()
+  const snapshot = await firestore.collection('activityLog')
+    .orderBy('createdAt', 'desc')
+    .limit(1000)
+    .get()
+  return snapshot.docs.map(docToObject)
+}
+
+// ==================== SUB-ADMIN ACTIVITY LOG ====================
+
+export async function getSubAdminActivityLogs(subAdminId: string) {
+  checkFirebase()
+  const snapshot = await firestore.collection('activityLog')
+    .where('userId', '==', subAdminId)
+    .orderBy('createdAt', 'desc')
+    .limit(100)
+    .get()
+  return snapshot.docs.map(docToObject)
+}
+
+// ==================== NURSE VERIFICATION ====================
+
+export async function verifyNurse(nurseId: string, verified: boolean) {
+  checkFirebase()
+  await firestore.collection('nurses').doc(nurseId).update({
+    isVerified: verified,
+    verifiedAt: verified ? admin.firestore.FieldValue.serverTimestamp() : admin.firestore.FieldValue.delete(),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  })
+  const doc = await firestore.collection('nurses').doc(nurseId).get()
+  return docToObject(doc)
+}
