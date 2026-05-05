@@ -1659,12 +1659,14 @@ export default function AdminDashboard() {
                     </div>
 
                     {/* Finance Sub-Tabs - Professional Pill Design */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-1 p-1.5 bg-gradient-to-l from-gray-100 to-gray-50 rounded-2xl shadow-inner border border-gray-200/50">
+                    <div className={`grid ${isSubAdmin ? 'grid-cols-2' : 'grid-cols-2 md:grid-cols-4'} gap-1 p-1.5 bg-gradient-to-l from-gray-100 to-gray-50 rounded-2xl shadow-inner border border-gray-200/50`}>
                       {[
                         { key: 'methods' as FinanceSubTab, label: 'طرق الدفع', icon: Wallet, count: payments.length, activeGradient: 'from-blue-500 to-indigo-600', activeShadow: 'shadow-blue-500/25' },
                         { key: 'transactions' as FinanceSubTab, label: 'المعاملات', icon: CreditCard, count: transactions.filter((t: any) => t.status === 'pending_confirmation' || t.status === 'pending').length, countColor: true, activeGradient: 'from-amber-500 to-orange-600', activeShadow: 'shadow-amber-500/25' },
-                        { key: 'settings' as FinanceSubTab, label: 'الإعدادات', icon: Settings, activeGradient: 'from-emerald-500 to-teal-600', activeShadow: 'shadow-emerald-500/25' },
-                        { key: 'pricing' as FinanceSubTab, label: 'التسعير', icon: TrendingUp, activeGradient: 'from-violet-500 to-purple-600', activeShadow: 'shadow-violet-500/25' },
+                        ...(!isSubAdmin ? [
+                          { key: 'settings' as FinanceSubTab, label: 'الإعدادات', icon: Settings, activeGradient: 'from-emerald-500 to-teal-600', activeShadow: 'shadow-emerald-500/25' },
+                          { key: 'pricing' as FinanceSubTab, label: 'التسعير', icon: TrendingUp, activeGradient: 'from-violet-500 to-purple-600', activeShadow: 'shadow-violet-500/25' },
+                        ] : []),
                       ].map(({ key, label, icon: Icon, count, countColor, activeGradient, activeShadow }) => (
                         <button
                           key={key}
@@ -1882,25 +1884,16 @@ export default function AdminDashboard() {
                       </div>
                     )}
 
-                    {/* ═══ Sub-Tab: إعدادات الدفع ═══ — Available to all admins */}
-                    {financeSubTab === 'settings' && settings && (
+                    {/* ═══ Sub-Tab: إعدادات الدفع ═══ — Main admin only */}
+                    {!isSubAdmin && financeSubTab === 'settings' && settings && (
                       <div className="space-y-4">
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center shadow-md"><Settings className="w-5 h-5 text-white" /></div>
                           <div>
-                            <h2 className="text-lg font-bold">إعدادات الدفع {isSubAdmin && <span className="text-sm text-violet-500">(خاصة بك)</span>}</h2>
-                            <p className="text-xs text-gray-400">{isSubAdmin ? 'إعدادات الدفع الخاصة بك كمدير فرعي' : 'إعدادات واتساب الدفع والإعدادات العامة'}</p>
+                            <h2 className="text-lg font-bold">إعدادات الدفع</h2>
+                            <p className="text-xs text-gray-400">إعدادات واتساب الدفع والإعدادات العامة</p>
                           </div>
                         </div>
-
-                        {isSubAdmin && (
-                          <div className="p-3 bg-violet-50/50 rounded-xl border border-violet-100">
-                            <div className="flex items-center gap-2">
-                              <ShieldAlert className="w-4 h-4 text-violet-500" />
-                              <p className="text-sm text-violet-700 font-medium">هذه الإعدادات خاصة بك كمدير فرعي ولا تؤثر على إعدادات الإدارة العامة</p>
-                            </div>
-                          </div>
-                        )}
 
                         <Card className="border-0 shadow-lg overflow-hidden">
                           <div className="bg-gradient-to-l from-emerald-500 to-teal-600 p-4 text-white">
@@ -1956,25 +1949,16 @@ export default function AdminDashboard() {
                       </div>
                     )}
 
-                    {/* ═══ Sub-Tab: التسعير الديناميكي ═══ — Available to all admins */}
-                    {financeSubTab === 'pricing' && settings && (
+                    {/* ═══ Sub-Tab: التسعير الديناميكي ═══ — Main admin only */}
+                    {!isSubAdmin && financeSubTab === 'pricing' && settings && (
                       <div className="space-y-4">
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-400 to-purple-500 flex items-center justify-center shadow-md"><TrendingUp className="w-5 h-5 text-white" /></div>
                           <div>
-                            <h2 className="text-lg font-bold">إعدادات التسعير الديناميكي {isSubAdmin && <span className="text-sm text-violet-500">(خاصة بك)</span>}</h2>
-                            <p className="text-xs text-gray-400">{isSubAdmin ? 'تحكم في نسب الرسوم الإضافية الخاصة بك كمدير فرعي' : 'تحكم في نسب الرسوم الإضافية للخدمات'}</p>
+                            <h2 className="text-lg font-bold">إعدادات التسعير الديناميكي</h2>
+                            <p className="text-xs text-gray-400">تحكم في نسب الرسوم الإضافية للخدمات</p>
                           </div>
                         </div>
-
-                        {isSubAdmin && (
-                          <div className="p-3 bg-violet-50/50 rounded-xl border border-violet-100">
-                            <div className="flex items-center gap-2">
-                              <ShieldAlert className="w-4 h-4 text-violet-500" />
-                              <p className="text-sm text-violet-700 font-medium">هذه الإعدادات خاصة بك كمدير فرعي ولا تؤثر على إعدادات الإدارة العامة</p>
-                            </div>
-                          </div>
-                        )}
 
                         <Card className="border-0 shadow-lg overflow-hidden">
                           <div className="bg-gradient-to-l from-indigo-500 to-purple-600 p-4 text-white">
@@ -2463,21 +2447,23 @@ export default function AdminDashboard() {
                     </Card>
                     )}
 
-                    {/* Shortcut to Finance Tab - Available to all admins */}
+                    {/* Shortcut to Finance Tab - Main admin only */}
+                    {!isSubAdmin && (
                     <Card className="border-0 shadow-lg bg-gradient-to-l from-blue-50/50 to-indigo-50/50 border border-blue-200/50">
                       <CardContent className="p-4">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center shadow-md"><CreditCard className="w-5 h-5 text-white" /></div>
                             <div>
-                              <p className="font-bold">إعدادات المدفوعات والتسعير {isSubAdmin && <span className="text-xs text-violet-500">(خاصة بك)</span>}</p>
-                              <p className="text-xs text-gray-500">{isSubAdmin ? 'إدارة طرق الدفع والإعدادات المالية الخاصة بك في قسم المالية' : 'إدارة طرق الدفع، إعدادات الدفع، والتسعير الديناميكي في قسم المالية'}</p>
+                              <p className="font-bold">إعدادات المدفوعات والتسعير</p>
+                              <p className="text-xs text-gray-500">إدارة طرق الدفع، إعدادات الدفع، والتسعير الديناميكي في قسم المالية</p>
                             </div>
                           </div>
                           <Button variant="outline" className="border-blue-300 text-blue-600 hover:bg-blue-50" onClick={() => setActiveTab('payments')}>الانتقال للمالية <ChevronDown className="w-4 h-4 mr-1 rotate-[-90deg]" /></Button>
                         </div>
                       </CardContent>
                     </Card>
+                    )}
 
                     {/* Sub-admin info banner */}
                     {isSubAdmin && (
@@ -2487,7 +2473,7 @@ export default function AdminDashboard() {
                           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-400 to-purple-500 flex items-center justify-center shadow-md"><Shield className="w-5 h-5 text-white" /></div>
                           <div>
                             <p className="font-bold text-violet-700">حساب مدير فرعي</p>
-                            <p className="text-xs text-gray-500">إعدادات الطوارئ والإحالة يديرها المدير الرئيسي فقط. إعدادات المدفوعات والتسعير خاصة بك</p>
+                            <p className="text-xs text-gray-500">إعدادات الطوارئ، الإحالة، والمدفوعات والتسعير يديرها المدير الرئيسي فقط</p>
                           </div>
                         </div>
                       </CardContent>

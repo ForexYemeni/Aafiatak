@@ -8,29 +8,13 @@ export async function GET(request: NextRequest) {
 
     const settings = await getAdminSettings(subAdminId || undefined)
     if (!settings) {
-      // Sub-admin defaults (includes payment/pricing fields specific to sub-admin)
+      // Sub-admin defaults (only basic contact fields)
       if (subAdminId) {
         return NextResponse.json({
           phone: '',
           email: '',
           whatsappNumber: '',
           whatsappNumbers: [],
-          nightSurchargePercent: 50,
-          fridaySurchargePercent: 25,
-          distanceFeesEnabled: true,
-          distanceFeePerKm5to15: 100,
-          distanceFeePerKm15to30: 150,
-          distanceFeePerKmOver30: 200,
-          distanceFreeKm: 5,
-          commissionPercent: 15,
-          emergencyServicePrices: {
-            'تمريض منزلي عاجل': 5000,
-            'إسعافات أولية': 3000,
-            'حقن وريدي': 4000,
-            'قياس الضغط والسكر': 2500,
-            'عناية بالجروح': 3500,
-            'أخرى': 3000,
-          },
         })
       }
       // Main admin defaults
@@ -77,9 +61,9 @@ export async function PUT(request: NextRequest) {
     const body = await request.json()
     const { subAdminId, ...data } = body
 
-    // Sub-admins can update their own limited fields + payment/pricing fields (sub-admin specific)
-    const subAdminAllowedFields = ['phone', 'email', 'whatsappNumber', 'whatsappNumbers', 'nightSurchargePercent', 'fridaySurchargePercent', 'distanceFeesEnabled', 'distanceFeePerKm5to15', 'distanceFeePerKm15to30', 'distanceFeePerKmOver30', 'distanceFreeKm', 'commissionPercent', 'emergencyServicePrices']
-    // Main admin can update all fields
+    // Sub-admins can only update their own limited fields (no payment/pricing)
+    const subAdminAllowedFields = ['phone', 'email', 'whatsappNumber', 'whatsappNumbers']
+    // Main admin can update all fields including payment/pricing
     const mainAdminAllowedFields = ['phone', 'email', 'emergencyPhone', 'whatsappNumber', 'whatsappNumbers', 'referralBonusPoints', 'referralBonusPointsReceiver', 'referralEnabled', 'nightSurchargePercent', 'fridaySurchargePercent', 'distanceFeesEnabled', 'distanceFeePerKm5to15', 'distanceFeePerKm15to30', 'distanceFeePerKmOver30', 'distanceFreeKm', 'commissionPercent', 'emergencyServicePrices']
 
     const allowedFields = subAdminId ? subAdminAllowedFields : mainAdminAllowedFields
