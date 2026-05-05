@@ -852,13 +852,16 @@ export default function AdminDashboard() {
   // Sorted nurses by proximity for the approve dialog
   const sortedNursesByProximity = useMemo(() => {
     const approved = nurses.filter(n => n.status === 'approved')
-    if (Object.keys(nurseDistances).length === 0) return approved
-    return [...approved].sort((a, b) => {
+    // Filter out nurses who previously rejected this specific request
+    const rejectedNurseIds = (selectedRequest?.rejectedNurses || []).map((rn: any) => rn.nurseId)
+    const available = approved.filter(n => !rejectedNurseIds.includes(n.id))
+    if (Object.keys(nurseDistances).length === 0) return available
+    return [...available].sort((a, b) => {
       const distA = nurseDistances[a.id] ?? Infinity
       const distB = nurseDistances[b.id] ?? Infinity
       return distA - distB
     })
-  }, [nurses, nurseDistances])
+  }, [nurses, nurseDistances, selectedRequest])
 
   // ─── Computed data ──────────────────────────────────────────
   const approvedNurses = nurses.filter(n => n.status === 'approved')
@@ -1708,6 +1711,17 @@ export default function AdminDashboard() {
                                     </button>
                                   )}
                                   {r.assignment?.nurse && <p className="text-sm text-emerald-600">الممرض: {r.assignment.nurse.firstName} {r.assignment.nurse.lastName}</p>}
+                                  {/* Show rejection info if nurse rejected this request */}
+                                  {r.assignmentRejection && (
+                                    <div className="mt-1.5 p-2 bg-red-50/80 rounded-lg ring-1 ring-red-200/50 flex items-start gap-2">
+                                      <XCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+                                      <div>
+                                        <p className="text-xs font-bold text-red-700">رفض الممرض "{r.assignmentRejection.nurseName}" المهمة</p>
+                                        <p className="text-xs text-red-600 mt-0.5">السبب: {r.assignmentRejection.reason}</p>
+                                        <p className="text-[10px] text-red-400 mt-0.5">يجب تعيين ممرض آخر</p>
+                                      </div>
+                                    </div>
+                                  )}
                                   {r.paymentMethod && <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
                                     <CreditCard className="w-3 h-3" />
                                     {r.paymentMethod === 'wallet-deposit' ? 'إيداع محفظة' : r.paymentMethod === 'exchange-transfer' ? 'تحويل صراف' : r.paymentMethod === 'bank-transfer' ? 'تحويل بنكي' : r.paymentMethod === 'cash' ? 'نقدي عند الاستلام' : r.paymentMethod}
@@ -2995,6 +3009,26 @@ export default function AdminDashboard() {
                       </div>
                     )}
                     <p className="text-sm text-gray-500">المستفيد: {selectedRequest.beneficiary?.name || 'غير محدد'}</p>
+                    {/* Rejection history warning */}
+                    {selectedRequest.assignmentRejection && (
+                      <div className="p-2.5 bg-red-50/80 rounded-lg ring-1 ring-red-200/50 flex items-start gap-2">
+                        <XCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+                        <div>
+                          <p className="text-xs font-bold text-red-700">الممرض "{selectedRequest.assignmentRejection.nurseName}" رفض المهمة</p>
+                          <p className="text-xs text-red-600">السبب: {selectedRequest.assignmentRejection.reason}</p>
+                        </div>
+                      </div>
+                    )}
+                    {selectedRequest.rejectedNurses && selectedRequest.rejectedNurses.length > 1 && (
+                      <div className="p-2 bg-amber-50/80 rounded-lg ring-1 ring-amber-200/50">
+                        <p className="text-xs font-bold text-amber-700 flex items-center gap-1"><AlertTriangle className="w-3.5 h-3.5" />{selectedRequest.rejectedNurses.length} ممرضين رفضوا هذا الطلب</p>
+                        <div className="mt-1 space-y-0.5">
+                          {selectedRequest.rejectedNurses.map((rn: any, idx: number) => (
+                            <p key={idx} className="text-[10px] text-amber-600">• {rn.nurseName}: {rn.reason}</p>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     {(selectedRequest.beneficiary?.location || selectedRequest.address || selectedRequest.location) && (
                       <button
                         onClick={() => showMapPreview(selectedRequest.beneficiary?.location || selectedRequest.address || selectedRequest.location)}

@@ -6,7 +6,7 @@ import {
   Stethoscope, ClipboardList, User, LogOut, Loader2, Play, CheckCircle,
   Menu, X, Phone, MapPin, Clock, HelpCircle, Bell, Activity,
   Calendar, Star, Filter, MessageSquare, ChevronDown, ChevronUp,
-  Mail, Shield, Award, Navigation, Info, Sparkles,
+  Mail, Shield, Award, Navigation, Info, Sparkles, AlertTriangle,
   Briefcase, Check, DollarSign, Camera, Upload, Plus, Trash2, Send, Wallet
 } from 'lucide-react'
 import { useAppStore, formatPrice, getStatusLabel, getStatusColor } from '@/lib/store'
@@ -300,6 +300,11 @@ export default function NurseDashboard() {
   const [completionNotes, setCompletionNotes] = useState('')
   const [actionLoading, setActionLoading] = useState(false)
 
+  // Reject dialog state
+  const [rejectDialogOpen, setRejectDialogOpen] = useState(false)
+  const [rejectAssignmentId, setRejectAssignmentId] = useState<string | null>(null)
+  const [rejectReason, setRejectReason] = useState('')
+
   // Chat state
   const [activeChatRequestId, setActiveChatRequestId] = useState<string | null>(null)
   const [chatOtherPartyName, setChatOtherPartyName] = useState<string>('')
@@ -497,6 +502,14 @@ export default function NurseDashboard() {
       toast({ title: 'خطأ', description: 'معرف الممرض غير متوفر', variant: 'destructive' })
       return
     }
+    // If reject, open dialog to get reason first
+    if (action === 'reject') {
+      setRejectAssignmentId(assignmentId)
+      setRejectReason('')
+      setRejectDialogOpen(true)
+      return
+    }
+    // Accept flow
     setActionLoading(true)
     try {
       const res = await fetch('/api/nurse/accept-assignment', {
@@ -506,8 +519,8 @@ export default function NurseDashboard() {
       })
       if (res.ok) {
         toast({
-          title: action === 'accept' ? 'تم قبول المهمة' : 'تم رفض المهمة',
-          description: action === 'accept' ? 'يمكنك الآن بدء تنفيذ المهمة' : 'تم رفض المهمة بنجاح',
+          title: 'تم قبول المهمة',
+          description: 'يمكنك الآن بدء تنفيذ المهمة',
         })
         fetchAssignments()
       } else {
@@ -520,6 +533,39 @@ export default function NurseDashboard() {
       setActionLoading(false)
     }
   }, [fetchAssignments, toast])
+
+  const handleConfirmReject = useCallback(async () => {
+    if (!rejectAssignmentId || !nurseId) return
+    if (!rejectReason.trim()) {
+      toast({ title: 'خطأ', description: 'يرجى إدخال سبب الرفض', variant: 'destructive' })
+      return
+    }
+    setActionLoading(true)
+    try {
+      const res = await fetch('/api/nurse/accept-assignment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ assignmentId: rejectAssignmentId, nurseId, action: 'reject', rejectionReason: rejectReason.trim() }),
+      })
+      if (res.ok) {
+        toast({
+          title: 'تم رفض المهمة',
+          description: 'تم إبلاغ الإدارة وسيتم تعيين ممرض آخر',
+        })
+        setRejectDialogOpen(false)
+        setRejectAssignmentId(null)
+        setRejectReason('')
+        fetchAssignments()
+      } else {
+        const data = await res.json().catch(() => ({}))
+        toast({ title: 'خطأ', description: data.error || 'حدث خطأ', variant: 'destructive' })
+      }
+    } catch {
+      toast({ title: 'خطأ', description: 'حدث خطأ في الاتصال', variant: 'destructive' })
+    } finally {
+      setActionLoading(false)
+    }
+  }, [rejectAssignmentId, rejectReason, nurseId, fetchAssignments, toast])
 
   const handleRatingReply = useCallback(async () => {
     if (!replyRatingId || !replyText.trim()) return
@@ -3128,6 +3174,64 @@ export default function NurseDashboard() {
                 الاتجاهات
               </Button>
             )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reject Assignment Dialog */}
+      <Dialog open={rejectDialogOpen} onOpenChange={(open) => { setRejectDialogOpen(open); if (!open) { setRejectReason(''); setRejectAssignmentId(null) } }}>
+        <DialogContent className="sm:max-w-md border-0 shadow-2xl" dir="rtl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-red-500 to-rose-600 flex items-center justify-center shadow-lg shadow-red-500/25">
+                <X className="w-5 h-5 text-white" />
+              </div>
+              رفض المهمة
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="p-3 bg-red-50/80 rounded-xl flex items-start gap-2.5 ring-1 ring-red-200/50">
+              <AlertTriangle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-bold text-red-700">تنبيه مهم</p>
+                <p className="text-xs text-red-600 mt-0.5">رفض المهمة سيُعلم الإدارة تلقائياً للبحث عن ممرض آخر. لن يتم تعيين هذه المهمة لك مرة أخرى.</p>
+              </div>
+            </div>
+            <div>
+              <Label className="text-sm font-bold text-gray-700 mb-1.5 block">سبب الرفض <span className="text-red-500">*</span></Label>
+              <Textarea
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                placeholder="يرجى توضيح سبب رفض المهمة (مثال: لدي مهمة أخرى في نفس الوقت، الموقع بعيد جداً، لا أملك المعدات اللازمة...)"
+                className="border-red-200 focus:border-red-400 min-h-[100px] resize-none"
+                maxLength={500}
+              />
+              <p className="text-[10px] text-gray-400 mt-1 text-left">{rejectReason.length}/500</p>
+            </div>
+            {/* Quick reason suggestions */}
+            <div className="flex flex-wrap gap-1.5">
+              {['لدي مهمة أخرى', 'الموقع بعيد', 'لا أملك المعدات', 'الوقت غير مناسب', 'ظرف طارئ'].map(reason => (
+                <button
+                  key={reason}
+                  onClick={() => setRejectReason(reason)}
+                  className="px-2.5 py-1 text-xs rounded-lg bg-gray-100 text-gray-600 hover:bg-red-50 hover:text-red-600 transition-colors border border-gray-200 hover:border-red-200"
+                >
+                  {reason}
+                </button>
+              ))}
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => { setRejectDialogOpen(false); setRejectReason(''); setRejectAssignmentId(null) }} className="flex-1">تراجع</Button>
+            <Button
+              variant="destructive"
+              onClick={handleConfirmReject}
+              disabled={actionLoading || !rejectReason.trim()}
+              className="flex-1 bg-gradient-to-l from-red-500 to-rose-600 shadow-lg shadow-red-500/25"
+            >
+              {actionLoading ? <Loader2 className="w-4 h-4 ml-1 animate-spin" /> : <X className="w-4 h-4 ml-1" />}
+              تأكيد الرفض
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

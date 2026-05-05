@@ -1,8 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServiceRequestById, getAssignmentByRequestId, getNurseById, createAssignment } from '@/lib/firestore'
+import { firestore, admin, firebaseInitialized, initializationError } from '@/lib/firebase-admin'
+
+function checkFirebase() {
+  if (!firebaseInitialized || !firestore) {
+    throw new Error(initializationError || 'Firebase غير مهيأ')
+  }
+}
 
 export async function POST(request: NextRequest) {
   try {
+    checkFirebase()
     const body = await request.json()
     const { requestId, nurseId } = body
 
@@ -17,6 +25,16 @@ export async function POST(request: NextRequest) {
 
     if (serviceRequest.status !== 'approved') {
       return NextResponse.json({ error: 'يجب أن يكون الطلب مقبولاً أولاً' }, { status: 400 })
+    }
+
+    // Check if this nurse has previously rejected this request
+    const rejectedNurses = serviceRequest.rejectedNurses || []
+    const hasRejected = rejectedNurses.some((rn: any) => rn.nurseId === nurseId)
+    if (hasRejected) {
+      const nurseInfo = rejectedNurses.find((rn: any) => rn.nurseId === nurseId)
+      return NextResponse.json({
+        error: `الممرض "${nurseInfo?.nurseName || ''}" رفض هذا الطلب سابقاً بسبب: "${nurseInfo?.reason || 'غير محدد'}". لا يمكن تعيين نفس الممرض مرة أخرى.`
+      }, { status: 400 })
     }
 
     const existingAssignment = await getAssignmentByRequestId(requestId)
@@ -34,6 +52,13 @@ export async function POST(request: NextRequest) {
       nurseId,
       status: 'assigned',
     })
+
+    // Clear assignmentRejection info from request since we're reassigning
+    if (serviceRequest.assignmentRejection) {
+      await firestore.collection('serviceRequests').doc(requestId).update({
+        assignmentRejection: admin.firestore.FieldValue.delete(),
+      })
+    }
 
     return NextResponse.json(assignment)
   } catch (error) {

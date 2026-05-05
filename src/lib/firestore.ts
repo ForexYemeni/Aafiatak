@@ -338,7 +338,7 @@ export async function getAllServiceRequests() {
       id: doc.id,
       ...convertTimestamps(data),
       beneficiary: beneficiaryDoc.exists
-        ? { id: beneficiaryDoc.id, name: beneficiaryDoc.data()!.name, phone: beneficiaryDoc.data()!.phone }
+        ? { id: beneficiaryDoc.id, name: beneficiaryDoc.data()!.name, phone: beneficiaryDoc.data()!.phone, location: beneficiaryDoc.data()!.location || null }
         : null,
       service: serviceDoc.exists
         ? { id: serviceDoc.id, name: serviceDoc.data()!.name, price: serviceDoc.data()!.price }

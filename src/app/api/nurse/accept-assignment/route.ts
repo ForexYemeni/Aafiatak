@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
   try {
     checkFirebase()
     const body = await request.json()
-    const { assignmentId, nurseId, action } = body
+    const { assignmentId, nurseId, action, rejectionReason } = body
 
     if (!assignmentId || !nurseId || !action) {
       return NextResponse.json({ error: 'معرف التعيين والممرض والإجراء مطلوبون' }, { status: 400 })
@@ -23,6 +23,11 @@ export async function POST(request: NextRequest) {
 
     if (action !== 'accept' && action !== 'reject') {
       return NextResponse.json({ error: 'الإجراء يجب أن يكون accept أو reject' }, { status: 400 })
+    }
+
+    // Require rejection reason when rejecting
+    if (action === 'reject' && (!rejectionReason || !rejectionReason.trim())) {
+      return NextResponse.json({ error: 'يرجى إدخال سبب الرفض' }, { status: 400 })
     }
 
     // Fetch assignment
@@ -52,11 +57,19 @@ export async function POST(request: NextRequest) {
     const newStatus = action === 'accept' ? 'accepted' : 'rejected'
 
     // Update assignment status
-    await firestore.collection('serviceAssignments').doc(assignmentId).update({
+    const updateData: Record<string, any> = {
       status: newStatus,
       respondedAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    })
+    }
+
+    // Save rejection reason if rejecting
+    if (action === 'reject' && rejectionReason) {
+      updateData.rejectionReason = rejectionReason.trim()
+      updateData.rejectedAt = admin.firestore.FieldValue.serverTimestamp()
+    }
+
+    await firestore.collection('serviceAssignments').doc(assignmentId).update(updateData)
 
     // If accepted, also update the service request status
     if (action === 'accept' && assignmentData.requestId) {
@@ -66,10 +79,36 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    // If rejected, optionally update the service request to allow reassignment
+    // If rejected, update the service request to allow reassignment and store rejection info
     if (action === 'reject' && assignmentData.requestId) {
+      // Get nurse name for the rejection record
+      const nurseData = nurseDoc.data()!
+      const nurseName = `${nurseData.firstName || ''} ${nurseData.lastName || ''}`.trim()
+
+      // Get existing rejected nurses list
+      const requestDoc = await firestore.collection('serviceRequests').doc(assignmentData.requestId).get()
+      const requestData = requestDoc.data() || {}
+      const rejectedNurses = requestData.rejectedNurses || []
+
+      // Add this nurse to the rejected list if not already there
+      if (!rejectedNurses.some((rn: any) => rn.nurseId === nurseId)) {
+        rejectedNurses.push({
+          nurseId,
+          nurseName,
+          reason: rejectionReason.trim(),
+          rejectedAt: new Date().toISOString(),
+        })
+      }
+
       await firestore.collection('serviceRequests').doc(assignmentData.requestId).update({
         status: 'approved', // Reset back to approved so admin can reassign
+        rejectedNurses,
+        assignmentRejection: {
+          nurseId,
+          nurseName,
+          reason: rejectionReason.trim(),
+          rejectedAt: new Date().toISOString(),
+        },
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       })
     }
