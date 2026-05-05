@@ -190,6 +190,13 @@ export default function AdminDashboard() {
   // Finance sub-tab
   const [financeSubTab, setFinanceSubTab] = useState<FinanceSubTab>('methods')
 
+  // Reset finance sub-tab if sub-admin tries to access restricted tabs
+  useEffect(() => {
+    if (isSubAdmin && (financeSubTab === 'settings' || financeSubTab === 'pricing')) {
+      setFinanceSubTab('methods')
+    }
+  }, [isSubAdmin, financeSubTab])
+
   // Confirmation dialog
   const [confirmDialog, setConfirmDialog] = useState(false)
   const [confirmAction, setConfirmAction] = useState<{ title: string; description: string; icon: any; iconColor: string; onConfirm: () => void } | null>(null)
@@ -279,7 +286,8 @@ export default function AdminDashboard() {
         else toast({ title: 'خطأ', description: 'فشل تحميل طرق الدفع', variant: 'destructive' })
         if (transRes?.ok) { const transData = await transRes.json(); setTransactions(Array.isArray(transData) ? transData : []) }
         try {
-          const setRes = await fetch('/api/admin/settings')
+          const settingsUrl = isSubAdmin ? `/api/admin/settings?subAdminId=${(user as any)?.id}` : '/api/admin/settings'
+          const setRes = await fetch(settingsUrl)
           if (setRes.ok) setSettings(await setRes.json())
         } catch {}
       } else if (activeTab === 'coupons') {
@@ -311,7 +319,8 @@ export default function AdminDashboard() {
         if (saRes.ok) setSubAdmins(await saRes.json())
         else toast({ title: 'خطأ', description: 'فشل تحميل المسؤولين الفرعيين', variant: 'destructive' })
       } else if (activeTab === 'settings') {
-        const setRes = await fetch('/api/admin/settings')
+        const settingsUrl = isSubAdmin ? `/api/admin/settings?subAdminId=${(user as any)?.id}` : '/api/admin/settings'
+        const setRes = await fetch(settingsUrl)
         if (setRes.ok) setSettings(await setRes.json())
         else toast({ title: 'خطأ', description: 'فشل تحميل الإعدادات', variant: 'destructive' })
       }
@@ -665,7 +674,8 @@ export default function AdminDashboard() {
   // ─── Settings save ──────────────────────────────────────────
   const handleSaveSettings = async (data: any) => {
     try {
-      const res = await fetch('/api/admin/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) })
+      const body = isSubAdmin ? { ...data, subAdminId: (user as any)?.id } : data
+      const res = await fetch('/api/admin/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       if (res.ok) { toast({ title: 'تم حفظ الإعدادات' }); fetchData() }
       else { const d = await res.json(); toast({ title: 'خطأ', description: d.error, variant: 'destructive' }) }
     } catch { toast({ title: 'خطأ', description: 'حدث خطأ', variant: 'destructive' }) }
@@ -1656,12 +1666,14 @@ export default function AdminDashboard() {
                     </div>
 
                     {/* Finance Sub-Tabs - Professional Pill Design */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-1 p-1.5 bg-gradient-to-l from-gray-100 to-gray-50 rounded-2xl shadow-inner border border-gray-200/50">
+                    <div className={`grid ${isSubAdmin ? 'grid-cols-2' : 'grid-cols-2 md:grid-cols-4'} gap-1 p-1.5 bg-gradient-to-l from-gray-100 to-gray-50 rounded-2xl shadow-inner border border-gray-200/50`}>
                       {[
                         { key: 'methods' as FinanceSubTab, label: 'طرق الدفع', icon: Wallet, count: payments.length, activeGradient: 'from-blue-500 to-indigo-600', activeShadow: 'shadow-blue-500/25' },
                         { key: 'transactions' as FinanceSubTab, label: 'المعاملات', icon: CreditCard, count: transactions.filter((t: any) => t.status === 'pending_confirmation' || t.status === 'pending').length, countColor: true, activeGradient: 'from-amber-500 to-orange-600', activeShadow: 'shadow-amber-500/25' },
-                        { key: 'settings' as FinanceSubTab, label: 'الإعدادات', icon: Settings, activeGradient: 'from-emerald-500 to-teal-600', activeShadow: 'shadow-emerald-500/25' },
-                        { key: 'pricing' as FinanceSubTab, label: 'التسعير', icon: TrendingUp, activeGradient: 'from-violet-500 to-purple-600', activeShadow: 'shadow-violet-500/25' },
+                        ...(!isSubAdmin ? [
+                          { key: 'settings' as FinanceSubTab, label: 'الإعدادات', icon: Settings, activeGradient: 'from-emerald-500 to-teal-600', activeShadow: 'shadow-emerald-500/25' },
+                          { key: 'pricing' as FinanceSubTab, label: 'التسعير', icon: TrendingUp, activeGradient: 'from-violet-500 to-purple-600', activeShadow: 'shadow-violet-500/25' },
+                        ] : []),
                       ].map(({ key, label, icon: Icon, count, countColor, activeGradient, activeShadow }) => (
                         <button
                           key={key}
@@ -1879,8 +1891,8 @@ export default function AdminDashboard() {
                       </div>
                     )}
 
-                    {/* ═══ Sub-Tab: إعدادات الدفع ═══ */}
-                    {financeSubTab === 'settings' && settings && (
+                    {/* ═══ Sub-Tab: إعدادات الدفع ═══ — Main admin only */}
+                    {!isSubAdmin && financeSubTab === 'settings' && settings && (
                       <div className="space-y-4">
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center shadow-md"><Settings className="w-5 h-5 text-white" /></div>
@@ -1944,8 +1956,8 @@ export default function AdminDashboard() {
                       </div>
                     )}
 
-                    {/* ═══ Sub-Tab: التسعير الديناميكي ═══ */}
-                    {financeSubTab === 'pricing' && settings && (
+                    {/* ═══ Sub-Tab: التسعير الديناميكي ═══ — Main admin only */}
+                    {!isSubAdmin && financeSubTab === 'pricing' && settings && (
                       <div className="space-y-4">
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-400 to-purple-500 flex items-center justify-center shadow-md"><TrendingUp className="w-5 h-5 text-white" /></div>
@@ -2413,7 +2425,8 @@ export default function AdminDashboard() {
                       </CardContent>
                     </Card>
 
-                    {/* Emergency Settings */}
+                    {/* Emergency Settings - Only main admin */}
+                    {!isSubAdmin && (
                     <Card className="border-0 shadow-lg">
                       <CardHeader className="pb-3"><CardTitle className="text-lg flex items-center gap-2"><Phone className="w-5 h-5 text-red-500" />إعدادات الطوارئ</CardTitle></CardHeader>
                       <CardContent className="space-y-4">
@@ -2421,8 +2434,10 @@ export default function AdminDashboard() {
                         <Button className="bg-gradient-to-l from-amber-500 via-orange-500 to-rose-500 text-white shadow-lg shadow-amber-500/25" onClick={() => showConfirmDialog('حفظ رقم الطوارئ', 'سيتم تحديث رقم هاتف الطوارئ. هل أنت متأكد؟', Phone, 'text-red-500', () => handleSaveSettings({ emergencyPhone: settings.emergencyPhone }))}>حفظ رقم الطوارئ</Button>
                       </CardContent>
                     </Card>
+                    )}
 
-                    {/* Referral Settings */}
+                    {/* Referral Settings - Only main admin */}
+                    {!isSubAdmin && (
                     <Card className="border-0 shadow-lg">
                       <CardHeader className="pb-3"><CardTitle className="text-lg flex items-center gap-2"><Gift className="w-5 h-5 text-purple-500" />إعدادات الإحالة</CardTitle></CardHeader>
                       <CardContent className="space-y-4">
@@ -2437,8 +2452,10 @@ export default function AdminDashboard() {
                         <Button className="bg-gradient-to-l from-amber-500 via-orange-500 to-rose-500 text-white shadow-lg shadow-amber-500/25" onClick={() => showConfirmDialog('حفظ إعدادات الإحالة', 'سيتم تحديث إعدادات نظام الإحالة. هل أنت متأكد؟', Gift, 'text-purple-500', () => handleSaveSettings({ referralEnabled: settings.referralEnabled, referralBonusPoints: settings.referralBonusPoints, referralBonusPointsReceiver: settings.referralBonusPointsReceiver }))}>حفظ إعدادات الإحالة</Button>
                       </CardContent>
                     </Card>
+                    )}
 
-                    {/* Shortcut to Finance Tab */}
+                    {/* Shortcut to Finance Tab - Only main admin */}
+                    {!isSubAdmin && (
                     <Card className="border-0 shadow-lg bg-gradient-to-l from-blue-50/50 to-indigo-50/50 border border-blue-200/50">
                       <CardContent className="p-4">
                         <div className="flex items-center justify-between">
@@ -2453,6 +2470,22 @@ export default function AdminDashboard() {
                         </div>
                       </CardContent>
                     </Card>
+                    )}
+
+                    {/* Sub-admin info banner */}
+                    {isSubAdmin && (
+                    <Card className="border-0 shadow-lg bg-gradient-to-l from-violet-50/50 to-purple-50/50 border border-violet-200/50">
+                      <CardContent className="p-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-400 to-purple-500 flex items-center justify-center shadow-md"><Shield className="w-5 h-5 text-white" /></div>
+                          <div>
+                            <p className="font-bold text-violet-700">حساب مدير فرعي</p>
+                            <p className="text-xs text-gray-500">إعدادات الطوارئ، الإحالة، والمدفوعات والتسعير يديرها المدير الرئيسي فقط</p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                    )}
 
                     {/* Dangerous Zone - Only main admin */}
                     {!isSubAdmin && (

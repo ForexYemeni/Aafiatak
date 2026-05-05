@@ -1190,20 +1190,22 @@ export async function unblockBeneficiary(id: string) {
 
 // ==================== ADMIN SETTINGS ====================
 
-export async function getAdminSettings() {
+export async function getAdminSettings(subAdminId?: string) {
   checkFirebase()
-  const doc = await firestore.collection('appSettings').doc('admin').get()
+  const docId = subAdminId ? `sub-admin-${subAdminId}` : 'admin'
+  const doc = await firestore.collection('appSettings').doc(docId).get()
   if (!doc.exists) return null
   return docToObject(doc)
 }
 
-export async function updateAdminSettings(data: Record<string, any>) {
+export async function updateAdminSettings(data: Record<string, any>, subAdminId?: string) {
   checkFirebase()
-  await firestore.collection('appSettings').doc('admin').set({
+  const docId = subAdminId ? `sub-admin-${subAdminId}` : 'admin'
+  await firestore.collection('appSettings').doc(docId).set({
     ...data,
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   }, { merge: true })
-  const doc = await firestore.collection('appSettings').doc('admin').get()
+  const doc = await firestore.collection('appSettings').doc(docId).get()
   return docToObject(doc)
 }
 

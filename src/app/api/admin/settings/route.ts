@@ -1,10 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAdminSettings, updateAdminSettings } from '@/lib/firestore'
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const settings = await getAdminSettings()
+    // Check if requesting sub-admin settings
+    const subAdminId = request.nextUrl.searchParams.get('subAdminId')
+
+    const settings = await getAdminSettings(subAdminId || undefined)
     if (!settings) {
+      // Sub-admin defaults (only fields relevant to sub-admins)
+      if (subAdminId) {
+        return NextResponse.json({
+          phone: '',
+          email: '',
+          whatsappNumber: '',
+          whatsappNumbers: [],
+        })
+      }
+      // Main admin defaults
       return NextResponse.json({
         phone: '',
         email: '',
@@ -46,12 +59,19 @@ export async function GET() {
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json()
-    const allowedFields = ['phone', 'email', 'emergencyPhone', 'whatsappNumber', 'whatsappNumbers', 'referralBonusPoints', 'referralBonusPointsReceiver', 'referralEnabled', 'nightSurchargePercent', 'fridaySurchargePercent', 'distanceFeesEnabled', 'distanceFeePerKm5to15', 'distanceFeePerKm15to30', 'distanceFeePerKmOver30', 'distanceFreeKm', 'commissionPercent', 'emergencyServicePrices']
+    const { subAdminId, ...data } = body
+
+    // Sub-admins can only update their own limited fields
+    const subAdminAllowedFields = ['phone', 'email', 'whatsappNumber', 'whatsappNumbers']
+    // Main admin can update all fields
+    const mainAdminAllowedFields = ['phone', 'email', 'emergencyPhone', 'whatsappNumber', 'whatsappNumbers', 'referralBonusPoints', 'referralBonusPointsReceiver', 'referralEnabled', 'nightSurchargePercent', 'fridaySurchargePercent', 'distanceFeesEnabled', 'distanceFeePerKm5to15', 'distanceFeePerKm15to30', 'distanceFeePerKmOver30', 'distanceFreeKm', 'commissionPercent', 'emergencyServicePrices']
+
+    const allowedFields = subAdminId ? subAdminAllowedFields : mainAdminAllowedFields
     const updateData: Record<string, any> = {}
 
     for (const field of allowedFields) {
-      if (body[field] !== undefined) {
-        updateData[field] = body[field]
+      if (data[field] !== undefined) {
+        updateData[field] = data[field]
       }
     }
 
@@ -59,7 +79,7 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'لا توجد بيانات للتحديث' }, { status: 400 })
     }
 
-    const settings = await updateAdminSettings(updateData)
+    const settings = await updateAdminSettings(updateData, subAdminId || undefined)
     return NextResponse.json(settings)
   } catch (error: any) {
     console.error('Update admin settings error:', error.message)
