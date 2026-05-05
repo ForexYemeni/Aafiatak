@@ -230,6 +230,9 @@ export default function AdminDashboard() {
   const [editingSubAdmin, setEditingSubAdmin] = useState<any>(null)
   const [subAdminForm, setSubAdminForm] = useState({ name: '', phone: '', password: '', permissions: { services: false, nurses: false, beneficiaries: false, requests: false, payments: false, coupons: false, reports: false, emergency: false, ratings: false } })
 
+  // Approve dialog: collapsed services list
+  const [approveServicesExpanded, setApproveServicesExpanded] = useState(false)
+
   // Map preview dialog
   const [mapPreviewDialog, setMapPreviewDialog] = useState(false)
   const [mapPreviewLocation, setMapPreviewLocation] = useState('')
@@ -476,7 +479,7 @@ export default function AdminDashboard() {
   // ─── Request actions ───────────────────────────────────────
   const handleOpenApproveDialog = async (req: any) => {
     setSelectedRequest(req); setApproveMode('assign'); setSelectedNurseId(''); setNurseDistances({});
-    setPaymentConfirmed(false); setPaymentConfirmStep(true); setApproveDialog(true)
+    setPaymentConfirmed(false); setPaymentConfirmStep(true); setApproveServicesExpanded(false); setApproveDialog(true)
     // Fetch nurses from API if not already loaded (e.g. when on requests tab)
     let currentNurses = nurses
     if (nurses.length === 0) {
@@ -1682,7 +1685,14 @@ export default function AdminDashboard() {
                                 )}
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-2 flex-wrap">
-                                    <p className="font-bold">{r.isMultiService && r.services ? r.services.map((s: any) => s.name).join(' + ') : (r.service?.name || 'خدمة غير محددة')}</p>
+                                    {r.isMultiService && r.services && r.services.length > 1 ? (
+                                      <p className="font-bold truncate">
+                                        {r.services.slice(0, 2).map((s: any) => s.name).join(' + ')}
+                                        {r.services.length > 2 && <span className="text-violet-600"> +{r.services.length - 2} أخرى</span>}
+                                      </p>
+                                    ) : (
+                                      <p className="font-bold">{r.service?.name || 'خدمة غير محددة'}</p>
+                                    )}
                                     {r.isMultiService && r.services && r.services.length > 1 && (
                                       <Badge className="bg-violet-100 text-violet-700 border-0 text-[10px] px-1.5 py-0">{r.services.length} خدمات</Badge>
                                     )}
@@ -2910,8 +2920,8 @@ export default function AdminDashboard() {
 
       {/* Approve Request Dialog — Professional Design with Nurse Fee */}
       <Dialog open={approveDialog} onOpenChange={setApproveDialog}>
-        <DialogContent className="sm:max-w-lg border-0 shadow-2xl">
-          <DialogHeader>
+        <DialogContent className="sm:max-w-lg border-0 shadow-2xl p-0 flex flex-col max-h-[92vh]">
+          <DialogHeader className="px-6 pt-6 pb-2 shrink-0">
             <div className="flex items-center gap-3">
               <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-lg ${paymentConfirmed ? 'bg-gradient-to-br from-emerald-400 to-teal-500' : 'bg-gradient-to-br from-amber-400 to-orange-500'}`}>
                 {paymentConfirmed ? <CheckCircle className="w-5 h-5 text-white" /> : <DollarSign className="w-5 h-5 text-white" />}
@@ -2922,35 +2932,65 @@ export default function AdminDashboard() {
               </div>
             </div>
           </DialogHeader>
-          <div className="space-y-4 py-2">
+          <div className="space-y-4 px-6 py-2 overflow-y-auto flex-1 min-h-0">
             {selectedRequest && (() => {
               const reqTotalPrice = selectedRequest.dynamicPrice || selectedRequest.service?.price || selectedRequest.totalPrice || 0
               const commissionPercent = settings?.commissionPercent ?? 15
               const commissionAmount = Math.round(reqTotalPrice * commissionPercent / 100)
               const nurseFee = reqTotalPrice - commissionAmount
+              const allServices = selectedRequest.isMultiService && selectedRequest.services ? selectedRequest.services : []
+              const VISIBLE_COUNT = 3
+              const showToggle = allServices.length > VISIBLE_COUNT
+              const visibleServices = approveServicesExpanded ? allServices : allServices.slice(0, VISIBLE_COUNT)
               return (
                 <div className="space-y-3">
                   {/* Request Info Card */}
                   <div className="p-4 bg-gradient-to-l from-amber-50 to-orange-50/50 rounded-xl border border-amber-200/50 space-y-2">
                     <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center">
+                      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shrink-0">
                         <ClipboardList className="w-4 h-4 text-white" />
                       </div>
-                      <p className="font-bold text-gray-800">{selectedRequest.isMultiService && selectedRequest.services ? selectedRequest.services.map((s: any) => s.name).join(' + ') : (selectedRequest.service?.name || 'خدمة')}</p>
+                      {selectedRequest.isMultiService && allServices.length > 1 ? (
+                        <div className="flex-1 min-w-0">
+                          <p className="font-bold text-gray-800 truncate">
+                            {allServices.slice(0, 2).map((s: any) => s.name).join(' + ')}
+                            {allServices.length > 2 && <span className="text-amber-600"> +{allServices.length - 2} أخرى</span>}
+                          </p>
+                          <p className="text-xs text-amber-600 font-medium">{allServices.length} خدمة • المجموع {formatPrice(allServices.reduce((sum: number, s: any) => sum + (s.price || 0), 0))}</p>
+                        </div>
+                      ) : (
+                        <p className="font-bold text-gray-800">{selectedRequest.service?.name || 'خدمة'}</p>
+                      )}
                     </div>
-                    {/* Multi-service details */}
-                    {selectedRequest.isMultiService && selectedRequest.services && selectedRequest.services.length > 1 && (
+                    {/* Multi-service details - Collapsible */}
+                    {allServices.length > 1 && (
                       <div className="mt-2 p-2.5 bg-white/60 rounded-lg border border-amber-100 space-y-1.5">
-                        <p className="text-xs font-bold text-amber-700">الخدمات المطلوبة ({selectedRequest.services.length})</p>
-                        {selectedRequest.services.map((s: any, idx: number) => (
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs font-bold text-amber-700">الخدمات المطلوبة ({allServices.length})</p>
+                          {showToggle && (
+                            <button
+                              onClick={() => setApproveServicesExpanded(!approveServicesExpanded)}
+                              className="flex items-center gap-1 text-xs font-bold text-amber-600 hover:text-amber-800 transition-colors"
+                            >
+                              {approveServicesExpanded ? 'أقل' : `عرض الكل (${allServices.length})`}
+                              <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${approveServicesExpanded ? 'rotate-180' : ''}`} />
+                            </button>
+                          )}
+                        </div>
+                        {visibleServices.map((s: any, idx: number) => (
                           <div key={s.id || idx} className="flex items-center justify-between text-sm">
-                            <span className="text-gray-700">{idx + 1}. {s.name}</span>
-                            <span className="text-amber-600 font-medium">{formatPrice(s.price)}</span>
+                            <span className="text-gray-700 truncate ml-2">{idx + 1}. {s.name}</span>
+                            <span className="text-amber-600 font-medium shrink-0">{formatPrice(s.price)}</span>
                           </div>
                         ))}
+                        {!approveServicesExpanded && showToggle && (
+                          <div className="flex items-center justify-center py-1">
+                            <span className="text-xs text-amber-500 font-medium">... و{allServices.length - VISIBLE_COUNT} خدمة أخرى</span>
+                          </div>
+                        )}
                         <div className="border-t border-amber-200 pt-1.5 flex items-center justify-between">
                           <span className="text-xs font-bold text-amber-700">مجموع الخدمات</span>
-                          <span className="text-xs font-bold text-amber-700">{formatPrice(selectedRequest.services.reduce((sum: number, s: any) => sum + (s.price || 0), 0))}</span>
+                          <span className="text-xs font-bold text-amber-700">{formatPrice(allServices.reduce((sum: number, s: any) => sum + (s.price || 0), 0))}</span>
                         </div>
                       </div>
                     )}
@@ -3090,13 +3130,13 @@ export default function AdminDashboard() {
               </>
             )}
           </div>
-          <DialogFooter className="gap-2">
+          <DialogFooter className="gap-2 px-6 pb-6 pt-3 shrink-0 border-t border-gray-100 bg-white/80 backdrop-blur-sm sticky bottom-0">
             <Button variant="outline" className="flex-1" onClick={() => { setApproveDialog(false); setPaymentConfirmed(false); setPaymentConfirmStep(false) }}>إلغاء</Button>
             <Button className={`flex-1 text-white shadow-lg ${
               !paymentConfirmed
                 ? 'bg-gradient-to-l from-emerald-500 to-teal-500 shadow-emerald-500/25'
-                : approveMode === 'assign' 
-                  ? 'bg-gradient-to-l from-amber-500 via-orange-500 to-rose-500 shadow-amber-500/25' 
+                : approveMode === 'assign'
+                  ? 'bg-gradient-to-l from-amber-500 via-orange-500 to-rose-500 shadow-amber-500/25'
                   : 'bg-gradient-to-l from-rose-500 via-pink-500 to-red-500 shadow-rose-500/25'
             }`} onClick={handleConfirmApprove}>
               {!paymentConfirmed ? 'تأكيد الدفع وقبول الطلب' : approveMode === 'assign' ? 'تعيين وتأكيد' : 'تنفيذ مباشر'}
