@@ -124,6 +124,7 @@ export default function AdminDashboard() {
   const [requestStatusFilter, setRequestStatusFilter] = useState<string>('all')
   const [requestServiceFilter, setRequestServiceFilter] = useState<string>('all')
   const [selectedRequestIds, setSelectedRequestIds] = useState<string[]>([])
+  const [requestActionFilter, setRequestActionFilter] = useState<string>('needs_action')
 
   const [reportFromDate, setReportFromDate] = useState('')
   const [reportToDate, setReportToDate] = useState('')
@@ -871,8 +872,26 @@ export default function AdminDashboard() {
     const matchSearch = requestSearch === '' || r.service?.name?.includes(requestSearch) || r.beneficiary?.name?.includes(requestSearch) || r.beneficiary?.phone?.includes(requestSearch) || r.notes?.includes(requestSearch)
     const matchStatus = requestStatusFilter === 'all' || r.status === requestStatusFilter
     const matchService = requestServiceFilter === 'all' || r.serviceId === requestServiceFilter
-    return matchSearch && matchStatus && matchService
-  }), [requests, requestSearch, requestStatusFilter, requestServiceFilter])
+    // Action filter: categorize requests by what action they need
+    let matchAction = true
+    if (requestActionFilter === 'needs_action') {
+      matchAction = ['pending', 'pending_confirmation', 'pending_payment', 'approved'].includes(r.status)
+    } else if (requestActionFilter === 'confirm_payment') {
+      matchAction = r.status === 'pending_payment'
+    } else if (requestActionFilter === 'accept') {
+      matchAction = r.status === 'pending' || r.status === 'pending_confirmation'
+    } else if (requestActionFilter === 'assign_nurse') {
+      matchAction = r.status === 'approved'
+    } else if (requestActionFilter === 'in_progress') {
+      matchAction = r.status === 'in_progress'
+    } else if (requestActionFilter === 'completed') {
+      matchAction = r.status === 'completed'
+    } else if (requestActionFilter === 'cancelled') {
+      matchAction = r.status === 'cancelled' || r.status === 'rejected'
+    }
+    // 'all' shows everything
+    return matchSearch && matchStatus && matchService && matchAction
+  }), [requests, requestSearch, requestStatusFilter, requestServiceFilter, requestActionFilter])
 
   // Charts data - use real data from requests, not random
   const revenueChartData = useMemo(() => {
@@ -1519,20 +1538,128 @@ export default function AdminDashboard() {
                 )}
 
                 {/* ═══════════════════════════════════════════════════
-                    TAB 5: الطلبات (Requests)
+                    TAB 5: الطلبات (Requests) - REDESIGNED
                 ═══════════════════════════════════════════════════ */}
                 {activeTab === 'requests' && (
                   <div className="space-y-6">
                     <div className="flex items-center justify-between flex-wrap gap-3">
                       <div><h1 className="text-2xl font-bold bg-gradient-to-l from-amber-600 via-orange-600 to-rose-600 bg-clip-text text-transparent">إدارة الطلبات</h1><p className="text-gray-500 text-sm mt-1">مراجعة ومعالجة الطلبات</p></div>
-                      {selectedRequestIds.length > 0 && <Button className="bg-gradient-to-l from-amber-500 via-orange-500 to-rose-500 text-white shadow-lg shadow-amber-500/25" onClick={handleBulkApprove}><CheckCircle className="w-4 h-4 ml-2" />قبول المحدد ({selectedRequestIds.length})</Button>}
+                      <div className="flex gap-2 items-center">
+                        {selectedRequestIds.length > 0 && <Button className="bg-gradient-to-l from-amber-500 via-orange-500 to-rose-500 text-white shadow-lg shadow-amber-500/25" onClick={handleBulkApprove}><CheckCircle className="w-4 h-4 ml-2" />قبول المحدد ({selectedRequestIds.length})</Button>}
+                      </div>
                     </div>
+
+                    {/* ===== ACTION TABS - Smart Classification ===== */}
+                    {(() => {
+                      const pendingConfirm = requests.filter((r: any) => r.status === 'pending_payment').length
+                      const pendingAccept = requests.filter((r: any) => r.status === 'pending' || r.status === 'pending_confirmation').length
+                      const pendingAssign = requests.filter((r: any) => r.status === 'approved').length
+                      const inProgressCount = requests.filter((r: any) => r.status === 'in_progress').length
+                      const completedCount = requests.filter((r: any) => r.status === 'completed').length
+                      const cancelledCount = requests.filter((r: any) => r.status === 'cancelled' || r.status === 'rejected').length
+                      const totalNeedsAction = pendingConfirm + pendingAccept + pendingAssign
+
+                      const actionTabs = [
+                        { key: 'needs_action', label: 'يحتاج إجراء', count: totalNeedsAction, icon: AlertTriangle, gradient: 'from-amber-500 to-orange-500', activeBg: 'bg-gradient-to-l from-amber-500 via-orange-500 to-rose-500' },
+                        { key: 'confirm_payment', label: 'تأكيد دفع', count: pendingConfirm, icon: CreditCard, gradient: 'from-emerald-500 to-teal-500', activeBg: 'bg-gradient-to-l from-emerald-500 to-teal-500' },
+                        { key: 'accept', label: 'بانتظار القبول', count: pendingAccept, icon: CheckCircle, gradient: 'from-amber-400 to-orange-500', activeBg: 'bg-gradient-to-l from-amber-400 via-orange-500 to-rose-500' },
+                        { key: 'assign_nurse', label: 'تعيين ممرض', count: pendingAssign, icon: UserPlus, gradient: 'from-blue-500 to-indigo-500', activeBg: 'bg-gradient-to-l from-blue-500 to-indigo-500' },
+                        { key: 'in_progress', label: 'قيد التنفيذ', count: inProgressCount, icon: Clock, gradient: 'from-cyan-500 to-teal-500', activeBg: 'bg-gradient-to-l from-cyan-500 to-teal-500' },
+                        { key: 'completed', label: 'مكتمل', count: completedCount, icon: CheckCircle, gradient: 'from-emerald-400 to-green-500', activeBg: 'bg-gradient-to-l from-emerald-400 to-green-500' },
+                        { key: 'cancelled', label: 'ملغي/مرفوض', count: cancelledCount, icon: XCircle, gradient: 'from-gray-400 to-gray-500', activeBg: 'bg-gradient-to-l from-gray-400 to-gray-500' },
+                        { key: 'all', label: 'الكل', count: requests.length, icon: ClipboardList, gradient: 'from-violet-400 to-fuchsia-500', activeBg: 'bg-gradient-to-l from-violet-400 to-fuchsia-500' },
+                      ]
+
+                      return (
+                        <div className="space-y-4">
+                          {/* Urgent Summary Bar */}
+                          {totalNeedsAction > 0 && (
+                            <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
+                              <Card className="border-0 shadow-xl overflow-hidden">
+                                <div className="bg-gradient-to-l from-red-500 via-orange-500 to-amber-500 p-4 text-white relative">
+                                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.12)_0%,transparent_50%)]" />
+                                  <div className="relative flex items-center gap-4">
+                                    <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center animate-pulse shadow-lg">
+                                      <AlertTriangle className="w-6 h-6" />
+                                    </div>
+                                    <div className="flex-1">
+                                      <p className="font-bold text-lg">{totalNeedsAction} طلب يحتاج إجراء</p>
+                                      <p className="text-red-100 text-sm">
+                                        {pendingConfirm > 0 && `${pendingConfirm} تأكيد دفع • `}
+                                        {pendingAccept > 0 && `${pendingAccept} بانتظار القبول • `}
+                                        {pendingAssign > 0 && `${pendingAssign} تعيين ممرض`}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
+                                {/* Quick Action Cards */}
+                                <div className="grid grid-cols-3 gap-0 divide-x divide-gray-100">
+                                  {[
+                                    { count: pendingConfirm, label: 'تأكيد دفع', icon: CreditCard, gradient: 'from-emerald-500 to-teal-500', filter: 'confirm_payment' },
+                                    { count: pendingAccept, label: 'قبول طلب', icon: CheckCircle, gradient: 'from-amber-500 to-orange-500', filter: 'accept' },
+                                    { count: pendingAssign, label: 'تعيين ممرض', icon: UserPlus, gradient: 'from-blue-500 to-indigo-500', filter: 'assign_nurse' },
+                                  ].map(item => (
+                                    <button
+                                      key={item.filter}
+                                      onClick={() => setRequestActionFilter(item.filter)}
+                                      className={`p-4 hover:bg-gray-50 transition-colors ${requestActionFilter === item.filter ? 'bg-violet-50/50' : ''}`}
+                                    >
+                                      <div className="flex items-center gap-3">
+                                        <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${item.gradient} flex items-center justify-center shadow-md shrink-0`}>
+                                          <item.icon className="w-5 h-5 text-white" />
+                                        </div>
+                                        <div className="text-right">
+                                          <p className="text-2xl font-black text-gray-800">{item.count}</p>
+                                          <p className="text-xs font-bold text-gray-500">{item.label}</p>
+                                        </div>
+                                      </div>
+                                    </button>
+                                  ))}
+                                </div>
+                              </Card>
+                            </motion.div>
+                          )}
+
+                          {/* Tab Pills */}
+                          <div className="flex gap-2 flex-wrap">
+                            {actionTabs.map(tab => {
+                              const Icon = tab.icon
+                              const isActive = requestActionFilter === tab.key
+                              return (
+                                <button
+                                  key={tab.key}
+                                  onClick={() => setRequestActionFilter(tab.key)}
+                                  className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all duration-200 ${
+                                    isActive
+                                      ? `${tab.activeBg} text-white shadow-lg`
+                                      : 'bg-white/80 backdrop-blur-sm text-gray-500 hover:text-gray-700 hover:bg-white ring-1 ring-gray-200/50'
+                                  }`}
+                                >
+                                  <Icon className="w-3.5 h-3.5" />
+                                  {tab.label}
+                                  {tab.count > 0 && (
+                                    <span className={`min-w-[18px] h-4 px-1 rounded-full text-[10px] flex items-center justify-center font-black ${
+                                      isActive ? 'bg-white/25' : 'bg-gray-100 text-gray-500'
+                                    }`}>
+                                      {tab.count}
+                                    </span>
+                                  )}
+                                </button>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )
+                    })()}
+
+                    {/* Search & Service Filter */}
                     <div className="flex flex-wrap gap-3 items-center">
-                      <div className="relative flex-1 min-w-[200px]"><Search className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" /><Input placeholder="بحث..." value={requestSearch} onChange={e => setRequestSearch(e.target.value)} className="pr-9 border-amber-200" /></div>
-                      <Select value={requestStatusFilter} onValueChange={setRequestStatusFilter}><SelectTrigger className="w-40 border-amber-200"><SelectValue placeholder="الحالة" /></SelectTrigger><SelectContent><SelectItem value="all">كل الحالات</SelectItem><SelectItem value="pending">قيد الانتظار</SelectItem><SelectItem value="approved">مقبول</SelectItem><SelectItem value="in_progress">قيد التنفيذ</SelectItem><SelectItem value="completed">مكتمل</SelectItem><SelectItem value="cancelled">ملغي</SelectItem></SelectContent></Select>
-                      <Select value={requestServiceFilter} onValueChange={setRequestServiceFilter}><SelectTrigger className="w-40 border-amber-200"><SelectValue placeholder="الخدمة" /></SelectTrigger><SelectContent><SelectItem value="all">كل الخدمات</SelectItem>{services.map((s: any) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent></Select>
+                      <div className="relative flex-1 min-w-[200px]"><Search className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" /><Input placeholder="بحث بالاسم أو الخدمة..." value={requestSearch} onChange={e => setRequestSearch(e.target.value)} className="pr-9 border-amber-200 rounded-xl" /></div>
+                      <Select value={requestServiceFilter} onValueChange={setRequestServiceFilter}><SelectTrigger className="w-40 border-amber-200 rounded-xl"><SelectValue placeholder="الخدمة" /></SelectTrigger><SelectContent><SelectItem value="all">كل الخدمات</SelectItem>{services.map((s: any) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent></Select>
                     </div>
-                    <div className="space-y-3 max-h-[70vh] overflow-y-auto">
+
+                    {/* Requests List */}
+                    <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
                       {filteredRequests.map((r: any) => (
                         <motion.div key={r.id} variants={cardVariants} initial="hidden" animate="visible">
                           <Card className={`border-0 shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden ${r.isEmergency ? 'ring-2 ring-red-400' : ''}`}>
