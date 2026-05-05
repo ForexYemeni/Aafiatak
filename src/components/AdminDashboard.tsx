@@ -128,7 +128,9 @@ export default function AdminDashboard() {
   // Service form
   const [serviceDialog, setServiceDialog] = useState(false)
   const [editingService, setEditingService] = useState<any>(null)
-  const [serviceForm, setServiceForm] = useState({ name: '', description: '', price: '', category: 'عام', isActive: true })
+  const [serviceForm, setServiceForm] = useState({ name: '', description: '', price: '', category: 'قياسات وتحاليل', isActive: true })
+  const [serviceCategoryFilter, setServiceCategoryFilter] = useState<string>('all')
+  const [seedServicesLoading, setSeedServicesLoading] = useState(false)
 
   // Payment form
   const [paymentDialog, setPaymentDialog] = useState(false)
@@ -379,6 +381,31 @@ export default function AdminDashboard() {
       if (res.ok) { toast({ title: 'تم حذف الخدمة' }); logActivity('service_delete', 'تم حذف خدمة'); fetchData() }
       else { const data = await res.json().catch(() => ({})); toast({ title: 'خطأ', description: data.error || 'فشل حذف الخدمة', variant: 'destructive' }) }
     } catch { toast({ title: 'خطأ', description: 'فشل حذف الخدمة', variant: 'destructive' }) }
+  }
+
+  // ─── Seed default services ────────────────────────────────────
+  const handleSeedServices = async (overwrite: boolean) => {
+    setSeedServicesLoading(true)
+    try {
+      const res = await fetch('/api/admin/services/seed', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ overwrite }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        toast({ title: 'تم بنجاح', description: data.message || `تم إضافة ${data.count} خدمة` })
+        logActivity('services_seed', `تم إضافة ${data.count} خدمة افتراضية`)
+        fetchData()
+      } else {
+        const data = await res.json()
+        toast({ title: 'خطأ', description: data.error || 'فشل إضافة الخدمات', variant: 'destructive' })
+      }
+    } catch {
+      toast({ title: 'خطأ', description: 'حدث خطأ في الاتصال', variant: 'destructive' })
+    } finally {
+      setSeedServicesLoading(false)
+    }
   }
 
   // ─── Nurse actions ─────────────────────────────────────────
@@ -1131,20 +1158,54 @@ export default function AdminDashboard() {
                 {/* ═══════════════════════════════════════════════════
                     TAB 2: الخدمات (Services)
                 ═══════════════════════════════════════════════════ */}
-                {activeTab === 'services' && (
+                {activeTab === 'services' && (() => {
+                  const categories = [...new Set(services.map((s: any) => s.category).filter(Boolean))]
+                  const filteredServices = serviceCategoryFilter === 'all' ? services : services.filter((s: any) => s.category === serviceCategoryFilter)
+                  const categoryIcons: Record<string, string> = {
+                    'قياسات وتحاليل': '🩺', 'حقن وإبر': '💉', 'عناية بالجروح': '🩹',
+                    'تمريض منزلي': '🏠', 'إسعافات أولية': '🚑', 'عناية بالمريض': '💊',
+                    'صحة المرأة': '👩‍⚕️', 'استشارات ومتابعة': '📋', 'رعاية الأطفال': '👶',
+                    'عام': '⚙️',
+                  }
+                  return (
                   <div className="space-y-6">
-                    <div className="flex items-center justify-between">
-                      <div><h1 className="text-2xl font-bold bg-gradient-to-l from-amber-600 via-orange-600 to-rose-600 bg-clip-text text-transparent">إدارة الخدمات</h1><p className="text-gray-500 text-sm mt-1">إضافة وتعديل وحذف الخدمات</p></div>
-                      <Button className="bg-gradient-to-l from-amber-500 via-orange-500 to-rose-500 text-white shadow-lg shadow-amber-500/25 hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300" onClick={() => { setEditingService(null); setServiceForm({ name: '', description: '', price: '', category: 'عام', isActive: true }); setServiceDialog(true) }}><Plus className="w-4 h-4 ml-2" />إضافة خدمة</Button>
+                    <div className="flex items-center justify-between flex-wrap gap-3">
+                      <div><h1 className="text-2xl font-bold bg-gradient-to-l from-amber-600 via-orange-600 to-rose-600 bg-clip-text text-transparent">إدارة الخدمات</h1><p className="text-gray-500 text-sm mt-1">إضافة وتعديل وحذف الخدمات ({services.length} خدمة)</p></div>
+                      <div className="flex gap-2 flex-wrap">
+                        {services.length === 0 && (
+                          <Button className="bg-gradient-to-l from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-500/25 hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300" disabled={seedServicesLoading} onClick={() => handleSeedServices(false)}>
+                            {seedServicesLoading ? <Loader2 className="w-4 h-4 ml-2 animate-spin" /> : <Sparkles className="w-4 h-4 ml-2" />}
+                            إضافة خدمات افتراضية
+                          </Button>
+                        )}
+                        {services.length > 0 && (
+                          <Button variant="outline" className="border-emerald-300 text-emerald-600 hover:bg-emerald-50" disabled={seedServicesLoading} onClick={() => showConfirmDialog('إعادة تعبئة الخدمات', 'سيتم حذف جميع الخدمات الحالية وإضافة الخدمات الافتراضية بدلاً عنها. هل أنت متأكد؟', Sparkles, 'text-emerald-500', () => handleSeedServices(true))}>
+                            {seedServicesLoading ? <Loader2 className="w-4 h-4 ml-2 animate-spin" /> : <Sparkles className="w-4 h-4 ml-2" />}
+                            إعادة تعبئة الخدمات
+                          </Button>
+                        )}
+                        <Button className="bg-gradient-to-l from-amber-500 via-orange-500 to-rose-500 text-white shadow-lg shadow-amber-500/25 hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300" onClick={() => { setEditingService(null); setServiceForm({ name: '', description: '', price: '', category: 'قياسات وتحاليل', isActive: true }); setServiceDialog(true) }}><Plus className="w-4 h-4 ml-2" />إضافة خدمة</Button>
+                      </div>
                     </div>
+                    {/* Category filter */}
+                    {categories.length > 0 && (
+                      <div className="flex gap-2 flex-wrap">
+                        <button onClick={() => setServiceCategoryFilter('all')} className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all duration-300 ${serviceCategoryFilter === 'all' ? 'bg-gradient-to-l from-amber-500 via-orange-500 to-rose-500 text-white shadow-lg shadow-amber-500/25' : 'bg-white/70 backdrop-blur-sm text-gray-500 hover:text-gray-700 hover:bg-white ring-1 ring-gray-200/50'}`}>الكل ({services.length})</button>
+                        {categories.map(cat => (
+                          <button key={cat} onClick={() => setServiceCategoryFilter(cat)} className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all duration-300 ${serviceCategoryFilter === cat ? 'bg-gradient-to-l from-amber-500 via-orange-500 to-rose-500 text-white shadow-lg shadow-amber-500/25' : 'bg-white/70 backdrop-blur-sm text-gray-500 hover:text-gray-700 hover:bg-white ring-1 ring-gray-200/50'}`}>
+                            {categoryIcons[cat] || ''} {cat} ({services.filter((s: any) => s.category === cat).length})
+                          </button>
+                        ))}
+                      </div>
+                    )}
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {services.map((svc: any) => (
+                      {filteredServices.map((svc: any) => (
                         <motion.div key={svc.id} variants={cardVariants} initial="hidden" animate="visible">
                           <Card className="border-0 shadow-lg hover:-translate-y-1 hover:shadow-xl transition-all duration-300 overflow-hidden relative group">
                             <div className="absolute inset-0 bg-gradient-to-br from-amber-400 to-orange-500 opacity-0 group-hover:opacity-5 transition-opacity duration-300" />
                             <CardContent className="p-4 relative z-10">
                               <div className="flex items-start justify-between mb-3">
-                                <div className="flex items-center gap-2"><div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-md"><Wrench className="w-5 h-5 text-white" /></div><div><p className="font-bold">{svc.name}</p><Badge className="text-[10px] bg-amber-50 text-amber-700 border-amber-200 border mt-0.5">{svc.category}</Badge></div></div>
+                                <div className="flex items-center gap-2"><div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-md text-lg">{categoryIcons[svc.category] || <Wrench className="w-5 h-5 text-white" />}</div><div><p className="font-bold">{svc.name}</p><Badge className="text-[10px] bg-amber-50 text-amber-700 border-amber-200 border mt-0.5">{svc.category}</Badge></div></div>
                                 <Badge className={`${getStatusColor(svc.isActive ? 'active' : 'suspended')} border text-xs`}>{svc.isActive ? 'نشطة' : 'معطلة'}</Badge>
                               </div>
                               <p className="text-sm text-gray-600 mb-2 line-clamp-2">{svc.description}</p>
@@ -1158,9 +1219,21 @@ export default function AdminDashboard() {
                         </motion.div>
                       ))}
                     </div>
-                    {services.length === 0 && <div className="text-center py-16"><Wrench className="w-12 h-12 text-gray-300 mx-auto mb-3" /><p className="text-gray-400">لا توجد خدمات</p></div>}
+                    {services.length === 0 && (
+                      <div className="text-center py-16">
+                        <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-amber-100 to-orange-100 flex items-center justify-center mx-auto mb-4">
+                          <Wrench className="w-10 h-10 text-amber-400" />
+                        </div>
+                        <p className="text-lg font-bold text-gray-600 mb-2">لا توجد خدمات</p>
+                        <p className="text-sm text-gray-400 mb-4">اضغط على زر "إضافة خدمات افتراضية" لإضافة أكثر من 55 خدمة صحية جاهزة</p>
+                      </div>
+                    )}
+                    {services.length > 0 && filteredServices.length === 0 && (
+                      <div className="text-center py-8"><p className="text-gray-400">لا توجد خدمات في هذا التصنيف</p></div>
+                    )}
                   </div>
-                )}
+                  )
+                })()}
 
                 {/* ═══════════════════════════════════════════════════
                     TAB 3: الممرضين (Nurses)
@@ -2420,7 +2493,7 @@ export default function AdminDashboard() {
             <div><Label>الوصف *</Label><Textarea value={serviceForm.description} onChange={e => setServiceForm({ ...serviceForm, description: e.target.value })} className="border-amber-200 mt-1" /></div>
             <div className="grid grid-cols-2 gap-4">
               <div><Label>السعر *</Label><Input type="number" value={serviceForm.price} onChange={e => setServiceForm({ ...serviceForm, price: e.target.value })} className="border-amber-200 mt-1" /></div>
-              <div><Label>الفئة</Label><Select value={serviceForm.category} onValueChange={v => setServiceForm({ ...serviceForm, category: v })}><SelectTrigger className="border-amber-200 mt-1"><SelectValue placeholder="اختر الفئة" /></SelectTrigger><SelectContent><SelectItem value="تمريض منزلي">تمريض منزلي</SelectItem><SelectItem value="رعاية المسنين">رعاية المسنين</SelectItem><SelectItem value="رعاية الأم والطفل">رعاية الأم والطفل</SelectItem><SelectItem value="علاج طبيعي">علاج طبيعي</SelectItem><SelectItem value="إسعافات أولية">إسعافات أولية</SelectItem><SelectItem value="حقن ومحاليل">حقن ومحاليل</SelectItem><SelectItem value="فحوصات مخبرية">فحوصات مخبرية</SelectItem><SelectItem value="قياسات حيوية">قياسات حيوية</SelectItem><SelectItem value="عناية بالجروح">عناية بالجروح</SelectItem><SelectItem value="رعاية نفسية">رعاية نفسية</SelectItem><SelectItem value="عام">عام</SelectItem></SelectContent></Select></div>
+              <div><Label>الفئة</Label><Select value={serviceForm.category} onValueChange={v => setServiceForm({ ...serviceForm, category: v })}><SelectTrigger className="border-amber-200 mt-1"><SelectValue placeholder="اختر الفئة" /></SelectTrigger><SelectContent><SelectItem value="قياسات وتحاليل">قياسات وتحاليل</SelectItem><SelectItem value="حقن وإبر">حقن وإبر</SelectItem><SelectItem value="عناية بالجروح">عناية بالجروح</SelectItem><SelectItem value="تمريض منزلي">تمريض منزلي</SelectItem><SelectItem value="إسعافات أولية">إسعافات أولية</SelectItem><SelectItem value="عناية بالمريض">عناية بالمريض</SelectItem><SelectItem value="صحة المرأة">صحة المرأة</SelectItem><SelectItem value="استشارات ومتابعة">استشارات ومتابعة</SelectItem><SelectItem value="رعاية الأطفال">رعاية الأطفال</SelectItem><SelectItem value="عام">عام</SelectItem></SelectContent></Select></div>
             </div>
             <div className="flex items-center justify-between p-3 bg-amber-50/50 rounded-xl"><Label>خدمة نشطة</Label><Switch checked={serviceForm.isActive} onCheckedChange={v => setServiceForm({ ...serviceForm, isActive: v })} /></div>
           </div>
