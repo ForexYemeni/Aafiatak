@@ -327,6 +327,7 @@ export async function getAllServiceRequests() {
               secondName: nurseDoc.data()!.secondName,
               thirdName: nurseDoc.data()!.thirdName,
               lastName: nurseDoc.data()!.lastName,
+              phone: nurseDoc.data()!.phone || null,
             }
           : null,
       }
@@ -379,6 +380,7 @@ export async function getServiceRequestsByBeneficiary(beneficiaryId: string) {
               secondName: nurseDoc.data()!.secondName,
               thirdName: nurseDoc.data()!.thirdName,
               lastName: nurseDoc.data()!.lastName,
+              phone: nurseDoc.data()!.phone || null,
             }
           : null,
       }
@@ -475,6 +477,7 @@ export async function updateServiceRequest(id: string, data: Record<string, any>
             secondName: nurseDoc.data()!.secondName,
             thirdName: nurseDoc.data()!.thirdName,
             lastName: nurseDoc.data()!.lastName,
+            phone: nurseDoc.data()!.phone || null,
           }
         : null,
     }
@@ -593,7 +596,7 @@ export async function createAssignment(data: {
     id: docRef.id,
     ...data,
     nurse: nurseDoc.exists
-      ? { id: nurseDoc.id, firstName: nurseDoc.data()!.firstName, secondName: nurseDoc.data()!.secondName, thirdName: nurseDoc.data()!.thirdName, lastName: nurseDoc.data()!.lastName }
+      ? { id: nurseDoc.id, firstName: nurseDoc.data()!.firstName, secondName: nurseDoc.data()!.secondName, thirdName: nurseDoc.data()!.thirdName, lastName: nurseDoc.data()!.lastName, phone: nurseDoc.data()!.phone || null }
       : null,
     request: {
       id: requestDoc.id,
@@ -992,9 +995,44 @@ export async function getEmergencyRequestsByBeneficiary(beneficiaryId: string) {
   const snapshot = await firestore.collection('emergencyRequests')
     .where('beneficiaryId', '==', beneficiaryId)
     .get()
-  const docs = snapshot.docs.map(docToObject)
+
+  const requests = []
+  for (const doc of snapshot.docs) {
+    const data = convertTimestamps(doc.data())
+
+    // Check for emergency assignment
+    const assignmentSnapshot = await firestore.collection('emergencyAssignments')
+      .where('emergencyRequestId', '==', doc.id)
+      .limit(1)
+      .get()
+
+    let assignment = null
+    if (!assignmentSnapshot.empty) {
+      const assignData = convertTimestamps(assignmentSnapshot.docs[0].data())
+      const nurseDoc = await firestore.collection('nurses').doc(assignData.nurseId).get()
+      assignment = {
+        id: assignmentSnapshot.docs[0].id,
+        ...assignData,
+        nurse: nurseDoc.exists
+          ? {
+              id: nurseDoc.id,
+              firstName: nurseDoc.data()!.firstName,
+              lastName: nurseDoc.data()!.lastName,
+              phone: nurseDoc.data()!.phone || null,
+            }
+          : null,
+      }
+    }
+
+    requests.push({
+      id: doc.id,
+      ...data,
+      assignment,
+    })
+  }
+
   // Sort by createdAt descending in code
-  docs.sort((a: any, b: any) => {
+  requests.sort((a: any, b: any) => {
     const getTime = (t: any) => {
       if (!t) return 0
       if (typeof t === 'object' && t !== null && 'seconds' in t) return t.seconds * 1000
@@ -1002,7 +1040,7 @@ export async function getEmergencyRequestsByBeneficiary(beneficiaryId: string) {
     }
     return getTime(b.createdAt) - getTime(a.createdAt)
   })
-  return docs
+  return requests
 }
 
 // ==================== REFERRAL SYSTEM ====================
@@ -1346,7 +1384,7 @@ export async function createEmergencyAssignment(data: {
     id: docRef.id,
     ...data,
     nurse: nurseDoc.exists
-      ? { id: nurseDoc.id, firstName: nurseDoc.data()!.firstName, lastName: nurseDoc.data()!.lastName }
+      ? { id: nurseDoc.id, firstName: nurseDoc.data()!.firstName, lastName: nurseDoc.data()!.lastName, phone: nurseDoc.data()!.phone || null }
       : null,
   }
 }

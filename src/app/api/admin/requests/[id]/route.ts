@@ -8,9 +8,9 @@ export async function PUT(
   try {
     const { id } = await params
     const body = await request.json()
-    const { status, adminNotes, paymentStatus } = body
+    const { status, adminNotes, paymentStatus, handledBy } = body
 
-    if (!status && !paymentStatus && !adminNotes) {
+    if (!status && !paymentStatus && !adminNotes && !handledBy) {
       return NextResponse.json({ error: 'يجب توفير حقل واحد على الأقل للتحديث' }, { status: 400 })
     }
 
@@ -28,6 +28,7 @@ export async function PUT(
     }
     if (paymentStatus) updateData.paymentStatus = paymentStatus
     if (adminNotes !== undefined) updateData.adminNotes = adminNotes
+    if (handledBy) updateData.handledBy = handledBy
 
     const updated = await updateServiceRequest(id, updateData)
 

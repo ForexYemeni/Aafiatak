@@ -1694,9 +1694,12 @@ export default function BeneficiaryDashboard() {
                         initial="hidden"
                         animate="visible"
                       >
-                        {filteredServices.map(service => (
+                        {filteredServices.map(service => {
+                          const isSelected = selectedServices.find((s: any) => s.id === service.id)
+                          return (
                           <motion.div key={service.id} variants={itemVariants} whileHover={{ y: -6 }} transition={{ duration: 0.2 }}>
-                            <Card className="border-0 bg-white/80 backdrop-blur-sm shadow-lg hover:shadow-xl transition-all duration-300 h-full flex flex-col overflow-hidden relative group">
+                            <Card className={`border-0 backdrop-blur-sm shadow-lg hover:shadow-xl transition-all duration-300 h-full flex flex-col overflow-hidden relative group ${isSelected ? 'bg-emerald-50/90 ring-2 ring-emerald-400 shadow-emerald-500/20' : 'bg-white/80'}`}>
+                              {isSelected && <div className="absolute top-2 left-2 z-20 bg-emerald-500 text-white rounded-full p-1 shadow-md"><Check className="w-3 h-3" /></div>}
                               <div className="absolute inset-0 bg-gradient-to-br from-violet-400 to-fuchsia-500 opacity-0 group-hover:opacity-5 transition-opacity duration-300" />
                               <CardContent className="p-5 flex flex-col flex-1 relative z-10">
                                 <div className="flex items-start justify-between mb-3">
@@ -1716,25 +1719,21 @@ export default function BeneficiaryDashboard() {
                                         : 'bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white hover:shadow-violet-500/25'
                                     }`}
                                     onClick={() => {
-                                      setSelectedService(service)
-                                      setSelectedServices(prev => {
-                                        const exists = prev.find((s: any) => s.id === service.id)
-                                        if (exists) return prev.filter((s: any) => s.id !== service.id)
-                                        return [...prev, service]
-                                      })
-                                      // Fetch pricing for all selected services
-                                      const newSelection = selectedServices.find((s: any) => s.id === service.id)
+                                      const exists = selectedServices.find((s: any) => s.id === service.id)
+                                      const newSelection = exists
                                         ? selectedServices.filter((s: any) => s.id !== service.id)
                                         : [...selectedServices, service]
-                                      setRequestForm({ paymentMethod: '', paymentMethodId: '', notes: '', address: beneficiaryUser?.location || '', couponCode: '' })
-                                      setValidCoupon(null)
-                                      setCouponError('')
-                                      setDynamicPricing(null)
-                                      setRequestFavoriteNurse(false)
-                                      setRequestDialog(true)
-                                      fetchRequestPaymentMethods()
+                                      setSelectedServices(newSelection)
+                                      if (newSelection.length === 1 && !exists) {
+                                        setSelectedService(service)
+                                      } else if (newSelection.length === 0) {
+                                        setSelectedService(null)
+                                      }
+                                      // Fetch dynamic pricing for selected services
                                       if (newSelection.length > 0) {
-                                        fetchDynamicPricing(newSelection.map((s: any) => s.id), beneficiaryUser?.location || '')
+                                        fetchDynamicPricing(newSelection.map((s: any) => s.id), beneficiaryUser?.location || requestForm.address || '')
+                                      } else {
+                                        setDynamicPricing(null)
                                       }
                                     }}
                                   >
@@ -1743,13 +1742,14 @@ export default function BeneficiaryDashboard() {
                                     ) : (
                                       <Plus className="w-4 h-4 ml-1" />
                                     )}
-                                    {selectedServices.find((s: any) => s.id === service.id) ? 'مختار' : 'طلب'}
+                                    {selectedServices.find((s: any) => s.id === service.id) ? 'مختار' : 'اختيار'}
                                   </Button>
                                 </div>
                               </CardContent>
                             </Card>
                           </motion.div>
-                        ))}
+                          )
+                        })}
                       </motion.div>
                     ) : !searchQuery || nurseSearchResults.length === 0 ? (
                       <motion.div
@@ -1824,6 +1824,74 @@ export default function BeneficiaryDashboard() {
                         </motion.div>
                       </div>
                     )}
+
+                    {/* ===== Floating Selected Services Bar ===== */}
+                    <AnimatePresence>
+                      {selectedServices.length > 0 && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 40 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: 40 }}
+                          className="sticky bottom-4 z-30 mx-2"
+                        >
+                          <div className="bg-gradient-to-l from-violet-600 via-purple-600 to-fuchsia-600 rounded-2xl shadow-2xl shadow-violet-500/30 p-4 text-white">
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="flex items-center gap-2">
+                                <ShoppingBag className="w-5 h-5" />
+                                <span className="font-bold text-sm">{selectedServices.length} خدمات مختارة</span>
+                              </div>
+                              <button
+                                onClick={() => { setSelectedServices([]); setSelectedService(null); setDynamicPricing(null) }}
+                                className="text-white/70 hover:text-white text-xs flex items-center gap-1 transition-colors"
+                              >
+                                <XCircle className="w-3.5 h-3.5" />
+                                إلغاء الكل
+                              </button>
+                            </div>
+                            <div className="flex flex-wrap gap-1.5 mb-3 max-h-20 overflow-y-auto">
+                              {selectedServices.map((s: any) => (
+                                <span key={s.id} className="inline-flex items-center gap-1 bg-white/20 rounded-lg px-2.5 py-1 text-xs">
+                                  {s.name}
+                                  <button
+                                    onClick={() => {
+                                      const newSel = selectedServices.filter((sv: any) => sv.id !== s.id)
+                                      setSelectedServices(newSel)
+                                      if (newSel.length === 0) { setSelectedService(null); setDynamicPricing(null) }
+                                      else if (newSel.length > 0) fetchDynamicPricing(newSel.map((sv: any) => sv.id), beneficiaryUser?.location || requestForm.address || '')
+                                    }}
+                                    className="hover:bg-white/30 rounded-full p-0.5 transition-colors"
+                                  >
+                                    <X className="w-3 h-3" />
+                                  </button>
+                                </span>
+                              ))}
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <span className="text-violet-100 text-xs">الإجمالي</span>
+                                <p className="text-xl font-black">
+                                  {formatPrice(dynamicPricing?.totalPrice || selectedServices.reduce((sum: number, s: any) => sum + (s.price || 0), 0))}
+                                </p>
+                              </div>
+                              <Button
+                                onClick={() => {
+                                  setRequestForm(prev => ({ ...prev, address: prev.address || beneficiaryUser?.location || profileLocation || '' }))
+                                  fetchRequestPaymentMethods()
+                                  if (selectedServices.length > 0) {
+                                    fetchDynamicPricing(selectedServices.map((s: any) => s.id), beneficiaryUser?.location || profileLocation || '')
+                                  }
+                                  setRequestDialog(true)
+                                }}
+                                className="bg-white text-violet-700 hover:bg-violet-50 font-bold px-6 rounded-xl shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all"
+                              >
+                                إتمام الطلب
+                                <ChevronDown className="w-4 h-4 mr-1 rotate-[-90deg]" />
+                              </Button>
+                            </div>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </div>
                 )}
 
@@ -1909,11 +1977,25 @@ export default function BeneficiaryDashboard() {
                                     <div className="mt-3 p-3 rounded-xl bg-gradient-to-l from-violet-50/50 to-fuchsia-50/50 border border-violet-100/50">
                                       <p className="text-xs font-medium text-violet-600 mb-1">الممرض/ة المعين/ة</p>
                                       <p className="text-sm font-semibold">{nurseAssigned.firstName} {nurseAssigned.lastName}</p>
+                                      {nurseAssigned.phone && (
+                                        <a href={`tel:${nurseAssigned.phone}`} className="flex items-center gap-1.5 text-xs text-violet-600 hover:text-violet-800 mt-1 transition-colors">
+                                          <Phone className="w-3 h-3 shrink-0" />
+                                          <span>{nurseAssigned.phone}</span>
+                                        </a>
+                                      )}
+                                    </div>
+                                  )}
+
+                                  {/* Nurse assigned from emergency request data */}
+                                  {!nurseAssigned && req.nurseId && req.nurseName && (
+                                    <div className="mt-3 p-3 rounded-xl bg-gradient-to-l from-violet-50/50 to-fuchsia-50/50 border border-violet-100/50">
+                                      <p className="text-xs font-medium text-violet-600 mb-1">الممرض/ة المعين/ة</p>
+                                      <p className="text-sm font-semibold">{req.nurseName}</p>
                                     </div>
                                   )}
 
                                   {/* Admin Direct Execution Info */}
-                                  {!nurseAssigned && req.status === 'in_progress' && (req.adminNotes?.includes('الإدارة') || req.isEmergency) && (
+                                  {!nurseAssigned && !req.nurseId && (req.handledBy === 'admin' || (req.status === 'in_progress' && req.adminNotes?.includes('الإدارة'))) && (
                                     <div className="mt-3 p-3 rounded-xl bg-gradient-to-l from-amber-50/80 to-orange-50/80 border border-amber-200/60">
                                       <div className="flex items-center gap-2 mb-2">
                                         <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-sm shrink-0">
@@ -3072,6 +3154,7 @@ export default function BeneficiaryDashboard() {
             address: beneficiaryUser?.location || profileLocation || '',
           }))
           setEmergencyDialog(true)
+          fetchEmergencyPaymentMethods()
         }}
         className="fixed bottom-24 left-6 z-40 w-14 h-14 rounded-full bg-gradient-to-br from-red-500 to-rose-600 text-white shadow-lg shadow-red-500/50 flex items-center justify-center"
         whileHover={{ scale: 1.1 }}
@@ -3910,7 +3993,12 @@ export default function BeneficiaryDashboard() {
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.1)_0%,transparent_70%)]" />
             <div className="relative">
               <DialogTitle className="text-lg font-bold">طلب خدمة</DialogTitle>
-              {selectedService && (
+              {selectedServices.length > 0 ? (
+                <div className="mt-2 flex items-center justify-between">
+                  <p className="text-violet-100 text-sm">{selectedServices.length} خدمة مختارة</p>
+                  <span className="text-white font-bold">{formatPrice(getFinalPrice())}</span>
+                </div>
+              ) : selectedService && (
                 <div className="mt-2 flex items-center justify-between">
                   <p className="text-violet-100 text-sm">{selectedService.name}</p>
                   <span className="text-white font-bold">{formatPrice(getFinalPrice() || selectedService.price)}</span>

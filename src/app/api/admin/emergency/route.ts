@@ -14,7 +14,7 @@ export async function GET() {
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json()
-    const { id, status, nurseId, adminNotes } = body
+    const { id, status, nurseId, adminNotes, handledBy } = body
 
     if (!id) {
       return NextResponse.json({ error: 'معرف الطلب مطلوب' }, { status: 400 })
@@ -53,6 +53,7 @@ export async function PUT(request: NextRequest) {
 
     const updateData: Record<string, any> = { status }
     if (adminNotes) updateData.adminNotes = adminNotes
+    if (handledBy) updateData.handledBy = handledBy
     const updated = await updateEmergencyRequest(id, updateData)
     return NextResponse.json(updated)
   } catch (error: any) {
