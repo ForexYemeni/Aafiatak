@@ -166,6 +166,7 @@ export default function LandingPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [registerSuccess, setRegisterSuccess] = useState(false)
   const [detectedRole, setDetectedRole] = useState<Role | null>(null)
+  const [countdown, setCountdown] = useState(10)
 
   // ─── Nurse Registration Step ───
   const [nurseStep, setNurseStep] = useState<NurseRegStep>(1)
@@ -189,6 +190,19 @@ export default function LandingPage() {
     setRegisterSuccess(false)
     setNurseStep(1)
   }, [])
+
+  // ─── Countdown effect when role detected ───
+  useEffect(() => {
+    if (!detectedRole) { setCountdown(10); return }
+    setCountdown(10)
+    const timer = setInterval(() => {
+      setCountdown(prev => {
+        if (prev <= 1) { clearInterval(timer); return 0 }
+        return prev - 1
+      })
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [detectedRole])
 
   // ─── Nurse step validation ───
   const isNurseStep1Valid = nurseRegForm.fullName.trim().split(/\s+/).length >= 3 && nurseRegForm.phone && nurseRegForm.location
@@ -234,8 +248,8 @@ export default function LandingPage() {
         const { data, role } = successResult
         // Show detected role animation
         setDetectedRole(role)
-        // Brief delay for animation before navigating
-        await new Promise(res => setTimeout(res, 800))
+        // 10 seconds animation before navigating
+        await new Promise(res => setTimeout(res, 10000))
 
         setUser(data, role)
         if (role === 'admin') {
@@ -318,7 +332,7 @@ export default function LandingPage() {
       if (res.ok) {
         // Auto-login after registration - show role detection animation then redirect
         setDetectedRole('nurse')
-        await new Promise(r => setTimeout(r, 1200))
+        await new Promise(r => setTimeout(r, 10000))
         setUser(data, 'nurse')
         setView('nurse-dashboard')
         toast({ title: `مرحباً ${data.firstName}`, description: 'تم إنشاء حسابك بنجاح! أكمل ملفك الشخصي لتحسين فرص التعيين' })
@@ -361,7 +375,7 @@ export default function LandingPage() {
       if (res.ok) {
         // Auto-login after registration - show role detection animation then redirect
         setDetectedRole('beneficiary')
-        await new Promise(r => setTimeout(r, 1200))
+        await new Promise(r => setTimeout(r, 10000))
         setUser(data, 'beneficiary')
         setView('beneficiary-dashboard')
         toast({ title: `مرحباً ${data.name}`, description: 'تم إنشاء حسابك بنجاح! يمكنك الآن طلب الخدمات الصحية' })
@@ -640,14 +654,27 @@ export default function LandingPage() {
                               </motion.div>
                             </motion.div>
 
-                            {/* Loading indicator */}
+                            {/* Loading indicator with countdown */}
                             <motion.div
                               initial={{ opacity: 0 }}
                               animate={{ opacity: 1 }}
                               transition={{ delay: 0.8 }}
-                              className="flex items-center gap-2 mt-1"
+                              className="flex flex-col items-center gap-3 mt-1"
                             >
-                              <Loader2 className={`w-4 h-4 animate-spin ${roleConfig[detectedRole].textAccent}`} />
+                              {/* Circular countdown */}
+                              <div className="relative w-12 h-12">
+                                <svg className="w-12 h-12 -rotate-90" viewBox="0 0 48 48">
+                                  <circle cx="24" cy="24" r="20" fill="none" stroke="#e2e8f0" strokeWidth="3" />
+                                  <circle cx="24" cy="24" r="20" fill="none" stroke="url(#countdown-gradient)" strokeWidth="3" strokeLinecap="round" strokeDasharray={`${2 * Math.PI * 20}`} strokeDashoffset={`${2 * Math.PI * 20 * (1 - countdown / 10)}`} className="transition-all duration-1000 ease-linear" />
+                                  <defs>
+                                    <linearGradient id="countdown-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                                      <stop offset="0%" stopColor={detectedRole === 'admin' ? '#f59e0b' : detectedRole === 'nurse' ? '#3b82f6' : '#8b5cf6'} />
+                                      <stop offset="100%" stopColor={detectedRole === 'admin' ? '#ef4444' : detectedRole === 'nurse' ? '#06b6d4' : '#d946ef'} />
+                                    </linearGradient>
+                                  </defs>
+                                </svg>
+                                <span className="absolute inset-0 flex items-center justify-center text-sm font-black text-slate-700">{countdown}</span>
+                              </div>
                               <span className="text-xs font-medium text-slate-400">جارٍ التحويل...</span>
                             </motion.div>
                           </motion.div>
