@@ -349,6 +349,22 @@ export default function NurseDashboard() {
   const nurseId = (user as any)?.id
   const nurseName = `${(user as any)?.firstName || ''} ${(user as any)?.lastName || ''}`
 
+  // Session validation - check if nurse account still exists
+  useEffect(() => {
+    if (!nurseId) return
+    const validateSession = async () => {
+      try {
+        const res = await fetch(`/api/nurse/profile?nurseId=${nurseId}`)
+        if (res.status === 404) {
+          // Account no longer exists (deleted by admin), force logout
+          toast({ title: 'تم تسجيل الخروج', description: 'حسابك لم يعد موجوداً. يرجى إنشاء حساب جديد.', variant: 'destructive' })
+          logout()
+        }
+      } catch {}
+    }
+    validateSession()
+  }, [nurseId, logout, toast])
+
   // ==================== Data Fetching ====================
 
   const fetchAssignments = useCallback(async () => {

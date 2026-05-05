@@ -67,6 +67,13 @@ export async function POST(request: NextRequest) {
       'loyaltyPoints',
       'referrals',
       'reports',
+      'transactions',
+      'appointments',
+      'pushNotifications',
+      'calendarSync',
+      'whatsappQueue',
+      'favoriteNurses',
+      'notifications',
     ]
 
     const results: Record<string, number> = {}

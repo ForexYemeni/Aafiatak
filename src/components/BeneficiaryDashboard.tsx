@@ -334,6 +334,22 @@ export default function BeneficiaryDashboard() {
       .catch(() => {})
   }, [])
 
+  // Session validation - check if beneficiary account still exists
+  useEffect(() => {
+    if (!beneficiaryUser?.id) return
+    const validateSession = async () => {
+      try {
+        const res = await fetch(`/api/beneficiary/profile?beneficiaryId=${beneficiaryUser.id}`)
+        if (res.status === 404) {
+          // Account no longer exists (deleted by admin), force logout
+          toast({ title: 'تم تسجيل الخروج', description: 'حسابك لم يعد موجوداً. يرجى إنشاء حساب جديد.', variant: 'destructive' })
+          logout()
+        }
+      } catch {}
+    }
+    validateSession()
+  }, [beneficiaryUser?.id, logout, toast])
+
   // Fetch data based on active tab
   const fetchData = useCallback(async () => {
     setLoading(true)
