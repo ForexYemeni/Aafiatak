@@ -84,6 +84,7 @@ interface DashboardStats {
   pendingPaymentConfirmations?: number
   pendingEmergency?: number
   pendingAssignmentAcceptance?: number
+  allPendingRequests?: number
 }
 
 const PIE_COLORS = ['#f59e0b', '#10b981', '#ef4444', '#3b82f6', '#8b5cf6', '#6b7280']
@@ -159,6 +160,8 @@ export default function AdminDashboard() {
   const [selectedRequest, setSelectedRequest] = useState<any>(null)
   const [approveMode, setApproveMode] = useState<'assign' | 'direct'>('assign')
   const [selectedNurseId, setSelectedNurseId] = useState('')
+  const [paymentConfirmed, setPaymentConfirmed] = useState(false)
+  const [paymentConfirmStep, setPaymentConfirmStep] = useState(false)
 
   // Reject dialog
   const [rejectDialog, setRejectDialog] = useState(false)
@@ -471,7 +474,8 @@ export default function AdminDashboard() {
 
   // ─── Request actions ───────────────────────────────────────
   const handleOpenApproveDialog = async (req: any) => {
-    setSelectedRequest(req); setApproveMode('assign'); setSelectedNurseId(''); setNurseDistances({}); setApproveDialog(true)
+    setSelectedRequest(req); setApproveMode('assign'); setSelectedNurseId(''); setNurseDistances({});
+    setPaymentConfirmed(false); setPaymentConfirmStep(true); setApproveDialog(true)
     // Fetch nurses from API if not already loaded (e.g. when on requests tab)
     let currentNurses = nurses
     if (nurses.length === 0) {
@@ -489,6 +493,31 @@ export default function AdminDashboard() {
   }
 
   const handleConfirmApprove = async () => {
+    // Step 1: Confirm payment first if not yet confirmed
+    if (!paymentConfirmed) {
+      // First confirm payment, then proceed
+      try {
+        const res = await fetch(`/api/admin/requests/${selectedRequest.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'approved', paymentStatus: 'paid' }),
+        })
+        if (res.ok) {
+          setPaymentConfirmed(true)
+          setPaymentConfirmStep(false)
+          toast({ title: 'تم تأكيد الدفع وقبول الطلب', description: 'الآن يمكنك تعيين ممرض أو التنفيذ المباشر' })
+          fetchData()
+        } else {
+          const data = await res.json()
+          toast({ title: 'خطأ', description: data.error, variant: 'destructive' })
+        }
+      } catch {
+        toast({ title: 'خطأ', description: 'حدث خطأ', variant: 'destructive' })
+      }
+      return
+    }
+
+    // Step 2: Assign nurse or direct execute (payment already confirmed)
     if (approveMode === 'assign') {
       if (!selectedNurseId) { toast({ title: 'خطأ', description: 'يرجى اختيار ممرض', variant: 'destructive' }); return }
       try {
@@ -1056,7 +1085,7 @@ export default function AdminDashboard() {
                         { key: 'emergency', count: stats.pendingEmergency || emergencyRequests.filter((e: any) => e.status === 'pending').length, label: 'طلب طوارئ', plural: 'طلبات طوارئ', gradient: 'from-red-500 to-rose-600', icon: AlertTriangle, tab: 'emergency' as Tab },
                         { key: 'unverified', count: stats.unverifiedNurses || 0, label: 'توثيق ممرض', plural: 'توثيق ممرضين', gradient: 'from-amber-500 to-orange-500', icon: BadgeCheck, tab: 'nurses' as Tab },
                         { key: 'pendingNurses', count: stats.pendingNurses || 0, label: 'موافقة ممرض', plural: 'موافقة ممرضين', gradient: 'from-yellow-500 to-amber-500', icon: UserPlus, tab: 'nurses' as Tab },
-                        { key: 'pendingRequests', count: stats.pendingRequests || 0, label: 'طلب خدمة', plural: 'طلبات خدمات', gradient: 'from-blue-500 to-indigo-500', icon: ClipboardList, tab: 'requests' as Tab },
+                        { key: 'pendingRequests', count: stats.allPendingRequests || stats.pendingRequests || 0, label: 'طلب خدمة', plural: 'طلبات خدمات', gradient: 'from-blue-500 to-indigo-500', icon: ClipboardList, tab: 'requests' as Tab },
                         { key: 'paymentConfirm', count: stats.pendingPaymentConfirmations || 0, label: 'تأكيد دفع', plural: 'تأكيدات دفع', gradient: 'from-emerald-500 to-teal-500', icon: Receipt, tab: 'requests' as Tab },
                         { key: 'complaints', count: stats.pendingComplaints || 0, label: 'شكوى/بلاغ', plural: 'شكاوى وبلاغات', gradient: 'from-purple-500 to-fuchsia-500', icon: MessageSquare, tab: 'complaints' as Tab },
                       ].filter(item => item.count > 0)
@@ -2757,12 +2786,12 @@ export default function AdminDashboard() {
         <DialogContent className="sm:max-w-lg border-0 shadow-2xl">
           <DialogHeader>
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-lg">
-                <CheckCircle className="w-5 h-5 text-white" />
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-lg ${paymentConfirmed ? 'bg-gradient-to-br from-emerald-400 to-teal-500' : 'bg-gradient-to-br from-amber-400 to-orange-500'}`}>
+                {paymentConfirmed ? <CheckCircle className="w-5 h-5 text-white" /> : <DollarSign className="w-5 h-5 text-white" />}
               </div>
               <div>
-                <DialogTitle className="text-lg font-bold">قبول الطلب</DialogTitle>
-                <p className="text-xs text-gray-400">اختر طريقة التنفيذ</p>
+                <DialogTitle className="text-lg font-bold">{paymentConfirmed ? 'تعيين الممرض' : 'تأكيد الدفع وقبول الطلب'}</DialogTitle>
+                <p className="text-xs text-gray-400">{paymentConfirmed ? 'اختر طريقة التنفيذ' : 'تأكيد استلام المبلغ من المستفيد'}</p>
               </div>
             </div>
           </DialogHeader>
@@ -2832,84 +2861,118 @@ export default function AdminDashboard() {
                     </div>
                     <p className="text-[10px] text-emerald-600/70">الممرض سيستلم {formatPrice(nurseFee)} بعد خصم عمولة المنصة {formatPrice(commissionAmount)}</p>
                   </div>
+
+                  {/* ══════════ STEP 1: Payment Confirmation ══════════ */}
+                  {!paymentConfirmed && (
+                    <div className="p-4 bg-gradient-to-l from-amber-50/80 via-yellow-50/50 to-orange-50/50 rounded-xl ring-2 ring-amber-300/50 space-y-4">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center shadow-md">
+                          <Receipt className="w-4 h-4 text-white" />
+                        </div>
+                        <p className="font-bold text-amber-800">تأكيد الدفع</p>
+                      </div>
+                      <p className="text-sm text-amber-700 leading-relaxed">
+                        هل قام المستفيد <span className="font-bold">{selectedRequest.beneficiary?.name || ''}</span> بإرسال المبلغ الإجمالي <span className="font-bold text-emerald-700">{formatPrice(reqTotalPrice)}</span>؟
+                      </p>
+                      <div className="flex items-center gap-2 p-3 bg-white/70 rounded-lg border border-amber-200/50">
+                        <CreditCard className="w-4 h-4 text-amber-600 shrink-0" />
+                        <span className="text-xs text-amber-700">طريقة الدفع: {selectedRequest.paymentMethod === 'cash' ? 'نقدي (عند الاستلام)' : selectedRequest.paymentMethod === 'electronic' ? 'إلكتروني' : selectedRequest.paymentMethod || 'غير محددة'}</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ══════════ STEP 2: Payment Confirmed Badge ══════════ */}
+                  {paymentConfirmed && (
+                    <div className="p-3 bg-gradient-to-l from-emerald-50 to-teal-50/50 rounded-xl ring-1 ring-emerald-200/50 flex items-center gap-2">
+                      <CheckCircle className="w-5 h-5 text-emerald-600" />
+                      <span className="font-bold text-emerald-700 text-sm">تم تأكيد الدفع وقبول الطلب</span>
+                    </div>
+                  )}
                 </div>
               )
             })()}
 
-            {/* Option A: Assign Nurse */}
-            <div className={`p-4 rounded-xl border-2 cursor-pointer transition-all duration-300 ${approveMode === 'assign' ? 'border-amber-400 bg-gradient-to-l from-amber-50 to-orange-50/30 shadow-md shadow-amber-500/10' : 'border-gray-200 hover:border-amber-200'}`} onClick={() => setApproveMode('assign')}>
-              <div className="flex items-center gap-3 mb-2">
-                <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${approveMode === 'assign' ? 'bg-gradient-to-br from-amber-400 to-orange-500 shadow-md' : 'bg-gray-100'}`}>
-                  <UserPlus className={`w-4.5 h-4.5 ${approveMode === 'assign' ? 'text-white' : 'text-gray-400'}`} />
-                </div>
-                <div>
-                  <p className="font-bold">تعيين ممرض</p>
-                  <p className="text-xs text-gray-400">اختيار ممرض معتمد وتعيينه للطلب</p>
-                </div>
-              </div>
-              {approveMode === 'assign' && (
-                <div className="mt-3 space-y-3">
-                  {/* Nearby Nurses Suggestions */}
-                  {geocodingLoading && (
-                    <div className="flex items-center gap-2 p-2 bg-blue-50/50 rounded-lg">
-                      <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
-                      <span className="text-sm text-blue-600">جارٍ حساب المسافات للممرضين القريبين...</span>
+            {/* ══════════ Assign/Execute Options (only after payment confirmed) ══════════ */}
+            {paymentConfirmed && (
+              <>
+                {/* Option A: Assign Nurse */}
+                <div className={`p-4 rounded-xl border-2 cursor-pointer transition-all duration-300 ${approveMode === 'assign' ? 'border-amber-400 bg-gradient-to-l from-amber-50 to-orange-50/30 shadow-md shadow-amber-500/10' : 'border-gray-200 hover:border-amber-200'}`} onClick={() => setApproveMode('assign')}>
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${approveMode === 'assign' ? 'bg-gradient-to-br from-amber-400 to-orange-500 shadow-md' : 'bg-gray-100'}`}>
+                      <UserPlus className={`w-4.5 h-4.5 ${approveMode === 'assign' ? 'text-white' : 'text-gray-400'}`} />
                     </div>
-                  )}
-                  {Object.keys(nurseDistances).length > 0 && (
-                    <div className="p-3 bg-gradient-to-l from-emerald-50/80 to-teal-50/50 rounded-xl border border-emerald-200/50">
-                      <p className="text-xs font-bold text-emerald-700 mb-2 flex items-center gap-1"><MapPin className="w-3.5 h-3.5" />مقترحات الممرضين القريبين ({Object.keys(nurseDistances).length} ممرض){geocodingLoading && <Loader2 className="w-3 h-3 animate-spin mr-1" />}</p>
-                      <div className="space-y-1.5 max-h-32 overflow-y-auto">
-                        {sortedNursesByProximity.filter((n: any) => nurseDistances[n.id] !== undefined).slice(0, 5).map((n: any) => (
-                          <button key={n.id} onClick={() => setSelectedNurseId(n.id)} className={`w-full flex items-center justify-between p-2 rounded-lg text-sm transition-all ${selectedNurseId === n.id ? 'bg-emerald-500 text-white' : 'bg-white/80 hover:bg-emerald-50'}`}>
-                            <span className="font-medium">{n.firstName} {n.lastName}</span>
-                            <Badge className={`${selectedNurseId === n.id ? 'bg-white/20 text-white' : 'bg-emerald-100 text-emerald-700'} border-0 text-xs`}>{nurseDistances[n.id]?.toFixed(1)} كم</Badge>
-                          </button>
-                        ))}
+                    <div>
+                      <p className="font-bold">تعيين ممرض</p>
+                      <p className="text-xs text-gray-400">اختيار ممرض معتمد وتعيينه للطلب</p>
+                    </div>
+                  </div>
+                  {approveMode === 'assign' && (
+                    <div className="mt-3 space-y-3">
+                      {/* Nearby Nurses Suggestions */}
+                      {geocodingLoading && (
+                        <div className="flex items-center gap-2 p-2 bg-blue-50/50 rounded-lg">
+                          <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
+                          <span className="text-sm text-blue-600">جارٍ حساب المسافات للممرضين القريبين...</span>
+                        </div>
+                      )}
+                      {Object.keys(nurseDistances).length > 0 && (
+                        <div className="p-3 bg-gradient-to-l from-emerald-50/80 to-teal-50/50 rounded-xl border border-emerald-200/50">
+                          <p className="text-xs font-bold text-emerald-700 mb-2 flex items-center gap-1"><MapPin className="w-3.5 h-3.5" />مقترحات الممرضين القريبين ({Object.keys(nurseDistances).length} ممرض){geocodingLoading && <Loader2 className="w-3 h-3 animate-spin mr-1" />}</p>
+                          <div className="space-y-1.5 max-h-32 overflow-y-auto">
+                            {sortedNursesByProximity.filter((n: any) => nurseDistances[n.id] !== undefined).slice(0, 5).map((n: any) => (
+                              <button key={n.id} onClick={() => setSelectedNurseId(n.id)} className={`w-full flex items-center justify-between p-2 rounded-lg text-sm transition-all ${selectedNurseId === n.id ? 'bg-emerald-500 text-white' : 'bg-white/80 hover:bg-emerald-50'}`}>
+                                <span className="font-medium">{n.firstName} {n.lastName}</span>
+                                <Badge className={`${selectedNurseId === n.id ? 'bg-white/20 text-white' : 'bg-emerald-100 text-emerald-700'} border-0 text-xs`}>{nurseDistances[n.id]?.toFixed(1)} كم</Badge>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      <div>
+                        <Label>اختر الممرض ({sortedNursesByProximity.length} ممرض معتمد)</Label>
+                        <Select value={selectedNurseId} onValueChange={setSelectedNurseId}>
+                          <SelectTrigger className="border-amber-200 mt-1"><SelectValue placeholder={sortedNursesByProximity.length === 0 ? 'لا يوجد ممرضين معتمدين' : 'اختر ممرض'} /></SelectTrigger>
+                          <SelectContent>
+                            {sortedNursesByProximity.map((n: any) => (
+                              <SelectItem key={n.id} value={n.id}>
+                                {n.firstName} {n.lastName}{nurseDistances[n.id] !== undefined ? ` (${nurseDistances[n.id].toFixed(1)} كم)` : n.location ? ` - ${getDisplayLocation(n.location)}` : ''}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {sortedNursesByProximity.length === 0 && !geocodingLoading && (
+                          <p className="text-xs text-red-500 mt-1">لا يوجد ممرضين معتمدين حالياً. يرجى إضافة وقبول ممرضين أولاً.</p>
+                        )}
                       </div>
                     </div>
                   )}
-                  <div>
-                    <Label>اختر الممرض ({sortedNursesByProximity.length} ممرض معتمد)</Label>
-                    <Select value={selectedNurseId} onValueChange={setSelectedNurseId}>
-                      <SelectTrigger className="border-amber-200 mt-1"><SelectValue placeholder={sortedNursesByProximity.length === 0 ? 'لا يوجد ممرضين معتمدين' : 'اختر ممرض'} /></SelectTrigger>
-                      <SelectContent>
-                        {sortedNursesByProximity.map((n: any) => (
-                          <SelectItem key={n.id} value={n.id}>
-                            {n.firstName} {n.lastName}{nurseDistances[n.id] !== undefined ? ` (${nurseDistances[n.id].toFixed(1)} كم)` : n.location ? ` - ${getDisplayLocation(n.location)}` : ''}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {sortedNursesByProximity.length === 0 && !geocodingLoading && (
-                      <p className="text-xs text-red-500 mt-1">لا يوجد ممرضين معتمدين حالياً. يرجى إضافة وقبول ممرضين أولاً.</p>
-                    )}
+                </div>
+
+                {/* Option B: Direct Execution */}
+                <div className={`p-4 rounded-xl border-2 cursor-pointer transition-all duration-300 ${approveMode === 'direct' ? 'border-rose-400 bg-gradient-to-l from-rose-50 to-pink-50/30 shadow-md shadow-rose-500/10' : 'border-gray-200 hover:border-rose-200'}`} onClick={() => setApproveMode('direct')}>
+                  <div className="flex items-center gap-3">
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${approveMode === 'direct' ? 'bg-gradient-to-br from-rose-400 to-pink-500 shadow-md' : 'bg-gray-100'}`}>
+                      <AlertCircle className={`w-4.5 h-4.5 ${approveMode === 'direct' ? 'text-white' : 'text-gray-400'}`} />
+                    </div>
+                    <div>
+                      <p className="font-bold">تنفيذ مباشر</p>
+                      <p className="text-xs text-gray-400">تنفيذ الطلب مباشرة من قبل الإدارة بدون تعيين ممرض</p>
+                    </div>
                   </div>
                 </div>
-              )}
-            </div>
-
-            {/* Option B: Direct Execution */}
-            <div className={`p-4 rounded-xl border-2 cursor-pointer transition-all duration-300 ${approveMode === 'direct' ? 'border-rose-400 bg-gradient-to-l from-rose-50 to-pink-50/30 shadow-md shadow-rose-500/10' : 'border-gray-200 hover:border-rose-200'}`} onClick={() => setApproveMode('direct')}>
-              <div className="flex items-center gap-3">
-                <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${approveMode === 'direct' ? 'bg-gradient-to-br from-rose-400 to-pink-500 shadow-md' : 'bg-gray-100'}`}>
-                  <AlertCircle className={`w-4.5 h-4.5 ${approveMode === 'direct' ? 'text-white' : 'text-gray-400'}`} />
-                </div>
-                <div>
-                  <p className="font-bold">تنفيذ مباشر</p>
-                  <p className="text-xs text-gray-400">تنفيذ الطلب مباشرة من قبل الإدارة بدون تعيين ممرض</p>
-                </div>
-              </div>
-            </div>
+              </>
+            )}
           </div>
           <DialogFooter className="gap-2">
-            <Button variant="outline" className="flex-1" onClick={() => setApproveDialog(false)}>إلغاء</Button>
+            <Button variant="outline" className="flex-1" onClick={() => { setApproveDialog(false); setPaymentConfirmed(false); setPaymentConfirmStep(false) }}>إلغاء</Button>
             <Button className={`flex-1 text-white shadow-lg ${
-              approveMode === 'assign' 
-                ? 'bg-gradient-to-l from-amber-500 via-orange-500 to-rose-500 shadow-amber-500/25' 
-                : 'bg-gradient-to-l from-rose-500 via-pink-500 to-red-500 shadow-rose-500/25'
+              !paymentConfirmed
+                ? 'bg-gradient-to-l from-emerald-500 to-teal-500 shadow-emerald-500/25'
+                : approveMode === 'assign' 
+                  ? 'bg-gradient-to-l from-amber-500 via-orange-500 to-rose-500 shadow-amber-500/25' 
+                  : 'bg-gradient-to-l from-rose-500 via-pink-500 to-red-500 shadow-rose-500/25'
             }`} onClick={handleConfirmApprove}>
-              {approveMode === 'assign' ? 'تعيين وتأكيد' : 'تنفيذ مباشر'}
+              {!paymentConfirmed ? 'تأكيد الدفع وقبول الطلب' : approveMode === 'assign' ? 'تعيين وتأكيد' : 'تنفيذ مباشر'}
             </Button>
           </DialogFooter>
         </DialogContent>

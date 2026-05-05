@@ -47,7 +47,20 @@ export async function GET() {
       pendingComplaints = reports.length
     } catch {}
 
-    // Count pending payment confirmations
+    // Count pending requests (includes pending, pending_confirmation, pending_payment)
+    let allPendingRequests = 0
+    try {
+      const pendingSnap = await firestore.collection('serviceRequests')
+        .where('status', '==', 'pending')
+        .get()
+      const pendingConfSnap = await firestore.collection('serviceRequests')
+        .where('status', '==', 'pending_confirmation')
+        .get()
+      const pendingPaySnap = await firestore.collection('serviceRequests')
+        .where('status', '==', 'pending_payment')
+        .get()
+      allPendingRequests = pendingSnap.size + pendingConfSnap.size + pendingPaySnap.size
+    } catch {}
     let pendingPaymentConfirmations = 0
     try {
       const pendingPaySnapshot = await firestore.collection('serviceRequests')
@@ -91,6 +104,7 @@ export async function GET() {
       pendingPaymentConfirmations,
       pendingEmergency,
       pendingAssignmentAcceptance,
+      allPendingRequests,
     })
   } catch (error) {
     return NextResponse.json({ error: 'حدث خطأ في الخادم' }, { status: 500 })
