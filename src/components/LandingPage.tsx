@@ -6,7 +6,7 @@ import {
   Shield, Stethoscope, Heart, Loader2, UserPlus, Eye, EyeOff,
   CheckCircle, Sparkles, ArrowRight, Navigation, MapPin, AlertTriangle,
   Check, X, Phone, CreditCard, FileBadge, Lock, ChevronLeft, User,
-  RefreshCw, BadgeCheck
+  RefreshCw, BadgeCheck, LogIn, ScanFace
 } from 'lucide-react'
 import { useAppStore } from '@/lib/store'
 import { getGPSLocation, getDisplayLocation } from '@/lib/location-utils'
@@ -161,19 +161,18 @@ export default function LandingPage() {
 
   // ─── Auth tab state ───
   const [authTab, setAuthTab] = useState<AuthTab>('login')
-  const [loginRole, setLoginRole] = useState<Role>('beneficiary')
   const [registerRole, setRegisterRole] = useState<'beneficiary' | 'nurse'>('beneficiary')
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [registerSuccess, setRegisterSuccess] = useState(false)
 
+  // ─── Unified login state ───
+  const [loginForm, setLoginForm] = useState({ phone: '', password: '' })
+  const [detectedRole, setDetectedRole] = useState<Role | null>(null)
+  const [showRoleDetection, setShowRoleDetection] = useState(false)
+
   // ─── Nurse Registration Step ───
   const [nurseStep, setNurseStep] = useState<NurseRegStep>(1)
-
-  // ─── Login forms ───
-  const [adminForm, setAdminForm] = useState({ phone: '', password: '' })
-  const [nurseLoginForm, setNurseLoginForm] = useState({ phone: '', password: '' })
-  const [beneficiaryLoginForm, setBeneficiaryLoginForm] = useState({ phone: '', password: '' })
 
   // ─── Register forms ───
   const [nurseRegForm, setNurseRegForm] = useState({
@@ -186,12 +185,10 @@ export default function LandingPage() {
   })
 
   // ─── Open auth tab ───
-  const openAuth = useCallback((tab: AuthTab, role?: Role) => {
+  const openAuth = useCallback((tab: AuthTab) => {
     setAuthTab(tab)
     setRegisterSuccess(false)
     setNurseStep(1)
-    if (tab === 'login' && role) setLoginRole(role)
-    if (tab === 'register' && role && role !== 'admin') setRegisterRole(role as 'beneficiary' | 'nurse')
   }, [])
 
   // ─── Nurse step validation ───
@@ -201,88 +198,52 @@ export default function LandingPage() {
   const isNurseStep3Valid = nurseRegForm.password.length >= 6 && nurseRegForm.password === nurseRegForm.confirmPassword
 
   // ═══════════════════════════════════════════
-  //  LOGIN HANDLERS
+  //  UNIFIED LOGIN HANDLER
   // ═══════════════════════════════════════════
 
-  const handleAdminLogin = async () => {
-    if (!adminForm.phone || !adminForm.password) {
+  const handleUnifiedLogin = async () => {
+    if (!loginForm.phone || !loginForm.password) {
       toast({ title: 'خطأ', description: 'يرجى ملء جميع الحقول', variant: 'destructive' })
       return
     }
     setLoading(true)
     try {
-      const res = await fetch('/api/admin/login', {
+      const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(adminForm),
+        body: JSON.stringify(loginForm),
       })
       const data = await res.json()
       if (res.ok) {
-        setUser(data, 'admin')
-        if (data.mustChangePassword) {
-          setView('admin-change-password')
-          toast({ title: 'يجب تغيير كلمة المرور', description: 'يجب تغيير كلمة المرور الافتراضية قبل المتابعة' })
-        } else {
-          setView('admin-dashboard')
-          const roleLabel = data.role === 'sub-admin' ? 'مدير فرعي' : 'مدير'
-          toast({ title: `مرحباً ${data.name}`, description: `تم تسجيل الدخول ك${roleLabel}` })
-        }
-      } else {
-        toast({ title: 'خطأ', description: data.error || 'اسم المستخدم أو كلمة المرور غير صحيحة', variant: 'destructive' })
-      }
-    } catch {
-      toast({ title: 'خطأ', description: 'حدث خطأ في الاتصال', variant: 'destructive' })
-    } finally {
-      setLoading(false)
-    }
-  }
+        const userType = data.userType as 'admin' | 'nurse' | 'beneficiary'
 
-  const handleNurseLogin = async () => {
-    if (!nurseLoginForm.phone || !nurseLoginForm.password) {
-      toast({ title: 'خطأ', description: 'يرجى ملء جميع الحقول', variant: 'destructive' })
-      return
-    }
-    setLoading(true)
-    try {
-      const res = await fetch('/api/nurse/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(nurseLoginForm),
-      })
-      const data = await res.json()
-      if (res.ok) {
-        setUser(data, 'nurse')
-        setView('nurse-dashboard')
-        toast({ title: 'مرحباً ' + data.firstName })
-      } else {
-        toast({ title: 'خطأ', description: data.error, variant: 'destructive' })
-      }
-    } catch {
-      toast({ title: 'خطأ', description: 'حدث خطأ في الاتصال', variant: 'destructive' })
-    } finally {
-      setLoading(false)
-    }
-  }
+        // Show role detection animation
+        setDetectedRole(userType)
+        setShowRoleDetection(true)
 
-  const handleBeneficiaryLogin = async () => {
-    if (!beneficiaryLoginForm.phone || !beneficiaryLoginForm.password) {
-      toast({ title: 'خطأ', description: 'يرجى ملء جميع الحقول', variant: 'destructive' })
-      return
-    }
-    setLoading(true)
-    try {
-      const res = await fetch('/api/beneficiary/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(beneficiaryLoginForm),
-      })
-      const data = await res.json()
-      if (res.ok) {
-        setUser(data, 'beneficiary')
-        setView('beneficiary-dashboard')
-        toast({ title: 'مرحباً ' + data.name })
+        // Wait for animation then redirect
+        setTimeout(() => {
+          setUser(data, userType)
+          if (userType === 'admin') {
+            if (data.mustChangePassword) {
+              setView('admin-change-password')
+              toast({ title: 'يجب تغيير كلمة المرور', description: 'يجب تغيير كلمة المرور الافتراضية قبل المتابعة' })
+            } else {
+              setView('admin-dashboard')
+              const roleLabel = data.role === 'sub-admin' ? 'مدير فرعي' : 'مدير'
+              toast({ title: `مرحباً ${data.name}`, description: `تم تسجيل الدخول ك${roleLabel}` })
+            }
+          } else if (userType === 'nurse') {
+            setView('nurse-dashboard')
+            toast({ title: 'مرحباً ' + data.firstName })
+          } else {
+            setView('beneficiary-dashboard')
+            toast({ title: 'مرحباً ' + data.name })
+          }
+          setShowRoleDetection(false)
+        }, 1500)
       } else {
-        toast({ title: 'خطأ', description: data.error, variant: 'destructive' })
+        toast({ title: 'خطأ', description: data.error || 'رقم الهاتف أو كلمة المرور غير صحيحة', variant: 'destructive' })
       }
     } catch {
       toast({ title: 'خطأ', description: 'حدث خطأ في الاتصال', variant: 'destructive' })
@@ -394,9 +355,7 @@ export default function LandingPage() {
 
   const handleLoginKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
-      if (loginRole === 'admin') handleAdminLogin()
-      else if (loginRole === 'nurse') handleNurseLogin()
-      else handleBeneficiaryLogin()
+      handleUnifiedLogin()
     }
   }
 
@@ -539,164 +498,159 @@ export default function LandingPage() {
               <AnimatePresence mode="wait">
 
                 {/* ═══════════════════════════════════ */}
-                {/* LOGIN TAB */}
+                {/* UNIFIED LOGIN TAB */}
                 {/* ═══════════════════════════════════ */}
                 {authTab === 'login' && (
                   <motion.div
-                    key="login"
+                    key="unified-login"
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: 20 }}
                     transition={{ duration: 0.4, ease: 'easeOut' }}
                   >
-                    {/* Login Role Selector */}
-                    <div className="flex bg-white/50 backdrop-blur-sm rounded-2xl p-1.5 mb-6 border border-white/60 shadow-sm">
-                      {(['beneficiary', 'nurse', 'admin'] as Role[]).map((r) => {
-                        const config = roleConfig[r]
-                        const Icon = config.icon
-                        const isActive = loginRole === r
-                        return (
-                          <button
-                            key={r}
-                            onClick={() => setLoginRole(r)}
-                            className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-all duration-400 ${
-                              isActive
-                                ? `bg-gradient-to-l ${config.gradient} text-white shadow-lg ${config.glowColor}`
-                                : 'text-slate-400 hover:text-slate-600'
-                            }`}
+                    {/* Role Detection Overlay */}
+                    <AnimatePresence>
+                      {showRoleDetection && detectedRole && (
+                        <motion.div
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0 }}
+                          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+                        >
+                          <motion.div
+                            initial={{ scale: 0.5, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0.5, opacity: 0 }}
+                            transition={{ type: 'spring', duration: 0.6, bounce: 0.3 }}
+                            className="flex flex-col items-center gap-4"
                           >
-                            <Icon className="w-4 h-4" />
-                            <span>{config.label}</span>
-                          </button>
-                        )
-                      })}
-                    </div>
+                            <motion.div
+                              initial={{ rotate: -180, scale: 0 }}
+                              animate={{ rotate: 0, scale: 1 }}
+                              transition={{ type: 'spring', duration: 0.8, bounce: 0.4 }}
+                              className={`w-28 h-28 rounded-3xl bg-gradient-to-br ${roleConfig[detectedRole].gradient} flex items-center justify-center shadow-2xl ${roleConfig[detectedRole].glowColor} ring-4 ring-white/30`}
+                            >
+                              {(() => {
+                                const Icon = roleConfig[detectedRole].icon
+                                return <Icon className="w-14 h-14 text-white" />
+                              })()}
+                            </motion.div>
+                            <motion.div
+                              initial={{ y: 20, opacity: 0 }}
+                              animate={{ y: 0, opacity: 1 }}
+                              transition={{ delay: 0.3, duration: 0.4 }}
+                              className="text-center"
+                            >
+                              <p className="text-white text-lg font-bold mb-1">تم التعرف على حسابك</p>
+                              <div className="flex items-center justify-center gap-2">
+                                <ScanFace className="w-4 h-4 text-emerald-400" />
+                                <span className={`text-2xl font-black ${detectedRole === 'beneficiary' ? 'text-violet-300' : detectedRole === 'nurse' ? 'text-blue-300' : 'text-amber-300'}`}>
+                                  {roleConfig[detectedRole].label}
+                                </span>
+                              </div>
+                              <p className="text-white/60 text-xs mt-2">جارٍ التحويل...</p>
+                            </motion.div>
+                          </motion.div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
 
-                    <div className="text-center mb-6">
-                      <h3 className="text-xl font-black text-slate-800">
+                    {/* Unified Login Header */}
+                    <div className="text-center mb-8">
+                      <motion.div
+                        initial={{ scale: 0.8, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        transition={{ delay: 0.1, duration: 0.4 }}
+                        className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500 via-purple-500 to-fuchsia-500 shadow-xl shadow-violet-500/25 mb-4 ring-4 ring-white/20"
+                      >
+                        <LogIn className="w-8 h-8 text-white" />
+                      </motion.div>
+                      <h3 className="text-2xl font-black text-slate-800">
                         مرحباً بعودتك
                       </h3>
-                      <p className="text-sm text-slate-400 mt-1">
-                        سجّل دخولك كـ{roleConfig[loginRole].label}
+                      <p className="text-sm text-slate-400 mt-1.5">
+                        سجّل دخولك وسنتعرف على حسابك تلقائياً
                       </p>
                     </div>
 
+                    {/* Role hint badges */}
+                    <div className="flex items-center justify-center gap-2 mb-6">
+                      {(['beneficiary', 'nurse', 'admin'] as Role[]).map((r) => {
+                        const config = roleConfig[r]
+                        const Icon = config.icon
+                        return (
+                          <div key={r} className="flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-white/60 border border-white/80 shadow-sm">
+                            <Icon className={`w-3 h-3 ${config.textAccent}`} />
+                            <span className="text-[10px] font-bold text-slate-500">{config.label}</span>
+                          </div>
+                        )
+                      })}
+                      <div className="flex items-center gap-1 px-2 py-1.5 rounded-full bg-emerald-50 border border-emerald-200">
+                        <ScanFace className="w-3 h-3 text-emerald-500" />
+                        <span className="text-[10px] font-bold text-emerald-600">تعرف تلقائي</span>
+                      </div>
+                    </div>
+
+                    {/* Unified Login Form */}
                     <div className="space-y-4 max-w-md mx-auto">
-                      {loginRole === 'admin' && (
-                        <>
-                          <div className="space-y-2">
-                            <Label className="text-sm font-semibold text-slate-700 flex items-center gap-1.5"><Phone className="w-3.5 h-3.5 text-amber-500" />رقم الهاتف</Label>
-                            <Input
-                              value={adminForm.phone}
-                              onChange={e => setAdminForm(f => ({ ...f, phone: e.target.value }))}
-                              onKeyDown={handleLoginKeyDown}
-                              placeholder="أدخل رقم الهاتف"
-                              className="h-12 bg-white/60 backdrop-blur-sm border-amber-200/50 focus:border-amber-400 focus:ring-amber-400/20 transition-all duration-300"
-                              disabled={loading}
-                              dir="ltr"
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label className="text-sm font-semibold text-slate-700 flex items-center gap-1.5"><Lock className="w-3.5 h-3.5 text-amber-500" />كلمة المرور</Label>
-                            <PasswordInput
-                              value={adminForm.password}
-                              onChange={v => setAdminForm(f => ({ ...f, password: v }))}
-                              onKeyDown={handleLoginKeyDown}
-                              showPassword={showPassword}
-                              setShowPassword={setShowPassword}
-                              disabled={loading}
-                              accentColor="amber"
-                            />
-                          </div>
-                        </>
-                      )}
-
-                      {loginRole === 'nurse' && (
-                        <>
-                          <div className="space-y-2">
-                            <Label className="text-sm font-semibold text-slate-700 flex items-center gap-1.5"><Phone className="w-3.5 h-3.5 text-blue-500" />رقم الهاتف</Label>
-                            <Input
-                              value={nurseLoginForm.phone}
-                              onChange={e => setNurseLoginForm(f => ({ ...f, phone: e.target.value }))}
-                              onKeyDown={handleLoginKeyDown}
-                              placeholder="7XXXXXXXX"
-                              dir="ltr"
-                              className="h-12 bg-white/60 backdrop-blur-sm border-blue-200/50 focus:border-blue-400 focus:ring-blue-400/20 text-left transition-all duration-300"
-                              disabled={loading}
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label className="text-sm font-semibold text-slate-700 flex items-center gap-1.5"><Lock className="w-3.5 h-3.5 text-blue-500" />كلمة المرور</Label>
-                            <PasswordInput
-                              value={nurseLoginForm.password}
-                              onChange={v => setNurseLoginForm(f => ({ ...f, password: v }))}
-                              onKeyDown={handleLoginKeyDown}
-                              showPassword={showPassword}
-                              setShowPassword={setShowPassword}
-                              disabled={loading}
-                              accentColor="blue"
-                            />
-                          </div>
-                        </>
-                      )}
-
-                      {loginRole === 'beneficiary' && (
-                        <>
-                          <div className="space-y-2">
-                            <Label className="text-sm font-semibold text-slate-700 flex items-center gap-1.5"><Phone className="w-3.5 h-3.5 text-violet-500" />رقم الهاتف</Label>
-                            <Input
-                              value={beneficiaryLoginForm.phone}
-                              onChange={e => setBeneficiaryLoginForm(f => ({ ...f, phone: e.target.value }))}
-                              onKeyDown={handleLoginKeyDown}
-                              placeholder="7XXXXXXXX"
-                              dir="ltr"
-                              className="h-12 bg-white/60 backdrop-blur-sm border-violet-200/50 focus:border-violet-400 focus:ring-violet-400/20 text-left transition-all duration-300"
-                              disabled={loading}
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label className="text-sm font-semibold text-slate-700 flex items-center gap-1.5"><Lock className="w-3.5 h-3.5 text-violet-500" />كلمة المرور</Label>
-                            <PasswordInput
-                              value={beneficiaryLoginForm.password}
-                              onChange={v => setBeneficiaryLoginForm(f => ({ ...f, password: v }))}
-                              onKeyDown={handleLoginKeyDown}
-                              showPassword={showPassword}
-                              setShowPassword={setShowPassword}
-                              disabled={loading}
-                              accentColor="violet"
-                            />
-                          </div>
-                        </>
-                      )}
+                      <div className="space-y-2">
+                        <Label className="text-sm font-semibold text-slate-700 flex items-center gap-1.5">
+                          <Phone className="w-3.5 h-3.5 text-violet-500" />
+                          رقم الهاتف
+                        </Label>
+                        <Input
+                          value={loginForm.phone}
+                          onChange={e => setLoginForm(f => ({ ...f, phone: e.target.value }))}
+                          onKeyDown={handleLoginKeyDown}
+                          placeholder="7XXXXXXXX"
+                          dir="ltr"
+                          className="h-12 bg-white/60 backdrop-blur-sm border-violet-200/50 focus:border-violet-400 focus:ring-violet-400/20 text-left transition-all duration-300 rounded-xl"
+                          disabled={loading}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-sm font-semibold text-slate-700 flex items-center gap-1.5">
+                          <Lock className="w-3.5 h-3.5 text-violet-500" />
+                          كلمة المرور
+                        </Label>
+                        <PasswordInput
+                          value={loginForm.password}
+                          onChange={v => setLoginForm(f => ({ ...f, password: v }))}
+                          onKeyDown={handleLoginKeyDown}
+                          showPassword={showPassword}
+                          setShowPassword={setShowPassword}
+                          disabled={loading}
+                          accentColor="violet"
+                        />
+                      </div>
 
                       <Button
-                        className={`w-full h-12 text-base font-bold bg-gradient-to-l ${roleConfig[loginRole].gradient} text-white hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] shadow-lg ${roleConfig[loginRole].glowColor} border-0 transition-all duration-300 rounded-xl`}
-                        onClick={() => {
-                          if (loginRole === 'admin') handleAdminLogin()
-                          else if (loginRole === 'nurse') handleNurseLogin()
-                          else handleBeneficiaryLogin()
-                        }}
+                        className="w-full h-12 text-base font-bold bg-gradient-to-l from-violet-600 via-purple-600 to-fuchsia-600 text-white hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-violet-500/25 border-0 transition-all duration-300 rounded-xl"
+                        onClick={handleUnifiedLogin}
                         disabled={loading}
                       >
-                        {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : (
+                        {loading ? (
                           <span className="flex items-center gap-2">
-                            تسجيل الدخول
-                            <ArrowRight className="w-4 h-4 rotate-180" />
+                            <Loader2 className="w-5 h-5 animate-spin" />
+                            <span>جارٍ التعرف على حسابك...</span>
+                          </span>
+                        ) : (
+                          <span className="flex items-center gap-2">
+                            <ScanFace className="w-5 h-5" />
+                            <span>تسجيل الدخول</span>
                           </span>
                         )}
                       </Button>
 
-                      {loginRole !== 'admin' && (
-                        <div className="text-center pt-1">
-                          <button
-                            onClick={() => setAuthTab('register')}
-                            className="text-sm text-slate-500 hover:text-violet-600 transition-colors inline-flex items-center gap-1.5 font-medium"
-                          >
-                            <UserPlus className="w-3.5 h-3.5" />
-                            ليس لديك حساب؟ إنشاء حساب جديد
-                          </button>
-                        </div>
-                      )}
+                      <div className="text-center pt-1">
+                        <button
+                          onClick={() => setAuthTab('register')}
+                          className="text-sm text-slate-500 hover:text-violet-600 transition-colors inline-flex items-center gap-1.5 font-medium"
+                        >
+                          <UserPlus className="w-3.5 h-3.5" />
+                          ليس لديك حساب؟ إنشاء حساب جديد
+                        </button>
+                      </div>
                     </div>
                   </motion.div>
                 )}
