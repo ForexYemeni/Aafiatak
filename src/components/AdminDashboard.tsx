@@ -11,7 +11,7 @@ import {
   Ban, Unlock, Eye, AlertTriangle, UsersRound, Settings,
   ChevronDown, AlertCircle, MessageSquare, Clock, MapPin, Calendar, Navigation,
   FileWarning, ShieldCheck, ShieldAlert, Image as ImageIcon,
-  Wallet, Send, Building, DollarSign, Save, Copy
+  Wallet, Send, Building, DollarSign, Save, Copy, Maximize2, ZoomIn
 } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RTooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts'
 import { useAppStore, formatPrice, getStatusLabel, getStatusColor } from '@/lib/store'
@@ -124,6 +124,7 @@ export default function AdminDashboard() {
   const [beneficiaryDetail, setBeneficiaryDetail] = useState<any>(null)
   const [beneficiaryRequests, setBeneficiaryRequests] = useState<any[]>([])
   const [nurseDetail, setNurseDetail] = useState<any>(null)
+  const [viewingImage, setViewingImage] = useState<{url: string, title: string} | null>(null)
 
   // Service form
   const [serviceDialog, setServiceDialog] = useState(false)
@@ -2954,21 +2955,71 @@ export default function AdminDashboard() {
                   {(nurseDetail.nationalIdPhotoUrl || nurseDetail.licensePhotoUrl) && (
                     <div>
                       <h3 className="text-sm font-bold text-gray-400 mb-3 flex items-center gap-2"><ImageIcon className="w-4 h-4" />وثائق التحقق</h3>
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         {nurseDetail.nationalIdPhotoUrl && (
-                          <div className="p-3 rounded-xl bg-blue-50/80 border border-blue-100">
-                            <p className="text-xs text-blue-500 mb-2">صورة البطاقة الوطنية</p>
-                            <a href={nurseDetail.nationalIdPhotoUrl} target="_blank" rel="noopener noreferrer" className="block w-full h-24 rounded-lg overflow-hidden border border-blue-200 hover:opacity-80 transition-opacity">
-                              <img src={nurseDetail.nationalIdPhotoUrl} alt="البطاقة الوطنية" className="w-full h-full object-cover" />
-                            </a>
+                          <div className="rounded-2xl overflow-hidden bg-gradient-to-br from-blue-50 to-indigo-50 ring-1 ring-blue-200/50 shadow-sm">
+                            <div className="p-3 bg-gradient-to-l from-blue-500 to-indigo-500 text-white flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <ShieldCheck className="w-4 h-4" />
+                                <span className="font-bold text-xs">البطاقة الوطنية</span>
+                              </div>
+                              <button
+                                onClick={() => setViewingImage({url: nurseDetail.nationalIdPhotoUrl, title: 'صورة البطاقة الوطنية'})}
+                                className="p-1.5 rounded-lg bg-white/20 hover:bg-white/30 transition-colors"
+                                title="عرض بالحجم الكامل"
+                              >
+                                <Maximize2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                            <div className="p-3">
+                              <div
+                                className="w-full h-48 sm:h-56 rounded-xl overflow-hidden border-2 border-blue-200/50 bg-white cursor-pointer hover:shadow-lg transition-all duration-300 group relative"
+                                onClick={() => setViewingImage({url: nurseDetail.nationalIdPhotoUrl, title: 'صورة البطاقة الوطنية'})}
+                              >
+                                <img src={nurseDetail.nationalIdPhotoUrl} alt="البطاقة الوطنية" className="w-full h-full object-contain" />
+                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-all duration-300 flex items-center justify-center">
+                                  <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-white/90 backdrop-blur-sm rounded-xl px-4 py-2 shadow-lg">
+                                    <div className="flex items-center gap-2 text-blue-600">
+                                      <ZoomIn className="w-4 h-4" />
+                                      <span className="text-xs font-bold">عرض بالحجم الكامل</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
                           </div>
                         )}
                         {nurseDetail.licensePhotoUrl && (
-                          <div className="p-3 rounded-xl bg-amber-50/80 border border-amber-100">
-                            <p className="text-xs text-amber-500 mb-2">صورة الترخيص</p>
-                            <a href={nurseDetail.licensePhotoUrl} target="_blank" rel="noopener noreferrer" className="block w-full h-24 rounded-lg overflow-hidden border border-amber-200 hover:opacity-80 transition-opacity">
-                              <img src={nurseDetail.licensePhotoUrl} alt="الترخيص" className="w-full h-full object-cover" />
-                            </a>
+                          <div className="rounded-2xl overflow-hidden bg-gradient-to-br from-amber-50 to-orange-50 ring-1 ring-amber-200/50 shadow-sm">
+                            <div className="p-3 bg-gradient-to-l from-amber-500 to-orange-500 text-white flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <ShieldCheck className="w-4 h-4" />
+                                <span className="font-bold text-xs">رخصة المزاولة</span>
+                              </div>
+                              <button
+                                onClick={() => setViewingImage({url: nurseDetail.licensePhotoUrl, title: 'صورة رخصة المزاولة'})}
+                                className="p-1.5 rounded-lg bg-white/20 hover:bg-white/30 transition-colors"
+                                title="عرض بالحجم الكامل"
+                              >
+                                <Maximize2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                            <div className="p-3">
+                              <div
+                                className="w-full h-48 sm:h-56 rounded-xl overflow-hidden border-2 border-amber-200/50 bg-white cursor-pointer hover:shadow-lg transition-all duration-300 group relative"
+                                onClick={() => setViewingImage({url: nurseDetail.licensePhotoUrl, title: 'صورة رخصة المزاولة'})}
+                              >
+                                <img src={nurseDetail.licensePhotoUrl} alt="رخصة المزاولة" className="w-full h-full object-contain" />
+                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-all duration-300 flex items-center justify-center">
+                                  <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-white/90 backdrop-blur-sm rounded-xl px-4 py-2 shadow-lg">
+                                    <div className="flex items-center gap-2 text-amber-600">
+                                      <ZoomIn className="w-4 h-4" />
+                                      <span className="text-xs font-bold">عرض بالحجم الكامل</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
                           </div>
                         )}
                       </div>
@@ -3017,6 +3068,39 @@ export default function AdminDashboard() {
               </>
             )
           })()}
+        </DialogContent>
+      </Dialog>
+
+      {/* Image Lightbox Dialog */}
+      <Dialog open={!!viewingImage} onOpenChange={() => setViewingImage(null)}>
+        <DialogContent className="sm:max-w-4xl p-0 overflow-hidden bg-black/95 border-white/10">
+          {viewingImage && (
+            <div className="relative">
+              {/* Header */}
+              <div className="absolute top-0 left-0 right-0 z-10 bg-gradient-to-b from-black/60 to-transparent p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-white">
+                    <ImageIcon className="w-4 h-4" />
+                    <span className="font-bold text-sm">{viewingImage.title}</span>
+                  </div>
+                  <button
+                    onClick={() => setViewingImage(null)}
+                    className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+              {/* Full Image */}
+              <div className="flex items-center justify-center min-h-[60vh] max-h-[80vh] p-4 pt-16">
+                <img
+                  src={viewingImage.url}
+                  alt={viewingImage.title}
+                  className="max-w-full max-h-[70vh] object-contain rounded-lg shadow-2xl"
+                />
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 

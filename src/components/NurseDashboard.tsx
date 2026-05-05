@@ -7,7 +7,7 @@ import {
   Menu, X, Phone, MapPin, Clock, HelpCircle, Bell, Activity,
   Calendar, Star, Filter, MessageSquare, ChevronDown, ChevronUp,
   Mail, Shield, Award, Navigation, Info, Sparkles,
-  Briefcase, Check, DollarSign, Camera, Plus, Trash2, Send, Wallet
+  Briefcase, Check, DollarSign, Camera, Upload, Plus, Trash2, Send, Wallet
 } from 'lucide-react'
 import { useAppStore, formatPrice, getStatusLabel, getStatusColor } from '@/lib/store'
 import { openInMaps, getGPSLocation, searchLocation, extractCoordinates, getDisplayLocation, getMapEmbedUrl, getDirectionsUrl } from '@/lib/location-utils'
@@ -1810,7 +1810,6 @@ export default function NurseDashboard() {
                   ref={nationalIdInputRef}
                   type="file"
                   accept="image/*"
-                  capture="environment"
                   className="hidden"
                   onChange={e => handleFileChange(e, 'nationalId')}
                 />
@@ -1818,7 +1817,6 @@ export default function NurseDashboard() {
                   ref={licenseInputRef}
                   type="file"
                   accept="image/*"
-                  capture="environment"
                   className="hidden"
                   onChange={e => handleFileChange(e, 'license')}
                 />
@@ -1851,7 +1849,7 @@ export default function NurseDashboard() {
                               disabled={documentUploading}
                               className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-white/90 backdrop-blur-sm rounded-lg px-3 py-1.5 text-xs font-bold text-blue-600 shadow-lg"
                             >
-                              <Camera className="w-3.5 h-3.5 inline ml-1" />
+                              <Upload className="w-3.5 h-3.5 inline ml-1" />
                               إعادة الرفع
                             </button>
                           </div>
@@ -1872,12 +1870,12 @@ export default function NurseDashboard() {
                             {documentUploading ? (
                               <Loader2 className="w-6 h-6 text-white animate-spin" />
                             ) : (
-                              <Camera className="w-6 h-6 text-white" />
+                              <Upload className="w-6 h-6 text-white" />
                             )}
                           </div>
                           <div className="text-center">
                             <p className="text-xs font-bold text-blue-600">رفع صورة البطاقة</p>
-                            <p className="text-[10px] text-blue-400">اضغط لالتقاط صورة أو اختيار ملف</p>
+                            <p className="text-[10px] text-blue-400">اضغط للاختيار من المعرض أو الكاميرا</p>
                           </div>
                         </button>
                       )}
@@ -1910,7 +1908,7 @@ export default function NurseDashboard() {
                               disabled={documentUploading}
                               className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-white/90 backdrop-blur-sm rounded-lg px-3 py-1.5 text-xs font-bold text-amber-600 shadow-lg"
                             >
-                              <Camera className="w-3.5 h-3.5 inline ml-1" />
+                              <Upload className="w-3.5 h-3.5 inline ml-1" />
                               إعادة الرفع
                             </button>
                           </div>
@@ -1931,12 +1929,12 @@ export default function NurseDashboard() {
                             {documentUploading ? (
                               <Loader2 className="w-6 h-6 text-white animate-spin" />
                             ) : (
-                              <Camera className="w-6 h-6 text-white" />
+                              <Upload className="w-6 h-6 text-white" />
                             )}
                           </div>
                           <div className="text-center">
                             <p className="text-xs font-bold text-amber-600">رفع صورة الرخصة</p>
-                            <p className="text-[10px] text-amber-400">اضغط لالتقاط صورة أو اختيار ملف</p>
+                            <p className="text-[10px] text-amber-400">اضغط للاختيار من المعرض أو الكاميرا</p>
                           </div>
                         </button>
                       )}
@@ -1949,14 +1947,14 @@ export default function NurseDashboard() {
                   <div className="p-3 bg-gradient-to-l from-blue-50/30 to-indigo-50/30 rounded-xl ring-1 ring-blue-100/50">
                     <p className="text-xs font-bold text-gray-600 mb-2 flex items-center gap-1.5">
                       <Sparkles className="w-3.5 h-3.5 text-blue-500" />
-                      نصائح لالتقاط صور واضحة
+                      نصائح لرفع صور واضحة
                     </p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                       {[
                         'تأكد من إضاءة جيدة عند التصوير',
                         'اجعل المستند بأكمله داخل الإطار',
                         'تجنب الانعكاسات والظلال',
-                        'استخدم كاميرا الهاتف الخلفي للوضوح',
+                        'يمكنك الرفع من المعرض أو التقاط صورة بالكاميرا',
                       ].map((tip, i) => (
                         <div key={i} className="flex items-center gap-1.5 text-[10px] text-gray-500">
                           <Check className="w-3 h-3 text-blue-400 shrink-0" />
