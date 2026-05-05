@@ -316,8 +316,12 @@ export default function LandingPage() {
       })
       const data = await res.json()
       if (res.ok) {
-        setRegisterSuccess(true)
-        toast({ title: 'تم التسجيل بنجاح', description: 'سيتم مراجعة حسابك من قبل الإدارة' })
+        // Auto-login after registration - show role detection animation then redirect
+        setDetectedRole('nurse')
+        await new Promise(r => setTimeout(r, 1200))
+        setUser(data, 'nurse')
+        setView('nurse-dashboard')
+        toast({ title: `مرحباً ${data.firstName}`, description: 'تم إنشاء حسابك بنجاح! أكمل ملفك الشخصي لتحسين فرص التعيين' })
       } else {
         toast({ title: 'خطأ', description: data.error, variant: 'destructive' })
       }
@@ -355,8 +359,12 @@ export default function LandingPage() {
       })
       const data = await res.json()
       if (res.ok) {
-        setRegisterSuccess(true)
-        toast({ title: 'تم التسجيل بنجاح' })
+        // Auto-login after registration - show role detection animation then redirect
+        setDetectedRole('beneficiary')
+        await new Promise(r => setTimeout(r, 1200))
+        setUser(data, 'beneficiary')
+        setView('beneficiary-dashboard')
+        toast({ title: `مرحباً ${data.name}`, description: 'تم إنشاء حسابك بنجاح! يمكنك الآن طلب الخدمات الصحية' })
       } else {
         toast({ title: 'خطأ', description: data.error, variant: 'destructive' })
       }
@@ -522,40 +530,126 @@ export default function LandingPage() {
                     exit={{ opacity: 0, x: 20 }}
                     transition={{ duration: 0.4, ease: 'easeOut' }}
                   >
-                    {/* Detected Role Animation Overlay */}
+                    {/* Detected Role Animation Overlay — Professional Design */}
                     <AnimatePresence>
                       {detectedRole && (
                         <motion.div
-                          initial={{ opacity: 0, scale: 0.8 }}
-                          animate={{ opacity: 1, scale: 1 }}
-                          exit={{ opacity: 0, scale: 1.1 }}
-                          transition={{ duration: 0.4, ease: 'easeOut' }}
-                          className="absolute inset-0 z-50 flex items-center justify-center bg-white/90 backdrop-blur-xl rounded-3xl"
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0 }}
+                          transition={{ duration: 0.3 }}
+                          className="absolute inset-0 z-50 flex items-center justify-center bg-white/95 backdrop-blur-2xl rounded-3xl overflow-hidden"
                         >
-                          <motion.div
-                            initial={{ scale: 0, rotate: -180 }}
-                            animate={{ scale: 1, rotate: 0 }}
-                            transition={{ type: 'spring', duration: 0.6, bounce: 0.3 }}
-                            className="flex flex-col items-center gap-4"
-                          >
-                            <div className={`w-24 h-24 rounded-3xl bg-gradient-to-br ${roleConfig[detectedRole].gradient} flex items-center justify-center shadow-2xl ${roleConfig[detectedRole].glowColor}`}>
-                              {(() => {
-                                const Icon = roleConfig[detectedRole].icon
-                                return <Icon className="w-12 h-12 text-white" />
-                              })()}
-                            </div>
+                          {/* Animated background particles */}
+                          <div className="absolute inset-0 pointer-events-none">
+                            {/* Pulsing rings */}
                             <motion.div
-                              initial={{ opacity: 0, y: 10 }}
+                              initial={{ scale: 0, opacity: 0.8 }}
+                              animate={{ scale: 4, opacity: 0 }}
+                              transition={{ duration: 2, repeat: Infinity, ease: 'easeOut' }}
+                              className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-20 h-20 rounded-full border-2 ${detectedRole === 'admin' ? 'border-amber-400/60' : detectedRole === 'nurse' ? 'border-blue-400/60' : 'border-violet-400/60'}`}
+                            />
+                            <motion.div
+                              initial={{ scale: 0, opacity: 0.6 }}
+                              animate={{ scale: 3.5, opacity: 0 }}
+                              transition={{ duration: 2, repeat: Infinity, ease: 'easeOut', delay: 0.5 }}
+                              className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-16 h-16 rounded-full border-2 ${detectedRole === 'admin' ? 'border-orange-400/40' : detectedRole === 'nurse' ? 'border-indigo-400/40' : 'border-purple-400/40'}`}
+                            />
+                            <motion.div
+                              initial={{ scale: 0, opacity: 0.4 }}
+                              animate={{ scale: 5, opacity: 0 }}
+                              transition={{ duration: 2.5, repeat: Infinity, ease: 'easeOut', delay: 1 }}
+                              className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-12 rounded-full border ${detectedRole === 'admin' ? 'border-amber-300/30' : detectedRole === 'nurse' ? 'border-cyan-300/30' : 'border-fuchsia-300/30'}`}
+                            />
+                            {/* Gradient orb behind icon */}
+                            <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-40 h-40 bg-gradient-to-br ${roleConfig[detectedRole].gradient} rounded-full blur-3xl opacity-20 animate-pulse`} />
+                          </div>
+
+                          <motion.div
+                            initial={{ scale: 0, rotate: -30 }}
+                            animate={{ scale: 1, rotate: 0 }}
+                            transition={{ type: 'spring', duration: 0.7, bounce: 0.2 }}
+                            className="flex flex-col items-center gap-5 relative z-10"
+                          >
+                            {/* Main Icon with ring border */}
+                            <div className="relative">
+                              {/* Rotating ring border */}
+                              <motion.div
+                                animate={{ rotate: 360 }}
+                                transition={{ duration: 8, repeat: Infinity, ease: 'linear' }}
+                                className={`absolute -inset-3 rounded-full border-2 border-dashed ${detectedRole === 'admin' ? 'border-amber-300/50' : detectedRole === 'nurse' ? 'border-blue-300/50' : 'border-violet-300/50'}`}
+                              />
+                              {/* Outer glow ring */}
+                              <motion.div
+                                initial={{ scale: 0.8, opacity: 0 }}
+                                animate={{ scale: 1.3, opacity: [0, 0.5, 0] }}
+                                transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+                                className={`absolute -inset-4 rounded-full bg-gradient-to-br ${roleConfig[detectedRole].gradient} opacity-20 blur-md`}
+                              />
+                              {/* Icon container */}
+                              <motion.div
+                                initial={{ scale: 0 }}
+                                animate={{ scale: 1 }}
+                                transition={{ type: 'spring', duration: 0.5, bounce: 0.5, delay: 0.1 }}
+                                className={`w-28 h-28 rounded-full bg-gradient-to-br ${roleConfig[detectedRole].gradient} flex items-center justify-center shadow-2xl ${roleConfig[detectedRole].glowColor} ring-4 ring-white/80`}
+                              >
+                                {(() => {
+                                  const Icon = roleConfig[detectedRole].icon
+                                  return <Icon className="w-14 h-14 text-white drop-shadow-lg" />
+                                })()}
+                              </motion.div>
+                              {/* Verified badge */}
+                              <motion.div
+                                initial={{ scale: 0 }}
+                                animate={{ scale: 1 }}
+                                transition={{ type: 'spring', delay: 0.5, bounce: 0.6 }}
+                                className="absolute -bottom-1 -left-1 w-9 h-9 rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center shadow-lg ring-3 ring-white"
+                              >
+                                <CheckCircle className="w-5 h-5 text-white" />
+                              </motion.div>
+                            </div>
+
+                            {/* Text content */}
+                            <motion.div
+                              initial={{ opacity: 0, y: 15 }}
                               animate={{ opacity: 1, y: 0 }}
-                              transition={{ delay: 0.3 }}
+                              transition={{ delay: 0.4, duration: 0.5 }}
                               className="text-center"
                             >
-                              <p className="text-lg font-black text-slate-800">تم التعرف عليك!</p>
-                              <p className={`text-sm font-bold ${roleConfig[detectedRole].textAccent} mt-1`}>
-                                {detectedRole === 'admin' ? 'مدير النظام' : detectedRole === 'nurse' ? 'ممرض / ممرضة' : 'مستفيد'}
-                              </p>
+                              <motion.p
+                                initial={{ opacity: 0, y: 5 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: 0.5 }}
+                                className="text-2xl font-black text-slate-800 mb-1"
+                              >
+                                تم التعرف عليك!
+                              </motion.p>
+                              <motion.div
+                                initial={{ opacity: 0, scale: 0.9 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                transition={{ delay: 0.65 }}
+                                className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full ${roleConfig[detectedRole].bgAccent} border ${roleConfig[detectedRole].borderAccent} mt-2`}
+                              >
+                                {(() => {
+                                  const Icon = roleConfig[detectedRole].icon
+                                  return <Icon className={`w-4 h-4 ${roleConfig[detectedRole].textAccent}`} />
+                                })()}
+                                <span className={`text-sm font-bold ${roleConfig[detectedRole].textAccent}`}>
+                                  {detectedRole === 'admin' ? 'مدير النظام' : detectedRole === 'nurse' ? 'ممرض / ممرضة' : 'مستفيد'}
+                                </span>
+                              </motion.div>
                             </motion.div>
-                            <Loader2 className="w-5 h-5 text-violet-500 animate-spin mt-2" />
+
+                            {/* Loading indicator */}
+                            <motion.div
+                              initial={{ opacity: 0 }}
+                              animate={{ opacity: 1 }}
+                              transition={{ delay: 0.8 }}
+                              className="flex items-center gap-2 mt-1"
+                            >
+                              <Loader2 className={`w-4 h-4 animate-spin ${roleConfig[detectedRole].textAccent}`} />
+                              <span className="text-xs font-medium text-slate-400">جارٍ التحويل...</span>
+                            </motion.div>
                           </motion.div>
                         </motion.div>
                       )}
@@ -692,7 +786,7 @@ export default function LandingPage() {
                     transition={{ duration: 0.4, ease: 'easeOut' }}
                   >
                     {registerSuccess ? (
-                      /* Success State */
+                      /* Success State - Now with auto-login animation */
                       <div className="text-center py-8">
                         <motion.div
                           initial={{ scale: 0 }}
@@ -702,18 +796,11 @@ export default function LandingPage() {
                         >
                           <CheckCircle className="w-12 h-12 text-white" />
                         </motion.div>
-                        <h3 className="text-2xl font-black mb-3 text-slate-800">تم التسجيل بنجاح!</h3>
-                        <p className="text-slate-500 mb-6 leading-relaxed max-w-sm mx-auto">
-                          {registerRole === 'nurse'
-                            ? 'سيتم مراجعة حسابك من قبل الإدارة. سيتم إشعارك عند الموافقة.'
-                            : 'يمكنك الآن تسجيل الدخول والاستفادة من خدماتنا الصحية.'}
+                        <h3 className="text-2xl font-black mb-3 text-slate-800">تم إنشاء حسابك!</h3>
+                        <p className="text-slate-500 mb-4 leading-relaxed max-w-sm mx-auto">
+                          جارٍ تسجيل دخولك تلقائياً...
                         </p>
-                        <Button
-                          className={`bg-gradient-to-l ${roleConfig[registerRole].gradient} text-white hover:opacity-90 border-0 shadow-lg ${roleConfig[registerRole].glowColor} rounded-xl px-8 h-12 font-bold`}
-                          onClick={() => { setRegisterSuccess(false); setAuthTab('login'); setNurseStep(1) }}
-                        >
-                          تسجيل الدخول الآن
-                        </Button>
+                        <Loader2 className="w-8 h-8 animate-spin mx-auto" style={{ color: registerRole === 'nurse' ? '#3b82f6' : '#8b5cf6' }} />
                       </div>
                     ) : (
                       <>
