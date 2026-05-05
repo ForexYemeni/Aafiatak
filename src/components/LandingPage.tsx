@@ -6,7 +6,7 @@ import {
   Shield, Stethoscope, Heart, Loader2, UserPlus, Eye, EyeOff,
   CheckCircle, Sparkles, ArrowRight, Navigation, MapPin, AlertTriangle,
   Check, X, Phone, CreditCard, FileBadge, Lock, ChevronLeft, User,
-  RefreshCw, BadgeCheck, LogIn, ScanFace
+  RefreshCw, BadgeCheck
 } from 'lucide-react'
 import { useAppStore } from '@/lib/store'
 import { getGPSLocation, getDisplayLocation } from '@/lib/location-utils'
@@ -165,14 +165,13 @@ export default function LandingPage() {
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [registerSuccess, setRegisterSuccess] = useState(false)
-
-  // ─── Unified login state ───
-  const [loginForm, setLoginForm] = useState({ phone: '', password: '' })
   const [detectedRole, setDetectedRole] = useState<Role | null>(null)
-  const [showRoleDetection, setShowRoleDetection] = useState(false)
 
   // ─── Nurse Registration Step ───
   const [nurseStep, setNurseStep] = useState<NurseRegStep>(1)
+
+  // ─── Unified login form ───
+  const [loginForm, setLoginForm] = useState({ phone: '', password: '' })
 
   // ─── Register forms ───
   const [nurseRegForm, setNurseRegForm] = useState({
@@ -198,52 +197,67 @@ export default function LandingPage() {
   const isNurseStep3Valid = nurseRegForm.password.length >= 6 && nurseRegForm.password === nurseRegForm.confirmPassword
 
   // ═══════════════════════════════════════════
-  //  UNIFIED LOGIN HANDLER
+  //  UNIFIED LOGIN HANDLER - Auto-detect role
   // ═══════════════════════════════════════════
 
   const handleUnifiedLogin = async () => {
     if (!loginForm.phone || !loginForm.password) {
-      toast({ title: 'خطأ', description: 'يرجى ملء جميع الحقول', variant: 'destructive' })
+      toast({ title: 'خطأ', description: 'يرجى إدخال رقم الهاتف وكلمة المرور', variant: 'destructive' })
       return
     }
     setLoading(true)
+    setDetectedRole(null)
     try {
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(loginForm),
-      })
-      const data = await res.json()
-      if (res.ok) {
-        const userType = data.userType as 'admin' | 'nurse' | 'beneficiary'
+      // Try all three APIs simultaneously for speed
+      const results = await Promise.all([
+        fetch('/api/admin/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone: loginForm.phone, password: loginForm.password }),
+        }).then(r => r.json().then(d => ({ ok: r.ok, data: d, role: 'admin' as const }))).catch(() => ({ ok: false, data: { error: '' }, role: 'admin' as const })),
+        fetch('/api/nurse/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone: loginForm.phone, password: loginForm.password }),
+        }).then(r => r.json().then(d => ({ ok: r.ok, data: d, role: 'nurse' as const }))).catch(() => ({ ok: false, data: { error: '' }, role: 'nurse' as const })),
+        fetch('/api/beneficiary/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone: loginForm.phone, password: loginForm.password }),
+        }).then(r => r.json().then(d => ({ ok: r.ok, data: d, role: 'beneficiary' as const }))).catch(() => ({ ok: false, data: { error: '' }, role: 'beneficiary' as const })),
+      ])
 
-        // Show role detection animation
-        setDetectedRole(userType)
-        setShowRoleDetection(true)
+      // Check in priority order: admin → nurse → beneficiary
+      const successResult = results.find(r => r.ok)
 
-        // Wait for animation then redirect
-        setTimeout(() => {
-          setUser(data, userType)
-          if (userType === 'admin') {
-            if (data.mustChangePassword) {
-              setView('admin-change-password')
-              toast({ title: 'يجب تغيير كلمة المرور', description: 'يجب تغيير كلمة المرور الافتراضية قبل المتابعة' })
-            } else {
-              setView('admin-dashboard')
-              const roleLabel = data.role === 'sub-admin' ? 'مدير فرعي' : 'مدير'
-              toast({ title: `مرحباً ${data.name}`, description: `تم تسجيل الدخول ك${roleLabel}` })
-            }
-          } else if (userType === 'nurse') {
-            setView('nurse-dashboard')
-            toast({ title: 'مرحباً ' + data.firstName })
+      if (successResult) {
+        const { data, role } = successResult
+        // Show detected role animation
+        setDetectedRole(role)
+        // Brief delay for animation before navigating
+        await new Promise(res => setTimeout(res, 800))
+
+        setUser(data, role)
+        if (role === 'admin') {
+          if (data.mustChangePassword) {
+            setView('admin-change-password')
+            toast({ title: 'يجب تغيير كلمة المرور', description: 'يجب تغيير كلمة المرور الافتراضية قبل المتابعة' })
           } else {
-            setView('beneficiary-dashboard')
-            toast({ title: 'مرحباً ' + data.name })
+            setView('admin-dashboard')
+            const roleLabel = data.role === 'sub-admin' ? 'مدير فرعي' : 'مدير'
+            toast({ title: `مرحباً ${data.name}`, description: `تم تسجيل الدخول ك${roleLabel}` })
           }
-          setShowRoleDetection(false)
-        }, 1500)
+        } else if (role === 'nurse') {
+          setView('nurse-dashboard')
+          toast({ title: `مرحباً ${data.firstName}` })
+        } else {
+          setView('beneficiary-dashboard')
+          toast({ title: `مرحباً ${data.name}` })
+        }
       } else {
-        toast({ title: 'خطأ', description: data.error || 'رقم الهاتف أو كلمة المرور غير صحيحة', variant: 'destructive' })
+        // All failed - get first meaningful error message
+        const errorMsg = results.find(r => r.data?.error)?.data?.error || 'رقم الهاتف أو كلمة المرور غير صحيحة'
+        toast({ title: 'خطأ في تسجيل الدخول', description: errorMsg, variant: 'destructive' })
       }
     } catch {
       toast({ title: 'خطأ', description: 'حدث خطأ في الاتصال', variant: 'destructive' })
@@ -302,15 +316,8 @@ export default function LandingPage() {
       })
       const data = await res.json()
       if (res.ok) {
-        // Auto-login after successful nurse registration
-        toast({ title: 'تم التسجيل بنجاح', description: 'مرحباً بك! يرجى توثيق حسابك لتتمكن من استلام المهام' })
-        setUser(data, 'nurse')
-        setDetectedRole('nurse')
-        setShowRoleDetection(true)
-        setTimeout(() => {
-          setView('nurse-dashboard')
-          setShowRoleDetection(false)
-        }, 1500)
+        setRegisterSuccess(true)
+        toast({ title: 'تم التسجيل بنجاح', description: 'سيتم مراجعة حسابك من قبل الإدارة' })
       } else {
         toast({ title: 'خطأ', description: data.error, variant: 'destructive' })
       }
@@ -348,15 +355,8 @@ export default function LandingPage() {
       })
       const data = await res.json()
       if (res.ok) {
-        // Auto-login after successful beneficiary registration
-        toast({ title: 'تم التسجيل بنجاح', description: 'مرحباً بك! يمكنك الآن الاستفادة من خدماتنا الصحية' })
-        setUser(data, 'beneficiary')
-        setDetectedRole('beneficiary')
-        setShowRoleDetection(true)
-        setTimeout(() => {
-          setView('beneficiary-dashboard')
-          setShowRoleDetection(false)
-        }, 1500)
+        setRegisterSuccess(true)
+        toast({ title: 'تم التسجيل بنجاح' })
       } else {
         toast({ title: 'خطأ', description: data.error, variant: 'destructive' })
       }
@@ -512,104 +512,93 @@ export default function LandingPage() {
               <AnimatePresence mode="wait">
 
                 {/* ═══════════════════════════════════ */}
-                {/* UNIFIED LOGIN TAB */}
+                {/* UNIFIED LOGIN TAB - Auto Role Detection */}
                 {/* ═══════════════════════════════════ */}
                 {authTab === 'login' && (
                   <motion.div
-                    key="unified-login"
+                    key="login"
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: 20 }}
                     transition={{ duration: 0.4, ease: 'easeOut' }}
                   >
-                    {/* Role Detection Overlay */}
+                    {/* Detected Role Animation Overlay */}
                     <AnimatePresence>
-                      {showRoleDetection && detectedRole && (
+                      {detectedRole && (
                         <motion.div
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          exit={{ opacity: 0 }}
-                          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+                          initial={{ opacity: 0, scale: 0.8 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          exit={{ opacity: 0, scale: 1.1 }}
+                          transition={{ duration: 0.4, ease: 'easeOut' }}
+                          className="absolute inset-0 z-50 flex items-center justify-center bg-white/90 backdrop-blur-xl rounded-3xl"
                         >
                           <motion.div
-                            initial={{ scale: 0.5, opacity: 0 }}
-                            animate={{ scale: 1, opacity: 1 }}
-                            exit={{ scale: 0.5, opacity: 0 }}
+                            initial={{ scale: 0, rotate: -180 }}
+                            animate={{ scale: 1, rotate: 0 }}
                             transition={{ type: 'spring', duration: 0.6, bounce: 0.3 }}
                             className="flex flex-col items-center gap-4"
                           >
-                            <motion.div
-                              initial={{ rotate: -180, scale: 0 }}
-                              animate={{ rotate: 0, scale: 1 }}
-                              transition={{ type: 'spring', duration: 0.8, bounce: 0.4 }}
-                              className={`w-28 h-28 rounded-3xl bg-gradient-to-br ${roleConfig[detectedRole].gradient} flex items-center justify-center shadow-2xl ${roleConfig[detectedRole].glowColor} ring-4 ring-white/30`}
-                            >
+                            <div className={`w-24 h-24 rounded-3xl bg-gradient-to-br ${roleConfig[detectedRole].gradient} flex items-center justify-center shadow-2xl ${roleConfig[detectedRole].glowColor}`}>
                               {(() => {
                                 const Icon = roleConfig[detectedRole].icon
-                                return <Icon className="w-14 h-14 text-white" />
+                                return <Icon className="w-12 h-12 text-white" />
                               })()}
-                            </motion.div>
+                            </div>
                             <motion.div
-                              initial={{ y: 20, opacity: 0 }}
-                              animate={{ y: 0, opacity: 1 }}
-                              transition={{ delay: 0.3, duration: 0.4 }}
+                              initial={{ opacity: 0, y: 10 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              transition={{ delay: 0.3 }}
                               className="text-center"
                             >
-                              <p className="text-white text-lg font-bold mb-1">تم التعرف على حسابك</p>
-                              <div className="flex items-center justify-center gap-2">
-                                <ScanFace className="w-4 h-4 text-emerald-400" />
-                                <span className={`text-2xl font-black ${detectedRole === 'beneficiary' ? 'text-violet-300' : detectedRole === 'nurse' ? 'text-blue-300' : 'text-amber-300'}`}>
-                                  {roleConfig[detectedRole].label}
-                                </span>
-                              </div>
-                              <p className="text-white/60 text-xs mt-2">جارٍ التحويل...</p>
+                              <p className="text-lg font-black text-slate-800">تم التعرف عليك!</p>
+                              <p className={`text-sm font-bold ${roleConfig[detectedRole].textAccent} mt-1`}>
+                                {detectedRole === 'admin' ? 'مدير النظام' : detectedRole === 'nurse' ? 'ممرض / ممرضة' : 'مستفيد'}
+                              </p>
                             </motion.div>
+                            <Loader2 className="w-5 h-5 text-violet-500 animate-spin mt-2" />
                           </motion.div>
                         </motion.div>
                       )}
                     </AnimatePresence>
 
-                    {/* Unified Login Header */}
+                    {/* Header */}
                     <div className="text-center mb-8">
                       <motion.div
-                        initial={{ scale: 0.8, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        transition={{ delay: 0.1, duration: 0.4 }}
-                        className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500 via-purple-500 to-fuchsia-500 shadow-xl shadow-violet-500/25 mb-4 ring-4 ring-white/20"
+                        initial={{ scale: 0 }}
+                        animate={{ scale: 1 }}
+                        transition={{ type: 'spring', duration: 0.5, bounce: 0.4 }}
+                        className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-600 via-purple-600 to-fuchsia-600 shadow-xl shadow-violet-500/30 mb-4"
                       >
-                        <LogIn className="w-8 h-8 text-white" />
+                        <Lock className="w-7 h-7 text-white" />
                       </motion.div>
                       <h3 className="text-2xl font-black text-slate-800">
                         مرحباً بعودتك
                       </h3>
-                      <p className="text-sm text-slate-400 mt-1.5">
-                        سجّل دخولك وسنتعرف على حسابك تلقائياً
+                      <p className="text-sm text-slate-400 mt-2 leading-relaxed">
+                        أدخل بياناتك وسنتعرف عليك تلقائياً
                       </p>
-                    </div>
-
-                    {/* Role hint badges */}
-                    <div className="flex items-center justify-center gap-2 mb-6">
-                      {(['beneficiary', 'nurse', 'admin'] as Role[]).map((r) => {
-                        const config = roleConfig[r]
-                        const Icon = config.icon
-                        return (
-                          <div key={r} className="flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-white/60 border border-white/80 shadow-sm">
-                            <Icon className={`w-3 h-3 ${config.textAccent}`} />
-                            <span className="text-[10px] font-bold text-slate-500">{config.label}</span>
-                          </div>
-                        )
-                      })}
-                      <div className="flex items-center gap-1 px-2 py-1.5 rounded-full bg-emerald-50 border border-emerald-200">
-                        <ScanFace className="w-3 h-3 text-emerald-500" />
-                        <span className="text-[10px] font-bold text-emerald-600">تعرف تلقائي</span>
+                      {/* Role hints */}
+                      <div className="flex items-center justify-center gap-3 mt-3">
+                        {(['beneficiary', 'nurse', 'admin'] as Role[]).map((r) => {
+                          const config = roleConfig[r]
+                          const Icon = config.icon
+                          return (
+                            <div key={r} className="flex items-center gap-1 text-xs text-slate-400">
+                              <Icon className="w-3 h-3" />
+                              <span>{config.label}</span>
+                            </div>
+                          )
+                        })}
                       </div>
                     </div>
 
-                    {/* Unified Login Form */}
-                    <div className="space-y-4 max-w-md mx-auto">
+                    <div className="space-y-5 max-w-md mx-auto">
+                      {/* Phone Input */}
                       <div className="space-y-2">
-                        <Label className="text-sm font-semibold text-slate-700 flex items-center gap-1.5">
-                          <Phone className="w-3.5 h-3.5 text-violet-500" />
+                        <Label className="text-sm font-bold text-slate-700 flex items-center gap-2">
+                          <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center">
+                            <Phone className="w-3.5 h-3.5 text-white" />
+                          </div>
                           رقم الهاتف
                         </Label>
                         <Input
@@ -618,13 +607,17 @@ export default function LandingPage() {
                           onKeyDown={handleLoginKeyDown}
                           placeholder="7XXXXXXXX"
                           dir="ltr"
-                          className="h-12 bg-white/60 backdrop-blur-sm border-violet-200/50 focus:border-violet-400 focus:ring-violet-400/20 text-left transition-all duration-300 rounded-xl"
-                          disabled={loading}
+                          className="h-13 bg-white/70 backdrop-blur-sm border-violet-200/50 focus:border-violet-400 focus:ring-violet-400/20 text-left transition-all duration-300 rounded-xl text-base font-medium tracking-wide"
+                          disabled={loading || !!detectedRole}
                         />
                       </div>
+
+                      {/* Password Input */}
                       <div className="space-y-2">
-                        <Label className="text-sm font-semibold text-slate-700 flex items-center gap-1.5">
-                          <Lock className="w-3.5 h-3.5 text-violet-500" />
+                        <Label className="text-sm font-bold text-slate-700 flex items-center gap-2">
+                          <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-purple-500 to-indigo-500 flex items-center justify-center">
+                            <Lock className="w-3.5 h-3.5 text-white" />
+                          </div>
                           كلمة المرور
                         </Label>
                         <PasswordInput
@@ -633,29 +626,47 @@ export default function LandingPage() {
                           onKeyDown={handleLoginKeyDown}
                           showPassword={showPassword}
                           setShowPassword={setShowPassword}
-                          disabled={loading}
+                          disabled={loading || !!detectedRole}
                           accentColor="violet"
                         />
                       </div>
 
+                      {/* Smart Detection Indicator */}
+                      {loading && !detectedRole && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 5 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="flex items-center justify-center gap-2 py-2"
+                        >
+                          <Loader2 className="w-4 h-4 text-violet-500 animate-spin" />
+                          <span className="text-xs font-bold text-violet-500">جارٍ التعرف على حسابك...</span>
+                        </motion.div>
+                      )}
+
+                      {/* Login Button */}
                       <Button
-                        className="w-full h-12 text-base font-bold bg-gradient-to-l from-violet-600 via-purple-600 to-fuchsia-600 text-white hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-violet-500/25 border-0 transition-all duration-300 rounded-xl"
+                        className="w-full h-13 text-base font-bold bg-gradient-to-l from-violet-600 via-purple-600 to-fuchsia-600 text-white hover:shadow-xl hover:shadow-violet-500/30 hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-violet-500/25 border-0 transition-all duration-300 rounded-xl"
                         onClick={handleUnifiedLogin}
-                        disabled={loading}
+                        disabled={loading || !!detectedRole}
                       >
                         {loading ? (
-                          <span className="flex items-center gap-2">
+                          detectedRole ? (
+                            <span className="flex items-center gap-2">
+                              <CheckCircle className="w-5 h-5" />
+                              تم التعرف بنجاح
+                            </span>
+                          ) : (
                             <Loader2 className="w-5 h-5 animate-spin" />
-                            <span>جارٍ التعرف على حسابك...</span>
-                          </span>
+                          )
                         ) : (
                           <span className="flex items-center gap-2">
-                            <ScanFace className="w-5 h-5" />
-                            <span>تسجيل الدخول</span>
+                            تسجيل الدخول
+                            <ArrowRight className="w-4 h-4 rotate-180" />
                           </span>
                         )}
                       </Button>
 
+                      {/* Register Link */}
                       <div className="text-center pt-1">
                         <button
                           onClick={() => setAuthTab('register')}

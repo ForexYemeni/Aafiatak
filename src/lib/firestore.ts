@@ -788,6 +788,22 @@ export async function sendChatMessage(data: {
   return { id: docRef.id, ...data }
 }
 
+export async function deleteChatMessages(requestId: string) {
+  checkFirebase()
+  const snapshot = await firestore.collection('chats')
+    .where('requestId', '==', requestId)
+    .get()
+
+  if (snapshot.empty) return { deletedCount: 0 }
+
+  const batch = firestore.batch()
+  snapshot.docs.forEach((doc: any) => {
+    batch.delete(doc.ref)
+  })
+  await batch.commit()
+  return { deletedCount: snapshot.size }
+}
+
 // ==================== COUPONS ====================
 
 export async function createCoupon(data: {

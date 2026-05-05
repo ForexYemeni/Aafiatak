@@ -612,6 +612,16 @@ export default function NurseDashboard() {
     }
   }, [assignments])
 
+  // إغلاق الدردشة تلقائياً عند اكتمال المهمة
+  useEffect(() => {
+    if (!activeChatRequestId) return
+    const activeAssignment = assignments.find(a => a.requestId === activeChatRequestId)
+    if (activeAssignment && (activeAssignment.status === 'completed' || activeAssignment.status === 'cancelled')) {
+      setActiveChatRequestId(null)
+      setChatOtherPartyName('')
+    }
+  }, [assignments, activeChatRequestId])
+
   // Fetch data when tab changes
   useEffect(() => {
     if (activeTab === 'assignments' || activeTab === 'schedule' || activeTab === 'notifications') {
@@ -711,6 +721,17 @@ export default function NurseDashboard() {
         body: JSON.stringify(body),
       })
       if (res.ok) {
+        // إذا تم إكمال المهمة، احذف الدردشة بالكامل
+        if (status === 'completed') {
+          const assignment = assignments.find(a => a.id === assignmentId)
+          if (assignment?.requestId) {
+            setActiveChatRequestId(null)
+            setChatOtherPartyName('')
+            try {
+              await fetch(`/api/chat?requestId=${assignment.requestId}`, { method: 'DELETE' })
+            } catch { /* صامت - ليس حرجاً */ }
+          }
+        }
         toast({
           title: status === 'in_progress' ? 'تم بدء تنفيذ المهمة' : 'تم إكمال المهمة بنجاح',
           description: status === 'completed' ? 'شكراً لجهودك في إنجاز هذه المهمة' : undefined,
@@ -730,6 +751,7 @@ export default function NurseDashboard() {
   const handleCompleteWithNotes = async () => {
     if (!selectedAssignment) return
     const assignmentId = selectedAssignment.id
+    const requestId = selectedAssignment.requestId
     const notes = completionNotes
     setActionLoading(true)
     try {
@@ -741,6 +763,14 @@ export default function NurseDashboard() {
         body: JSON.stringify(body),
       })
       if (res.ok) {
+        // احذف الدردشة بالكامل عند إكمال المهمة
+        if (requestId) {
+          setActiveChatRequestId(null)
+          setChatOtherPartyName('')
+          try {
+            await fetch(`/api/chat?requestId=${requestId}`, { method: 'DELETE' })
+          } catch { /* صامت - ليس حرجاً */ }
+        }
         toast({ title: 'تم إكمال المهمة بنجاح', description: 'شكراً لجهودك في إنجاز هذه المهمة' })
         fetchAssignments()
         setCompleteDialogOpen(false)

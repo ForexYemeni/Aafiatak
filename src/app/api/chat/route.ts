@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getChatMessages, sendChatMessage } from '@/lib/firestore'
+import { getChatMessages, sendChatMessage, deleteChatMessages } from '@/lib/firestore'
 
 export async function GET(request: NextRequest) {
   try {
@@ -59,5 +59,26 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     console.error('Chat POST error:', error.message)
     return NextResponse.json({ error: 'حدث خطأ في الخادم أثناء إرسال الرسالة' }, { status: 500 })
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url)
+    const requestId = searchParams.get('requestId')
+
+    if (!requestId) {
+      return NextResponse.json({ error: 'معرف الطلب مطلوب' }, { status: 400 })
+    }
+
+    const result = await deleteChatMessages(requestId)
+    return NextResponse.json({
+      success: true,
+      message: `تم حذف ${result.deletedCount} رسالة`,
+      deletedCount: result.deletedCount
+    })
+  } catch (error: any) {
+    console.error('Chat DELETE error:', error.message)
+    return NextResponse.json({ error: 'حدث خطأ في الخادم أثناء حذف المحادثة' }, { status: 500 })
   }
 }

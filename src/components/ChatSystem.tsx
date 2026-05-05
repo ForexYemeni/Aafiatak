@@ -241,7 +241,7 @@ export default function ChatSystem({
     if (!msgText.trim() || sending) return
 
     // Validate required fields before sending
-    if (!requestId || !userId || !senderName || !userType) {
+    if (!requestId || !userId || !userName || !userType) {
       toast({ title: 'خطأ', description: 'بيانات المحادثة غير مكتملة. يرجى إعادة فتح المحادثة.', variant: 'destructive' })
       return
     }
@@ -254,7 +254,7 @@ export default function ChatSystem({
         body: JSON.stringify({
           requestId,
           senderId: userId,
-          senderName,
+          senderName: userName,
           senderType: userType,
           message: msgText.trim(),
         }),

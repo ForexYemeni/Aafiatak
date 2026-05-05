@@ -376,6 +376,16 @@ export default function BeneficiaryDashboard() {
     validateSession()
   }, [beneficiaryUser?.id, logout, toast])
 
+  // إغلاق الدردشة تلقائياً عند اكتمال المهمة
+  useEffect(() => {
+    if (!activeChatRequestId) return
+    const activeRequest = requests.find(r => r.id === activeChatRequestId)
+    if (activeRequest && (activeRequest.status === 'completed' || activeRequest.status === 'cancelled')) {
+      setActiveChatRequestId(null)
+      setActiveChatNurseName('')
+    }
+  }, [requests, activeChatRequestId])
+
   // Fetch data based on active tab
   const fetchData = useCallback(async () => {
     setLoading(true)
