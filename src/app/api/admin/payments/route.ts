@@ -1,31 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { firestore, admin, firebaseInitialized, initializationError } from '@/lib/firebase-admin'
-
-function checkFirebase() {
-  if (!firebaseInitialized || !firestore) {
-    throw new Error(initializationError || 'Firebase غير مهيأ')
-  }
-}
+import { getAllPaymentMethods, createPaymentMethod } from '@/lib/firestore'
+import { connectToDatabase } from '@/lib/mongodb'
+import { mongoose } from '@/lib/mongodb'
 
 export async function GET() {
   try {
-    checkFirebase()
-    const snapshot = await firestore.collection('paymentMethods').orderBy('createdAt', 'desc').get()
-    const payments = snapshot.docs.map(doc => {
-      const data = doc.data()
-      const converted = {} as Record<string, any>
-      for (const key of Object.keys(data)) {
-        const val = data[key]
-        if (val && typeof val === 'object' && 'seconds' in val && 'nanoseconds' in val) {
-          converted[key] = { seconds: val.seconds, nanoseconds: val.nanoseconds }
-        } else if (val && typeof val === 'object' && '_seconds' in val && '_nanoseconds' in val) {
-          converted[key] = { seconds: val._seconds, nanoseconds: val._nanoseconds }
-        } else {
-          converted[key] = val
-        }
-      }
-      return { id: doc.id, ...converted }
-    })
+    const payments = await getAllPaymentMethods()
     return NextResponse.json(payments)
   } catch (error: any) {
     console.error('Get payment methods error:', error.message)
@@ -35,7 +15,6 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    checkFirebase()
     const body = await request.json()
     const {
       type,           // 'wallet-deposit' | 'exchange-transfer' | 'bank-transfer' | 'cash'
@@ -44,7 +23,7 @@ export async function POST(request: NextRequest) {
       accountNumber,  // Account/phone number
       bankName,       // Bank name (for bank-transfer)
       exchangeName,   // Exchange shop name (for exchange-transfer)
-      walletType,     // 'one-cash' | 'cash-wallet' | 'jawali' | 'yemen-wallet' | 'saba-cash' | 'mahfathati' | 'pyes' | 'floosak' | 'jaib' | 'shamil-money' | 'em-pay' | 'bin-dowal-pay' | 'national-wallet' | 'other'
+      walletType,     // 'one-cash' | 'cash-wallet' | 'jawali' | etc.
       instructions,   // Payment instructions for beneficiary
       isActive,
     } = body
@@ -104,7 +83,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'رقم الحساب البنكي مطلوب' }, { status: 400 })
     }
 
-    const paymentData = {
+    // Create payment method using the firestore helper, then add extra fields
+    await connectToDatabase()
+    const PaymentMethod = mongoose.models.PaymentMethod
+
+    const paymentData: Record<string, any> = {
       type,
       name: autoName,
       accountName: accountName || '',
@@ -114,24 +97,24 @@ export async function POST(request: NextRequest) {
       walletType: walletType || '',
       instructions: instructions || '',
       isActive: isActive !== undefined ? isActive : true,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: new Date(),
+      updatedAt: new Date(),
     }
 
-    const docRef = await firestore.collection('paymentMethods').add(paymentData)
-    // Re-read the document to get actual timestamps instead of sentinel values
-    const createdDoc = await firestore.collection('paymentMethods').doc(docRef.id).get()
-    const createdData = createdDoc.data()
-    const convertedData = {} as Record<string, any>
-    for (const key of Object.keys(createdData || {})) {
-      const val = createdData![key]
-      if (val && typeof val === 'object' && 'seconds' in val && 'nanoseconds' in val) {
-        convertedData[key] = { seconds: val.seconds, nanoseconds: val.nanoseconds }
-      } else {
-        convertedData[key] = val
-      }
+    const doc = PaymentMethod ? await PaymentMethod.create(paymentData) : null
+    const docId = doc ? doc._id.toString() : ''
+
+    // Re-read to get the actual document
+    const createdDoc = doc ? await PaymentMethod.findById(docId).lean() : null
+    const result: Record<string, any> = { id: docId }
+    if (createdDoc) {
+      const { _id, __v, ...rest } = createdDoc
+      Object.assign(result, rest)
+    } else {
+      Object.assign(result, paymentData)
     }
-    return NextResponse.json({ id: docRef.id, ...convertedData })
+
+    return NextResponse.json(result)
   } catch (error: any) {
     console.error('Create payment method error:', error.message)
     return NextResponse.json({ error: 'حدث خطأ في الخادم' }, { status: 500 })

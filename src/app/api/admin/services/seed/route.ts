@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { firestore, admin, firebaseInitialized, initializationError } from '@/lib/firebase-admin'
+import { connectToDatabase } from '@/lib/mongodb'
+import { mongoose } from '@/lib/mongodb'
 
 const defaultServices = [
   // ═══════════ قياسات وتحاليل منزلية ═══════════
@@ -102,7 +103,7 @@ const defaultServices = [
   { name: 'توصيل أدوية ومستلزمات', description: 'خدمة توصيل الأدوية والمستلزمات الطبية من الصيدلية إلى المنزل مع التأكد من صحة الأدوية وتواريخ الانتهاء', price: 1000, category: 'استشارات ومتابعة' },
   { name: 'متابعة مرضى الضغط', description: 'متابعة دورية لمرضى ارتفاع ضغط الدم تشمل قياس الضغط ومراقبة الأدوية وتسجيل القراءات وتعديل نمط الحياة', price: 2000, category: 'استشارات ومتابعة' },
   { name: 'متابعة مرضى السكر', description: 'متابعة دورية لمرضى السكري تشمل قياس السكر وفحص القدمين ومراقبة الأدوية وتقديم نصائح التغذية', price: 2500, category: 'استشارات ومتابعة' },
-  { name: 'متابعة مرضى الربو', description: 'متابعة دورية لمرضى الربو تشمل تقييم التنفس ومراقبة الأدوية وتعليم استخدام البخاخات وتجنب المحفزات', price: 2000, category: 'استشارات ومتابعة' },
+  { name: 'متابعة مرضى الربو', description: 'متابعة دورية لمرضى الربو تشمل تقييم التنفس ومراقبة الأدوية وتعليم استخدام البخاخات وتجنب المحفطات', price: 2000, category: 'استشارات ومتابعة' },
   { name: 'استشارة تغذية', description: 'استشارة تغذوية متخصصة لتقييم النظام الغذائي وتقديم خطة غذائية مخصصة حسب الحالة الصحية والأهداف الغذائية', price: 2500, category: 'استشارات ومتابعة' },
   { name: 'متابعة مرضى الصرع', description: 'متابعة دورية لمرضى الصرع تشمل مراقبة الأدوية وتسجيل النوبات والتثقيف حول التعامل مع النوبات', price: 2500, category: 'استشارات ومتابعة' },
 
@@ -136,7 +137,7 @@ const defaultServices = [
   { name: 'تأهيل مركزي عصبي', description: 'برنامج تأهيلي لأمراض الجهاز العصبي المركزي يشمل تمارين الحركة والتوازن والتنسيق والمتابعة الدورية', price: 6000, category: 'علاج طبيعي وتأهيل' },
 
   // ═══════════ خدمات منزلية متقدمة ═══════════
-  { name: 'فحص سمع منزلي', description: 'فحص أولي للسمع في المنزل باستخدام أجهزة متخصصة مع تقييم结果 وتوجيه المريض للخطوات التالية', price: 3000, category: 'خدمات منزلية متقدمة' },
+  { name: 'فحص سمع منزلي', description: 'فحص أولي للسمع في المنزل باستخدام أجهزة متخصصة مع تقييم النتائج وتوجيه المريض للخطوات التالية', price: 3000, category: 'خدمات منزلية متقدمة' },
   { name: 'فحص نظر أولي منزلي', description: 'فحص أولي للنظر في المنزل يشمل اختبارات حدة البصر وقياس الضغط داخل العين مع التوجيه الطبي', price: 2500, category: 'خدمات منزلية متقدمة' },
   { name: 'تنظيف جروح ما بعد الولادة القيصرية', description: 'تنظيف وتعقيم جرح الولادة القيصرية مع تغيير الضمادات ومراقبة التئام الجرح والكشف عن علامات العدوى', price: 2500, category: 'خدمات منزلية متقدمة' },
   { name: 'تركيب جهاز قياس السكر المستمر', description: 'تركيب جهاز مراقبة السكر المستمر للمصابين بالسكري مع تعليم المريض طريقة الاستخدام وقراءة البيانات', price: 5000, category: 'خدمات منزلية متقدمة' },
@@ -149,8 +150,11 @@ const defaultServices = [
 
 export async function POST(request: NextRequest) {
   try {
-    if (!firebaseInitialized || !firestore) {
-      return NextResponse.json({ error: initializationError || 'Firebase غير مهيأ' }, { status: 500 })
+    await connectToDatabase()
+    const Service = mongoose.models.Service
+
+    if (!Service) {
+      return NextResponse.json({ error: 'قاعدة البيانات غير متصلة' }, { status: 500 })
     }
 
     const body = await request.json().catch(() => ({}))
@@ -158,29 +162,22 @@ export async function POST(request: NextRequest) {
 
     // If overwrite, delete all existing services first
     if (overwrite) {
-      const existingSnapshot = await firestore.collection('services').get()
-      const batch = firestore.batch()
-      existingSnapshot.docs.forEach(doc => batch.delete(doc.ref))
-      await batch.commit()
+      await Service.deleteMany({})
     }
 
     // Create all default services
-    const batch = firestore.batch()
     const createdServices: any[] = []
 
     for (const svc of defaultServices) {
-      const docRef = firestore.collection('services').doc()
       const serviceData = {
         ...svc,
         isActive: true,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        createdAt: new Date(),
+        updatedAt: new Date(),
       }
-      batch.set(docRef, serviceData)
-      createdServices.push({ id: docRef.id, ...svc, isActive: true })
+      const doc = await Service.create(serviceData)
+      createdServices.push({ id: doc._id.toString(), ...svc, isActive: true })
     }
-
-    await batch.commit()
 
     return NextResponse.json({
       message: `تم إضافة ${defaultServices.length} خدمة بنجاح`,

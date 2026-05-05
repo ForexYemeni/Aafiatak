@@ -1,67 +1,202 @@
-import { firestore, admin, firebaseInitialized, initializationError } from './firebase-admin'
+/**
+ * عافيتك — MongoDB Data Access Layer
+ * Migrated from Firebase Firestore to MongoDB (Mongoose)
+ * All function signatures remain identical for backward compatibility
+ */
 
-// Helper to check Firebase is available
-function checkFirebase() {
-  if (!firebaseInitialized || !firestore) {
-    throw new Error(initializationError || 'Firebase غير مهيأ. يرجى التحقق من إعدادات Firebase في ملف .env.local')
-  }
+import { connectToDatabase, docToObject, docsToObjects, convertTimestamps, getTimeFromTimestamp, mongoose } from './mongodb'
+
+// ==================== MONGOOSE MODELS ====================
+// Using strict: false to allow flexible data (matching Firestore's schema-less nature)
+// Using mongoose.models.X || mongoose.model('X', schema) pattern to prevent recompilation errors
+// Using `any` model types to avoid TypeScript issues with strict:false schemas
+
+const Schema = mongoose.Schema
+
+function getModel(name: string, schemaDef: any, collection: string): any {
+  if (mongoose.models[name]) return mongoose.models[name]
+  const schema = new Schema(schemaDef, { strict: false, timestamps: false })
+  return mongoose.model(name, schema, collection)
 }
 
-// Helper to convert Firestore Timestamps to serializable format
-function convertTimestamps(data: any): any {
-  if (!data || typeof data !== 'object') return data
-  if (data instanceof admin.firestore.Timestamp) {
-    return { seconds: data.seconds, nanoseconds: data.nanoseconds }
-  }
-  if (Array.isArray(data)) return data.map(convertTimestamps)
-  const result: any = {}
-  for (const key of Object.keys(data)) {
-    const val = data[key]
-    if (val instanceof admin.firestore.Timestamp) {
-      result[key] = { seconds: val.seconds, nanoseconds: val.nanoseconds }
-    } else if (val && typeof val === 'object' && !Array.isArray(val)) {
-      result[key] = convertTimestamps(val)
-    } else {
-      result[key] = val
-    }
-  }
-  return result
-}
+const Admin = getModel('Admin', {
+  username: String, phone: String, password: String, name: String,
+  mustChangePassword: Boolean, createdAt: Date, updatedAt: Date,
+}, 'admins')
 
-// Helper to convert Firestore doc to object with id
-function docToObject(doc: FirebaseFirestore.QueryDocumentSnapshot | FirebaseFirestore.DocumentSnapshot) {
-  const data = doc.data()
-  return { id: doc.id, ...convertTimestamps(data) }
+const SubAdmin = getModel('SubAdmin', {
+  name: String, phone: String, password: String, adminId: String,
+  permissions: Object, status: String, createdAt: Date, updatedAt: Date,
+}, 'subadmins')
+
+const Nurse = getModel('Nurse', {
+  firstName: String, secondName: String, thirdName: String, lastName: String,
+  phone: String, location: String, nationalId: String, licenseNumber: String,
+  licenseExpiryDate: String, password: String, status: String, isVerified: Boolean,
+  verifiedAt: Date, portfolio: Object, specialties: [String], rating: Number,
+  totalRatings: Number, location_lat: Number, location_lng: Number,
+  rejectionReason: String, currentLocation: Object, createdAt: Date, updatedAt: Date,
+}, 'nurses')
+
+const Beneficiary = getModel('Beneficiary', {
+  name: String, phone: String, location: String, password: String,
+  status: String, loyaltyPoints: Number, favoriteNurseId: String,
+  createdAt: Date, updatedAt: Date,
+}, 'beneficiaries')
+
+const Service = getModel('Service', {
+  name: String, description: String, price: Number, category: String,
+  isActive: Boolean, image: String, estimatedDuration: String,
+  createdAt: Date, updatedAt: Date,
+}, 'services')
+
+const ServiceRequest = getModel('ServiceRequest', {
+  beneficiaryId: String, serviceId: String, status: String,
+  paymentMethod: String, paymentMethodId: String, notes: String, address: String,
+  serviceIds: [String], services: Array, isMultiService: Boolean,
+  couponCode: String, requestFavoriteNurse: Boolean, dynamicPrice: Number,
+  pricingBreakdown: Object, commission: Object, paymentStatus: String,
+  adminNotes: String, rejectionReason: String, beneficiaryName: String,
+  createdAt: Date, updatedAt: Date,
+}, 'servicerequests')
+
+const ServiceAssignment = getModel('ServiceAssignment', {
+  requestId: String, nurseId: String, status: String, rejectionReason: String,
+  acceptedAt: Date, completedAt: Date, createdAt: Date, updatedAt: Date,
+}, 'serviceassignments')
+
+const EmergencyRequest = getModel('EmergencyRequest', {
+  beneficiaryId: String, beneficiaryName: String, serviceType: String,
+  address: String, notes: String, price: Number, dynamicPrice: Number,
+  pricingBreakdown: Object, commission: Object, paymentMethod: String,
+  paymentMethodId: String, paymentStatus: String, status: String,
+  isEmergency: Boolean, createdAt: Date, updatedAt: Date,
+}, 'emergencyrequests')
+
+const EmergencyAssignment = getModel('EmergencyAssignment', {
+  emergencyRequestId: String, nurseId: String, status: String,
+  createdAt: Date, updatedAt: Date,
+}, 'emergencyassignments')
+
+const PaymentMethodModel = getModel('PaymentMethod', {
+  name: String, accountInfo: String, isActive: Boolean,
+  createdAt: Date, updatedAt: Date,
+}, 'paymentmethods')
+
+const ActivityLog = getModel('ActivityLog', {
+  type: String, description: String, userId: String, userName: String,
+  metadata: Object, createdAt: Date,
+}, 'activitylog')
+
+const Chat = getModel('Chat', {
+  requestId: String, senderId: String, senderName: String,
+  senderType: String, message: String, createdAt: Date,
+}, 'chats')
+
+const Coupon = getModel('Coupon', {
+  code: String, discountPercent: Number, maxUses: Number, usedCount: Number,
+  expiresAt: String, isActive: Boolean, createdAt: Date, updatedAt: Date,
+}, 'coupons')
+
+const LoyaltyPoint = getModel('LoyaltyPoint', {
+  beneficiaryId: String, points: Number, reason: String, type: String,
+  createdAt: Date,
+}, 'loyaltypoints')
+
+const Referral = getModel('Referral', {
+  beneficiaryId: String, code: String, uses: Number, createdAt: Date,
+}, 'referrals')
+
+const PushNotification = getModel('PushNotification', {
+  userId: String, userType: String, title: String, message: String,
+  type: String, data: Object, isRead: Boolean, read: Boolean,
+  createdAt: Date, updatedAt: Date,
+}, 'pushnotifications')
+
+const FcmToken = getModel('FcmToken', {
+  userId: String, userType: String, token: String, isActive: Boolean,
+  deviceInfo: Object, createdAt: Date, updatedAt: Date,
+}, 'fcmtokens')
+
+const Rating = getModel('Rating', {
+  requestId: String, fromUserId: String, fromUserName: String, fromUserType: String,
+  toUserId: String, toUserName: String, toUserType: String,
+  nurseId: String, beneficiaryId: String, beneficiaryName: String, nurseName: String,
+  serviceName: String, rating: Number, overallRating: Number, comment: String,
+  criteria: Object, beforePhotos: [String], afterPhotos: [String],
+  reply: String, replyCreatedAt: Date, nurseReply: Object,
+  createdAt: Date, updatedAt: Date,
+}, 'ratings')
+
+const AdminSetting = getModel('AdminSetting', {
+  key: String, value: mongoose.Schema.Types.Mixed, subAdminId: String,
+  createdAt: Date, updatedAt: Date,
+}, 'adminsettings')
+
+const WhatsappQueue = getModel('WhatsappQueue', {
+  phone: String, message: String, type: String, userId: String,
+  status: String, attempts: Number, createdAt: Date,
+}, 'whatsappqueue')
+
+const AppSetting = getModel('AppSetting', {}, 'appsettings')
+
+const Appointment = getModel('Appointment', {
+  beneficiaryId: String, serviceId: String, nurseId: String,
+  date: String, time: String, notes: String, status: String,
+  createdAt: Date, updatedAt: Date,
+}, 'appointments')
+
+const Report = getModel('Report', {
+  reporterId: String, reporterType: String, reportedId: String,
+  reportedType: String, type: String, description: String,
+  images: [String], status: String, adminResponse: String,
+  createdAt: Date, updatedAt: Date,
+}, 'reports')
+
+const Transaction = getModel('Transaction', {
+  requestId: String, beneficiaryId: String, amount: Number,
+  paymentMethod: String, transactionRef: String, status: String,
+  createdAt: Date, updatedAt: Date,
+}, 'transactions')
+
+// ==================== HELPER ====================
+
+function sortByCreatedAt(docs: any[], direction: 'asc' | 'desc' = 'desc') {
+  return docs.sort((a: any, b: any) => {
+    const aTime = getTimeFromTimestamp(a.createdAt)
+    const bTime = getTimeFromTimestamp(b.createdAt)
+    return direction === 'desc' ? bTime - aTime : aTime - bTime
+  })
 }
 
 // ==================== ADMINS ====================
 
 export async function getAdminByUsername(username: string) {
-  checkFirebase()
-  const snapshot = await firestore.collection('admins').where('username', '==', username).limit(1).get()
-  if (snapshot.empty) return null
-  return docToObject(snapshot.docs[0])
+  await connectToDatabase()
+  const doc = await Admin.findOne({ username }).lean()
+  if (!doc) return null
+  return convertTimestamps(docToObject(doc))
 }
 
 export async function getAdminById(id: string) {
-  checkFirebase()
-  const doc = await firestore.collection('admins').doc(id).get()
-  if (!doc.exists) return null
-  return docToObject(doc)
+  await connectToDatabase()
+  const doc = await Admin.findById(id).lean()
+  if (!doc) return null
+  return convertTimestamps(docToObject(doc))
 }
 
 export async function getFirstAdmin() {
-  checkFirebase()
-  const snapshot = await firestore.collection('admins').limit(1).get()
-  if (snapshot.empty) return null
-  return docToObject(snapshot.docs[0])
+  await connectToDatabase()
+  const doc = await Admin.findOne().lean()
+  if (!doc) return null
+  return convertTimestamps(docToObject(doc))
 }
 
 export async function getAdminByPhone(phone: string) {
-  checkFirebase()
-  const snapshot = await firestore.collection('admins').where('phone', '==', phone).limit(1).get()
-  if (snapshot.empty) return null
-  return docToObject(snapshot.docs[0])
+  await connectToDatabase()
+  const doc = await Admin.findOne({ phone }).lean()
+  if (!doc) return null
+  return convertTimestamps(docToObject(doc))
 }
 
 export async function createAdmin(data: {
@@ -71,67 +206,138 @@ export async function createAdmin(data: {
   name: string
   mustChangePassword: boolean
 }) {
-  checkFirebase()
-  const docRef = await firestore.collection('admins').add({
+  await connectToDatabase()
+  const doc = await Admin.create({
     ...data,
     phone: data.phone || data.username,
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    createdAt: new Date(),
+    updatedAt: new Date(),
   })
-  return { id: docRef.id, ...data, phone: data.phone || data.username }
+  const obj = docToObject(doc)
+  return { id: obj.id, ...data, phone: data.phone || data.username }
 }
 
 export async function updateAdmin(id: string, data: Record<string, any>) {
-  checkFirebase()
-  await firestore.collection('admins').doc(id).update({
-    ...data,
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  await connectToDatabase()
+  await Admin.findByIdAndUpdate(id, { ...data, updatedAt: new Date() })
+  const doc = await Admin.findById(id).lean()
+  if (!doc) return null
+  return convertTimestamps(docToObject(doc))
+}
+
+// ==================== SUB-ADMINS ====================
+
+export async function getSubAdminByPhone(phone: string) {
+  await connectToDatabase()
+  const doc = await SubAdmin.findOne({ phone }).lean()
+  if (!doc) return null
+  return convertTimestamps(docToObject(doc))
+}
+
+export async function getSubAdminById(id: string) {
+  await connectToDatabase()
+  const doc = await SubAdmin.findById(id).lean()
+  if (!doc) return null
+  return convertTimestamps(docToObject(doc))
+}
+
+export async function getAllSubAdmins() {
+  await connectToDatabase()
+  const docs = await SubAdmin.find().sort({ createdAt: -1 }).lean()
+  return docs.map((doc: any) => {
+    const obj = convertTimestamps(docToObject(doc))
+    const { password, ...rest } = obj
+    return rest
   })
-  const doc = await firestore.collection('admins').doc(id).get()
-  return docToObject(doc)
+}
+
+export async function getSubAdmins(adminId: string) {
+  await connectToDatabase()
+  const docs = await SubAdmin.find({ adminId }).sort({ createdAt: -1 }).lean()
+  return docs.map((doc: any) => {
+    const obj = convertTimestamps(docToObject(doc))
+    const { password, ...rest } = obj
+    return rest
+  })
+}
+
+export async function createSubAdmin(data: {
+  name: string
+  phone: string
+  password: string
+  adminId: string
+  permissions: Record<string, boolean>
+}) {
+  await connectToDatabase()
+  const hashedPassword = await import('bcryptjs').then(bcrypt => bcrypt.hash(data.password, 10))
+  const doc = await SubAdmin.create({
+    ...data,
+    password: hashedPassword,
+    status: 'active',
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  })
+  const { password: _, ...safeData } = data
+  const obj = docToObject(doc)
+  return { id: obj.id, ...safeData, status: 'active' }
+}
+
+export async function updateSubAdmin(id: string, data: Record<string, any>) {
+  await connectToDatabase()
+  const updateData: Record<string, any> = { ...data, updatedAt: new Date() }
+  if (data.password) {
+    const hashedPassword = await import('bcryptjs').then(bcrypt => bcrypt.hash(data.password, 10))
+    updateData.password = hashedPassword
+  }
+  await SubAdmin.findByIdAndUpdate(id, updateData)
+  const doc = await SubAdmin.findById(id).lean()
+  if (!doc) return null
+  const obj = convertTimestamps(docToObject(doc))
+  const { password, ...rest } = obj
+  return rest
+}
+
+export async function deleteSubAdmin(id: string) {
+  await connectToDatabase()
+  await SubAdmin.findByIdAndDelete(id)
 }
 
 // ==================== NURSES ====================
 
 export async function getNurseByPhone(phone: string) {
-  checkFirebase()
-  const snapshot = await firestore.collection('nurses').where('phone', '==', phone).limit(1).get()
-  if (snapshot.empty) return null
-  return docToObject(snapshot.docs[0])
+  await connectToDatabase()
+  const doc = await Nurse.findOne({ phone }).lean()
+  if (!doc) return null
+  return convertTimestamps(docToObject(doc))
 }
 
 export async function getNurseByNationalId(nationalId: string) {
-  checkFirebase()
-  const snapshot = await firestore.collection('nurses').where('nationalId', '==', nationalId).limit(1).get()
-  if (snapshot.empty) return null
-  return docToObject(snapshot.docs[0])
+  await connectToDatabase()
+  const doc = await Nurse.findOne({ nationalId }).lean()
+  if (!doc) return null
+  return convertTimestamps(docToObject(doc))
 }
 
 export async function getNurseByLicenseNumber(licenseNumber: string) {
-  checkFirebase()
-  const snapshot = await firestore.collection('nurses').where('licenseNumber', '==', licenseNumber).limit(1).get()
-  if (snapshot.empty) return null
-  return docToObject(snapshot.docs[0])
+  await connectToDatabase()
+  const doc = await Nurse.findOne({ licenseNumber }).lean()
+  if (!doc) return null
+  return convertTimestamps(docToObject(doc))
 }
 
 export async function getNurseById(id: string) {
-  checkFirebase()
-  const doc = await firestore.collection('nurses').doc(id).get()
-  if (!doc.exists) return null
-  return docToObject(doc)
+  await connectToDatabase()
+  const doc = await Nurse.findById(id).lean()
+  if (!doc) return null
+  return convertTimestamps(docToObject(doc))
 }
 
 export async function getAllNurses(status?: string) {
-  checkFirebase()
-  let snapshot: FirebaseFirestore.QuerySnapshot
-  if (status) {
-    // Filter in code to avoid composite index
-    const allSnapshot = await firestore.collection('nurses').orderBy('createdAt', 'desc').get()
-    snapshot = { docs: allSnapshot.docs.filter(d => d.data().status === status) } as any
-  } else {
-    snapshot = await firestore.collection('nurses').orderBy('createdAt', 'desc').get()
-  }
-  return snapshot.docs.map(docToObject)
+  await connectToDatabase()
+  const filter: any = {}
+  if (status) filter.status = status
+  const docs = await Nurse.find(filter).sort({ createdAt: -1 }).lean()
+  return docs.map((doc: any) => convertTimestamps(docToObject(doc)))
 }
 
 export async function createNurse(data: {
@@ -148,50 +354,87 @@ export async function createNurse(data: {
   status: string
   isVerified?: boolean
 }) {
-  checkFirebase()
-  const docRef = await firestore.collection('nurses').add({
+  await connectToDatabase()
+  const doc = await Nurse.create({
     ...data,
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    createdAt: new Date(),
+    updatedAt: new Date(),
   })
-  return { id: docRef.id, ...data }
+  const obj = docToObject(doc)
+  return { id: obj.id, ...data }
 }
 
 export async function updateNurse(id: string, data: Record<string, any>) {
-  checkFirebase()
-  await firestore.collection('nurses').doc(id).update({
-    ...data,
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  })
-  const doc = await firestore.collection('nurses').doc(id).get()
-  return docToObject(doc)
+  await connectToDatabase()
+  await Nurse.findByIdAndUpdate(id, { ...data, updatedAt: new Date() })
+  const doc = await Nurse.findById(id).lean()
+  if (!doc) return null
+  return convertTimestamps(docToObject(doc))
 }
 
 export async function countNurses(status?: string) {
-  checkFirebase()
-  if (status) {
-    // Filter in code to avoid composite index
-    const snapshot = await firestore.collection('nurses').get()
-    return snapshot.docs.filter(d => d.data().status === status).length
+  await connectToDatabase()
+  const filter: any = {}
+  if (status) filter.status = status
+  return Nurse.countDocuments(filter)
+}
+
+export async function deleteNurse(id: string) {
+  await connectToDatabase()
+  await ServiceAssignment.deleteMany({ nurseId: id })
+  await Nurse.findByIdAndDelete(id)
+}
+
+export async function blockNurse(id: string) {
+  await connectToDatabase()
+  await Nurse.findByIdAndUpdate(id, { status: 'blocked', updatedAt: new Date() })
+  const doc = await Nurse.findById(id).lean()
+  if (!doc) return null
+  return convertTimestamps(docToObject(doc))
+}
+
+export async function unblockNurse(id: string) {
+  await connectToDatabase()
+  await Nurse.findByIdAndUpdate(id, { status: 'approved', updatedAt: new Date() })
+  const doc = await Nurse.findById(id).lean()
+  if (!doc) return null
+  return convertTimestamps(docToObject(doc))
+}
+
+export async function verifyNurse(nurseId: string, verified: boolean) {
+  await connectToDatabase()
+  if (verified) {
+    await Nurse.findByIdAndUpdate(nurseId, {
+      isVerified: true,
+      verifiedAt: new Date(),
+      updatedAt: new Date(),
+    })
+  } else {
+    // Use $unset to remove the field (equivalent to FieldValue.delete())
+    await Nurse.findByIdAndUpdate(nurseId, {
+      $set: { isVerified: false, updatedAt: new Date() },
+      $unset: { verifiedAt: '' },
+    })
   }
-  const snapshot = await firestore.collection('nurses').get()
-  return snapshot.size
+  const doc = await Nurse.findById(nurseId).lean()
+  if (!doc) return null
+  return convertTimestamps(docToObject(doc))
 }
 
 // ==================== BENEFICIARIES ====================
 
 export async function getBeneficiaryByPhone(phone: string) {
-  checkFirebase()
-  const snapshot = await firestore.collection('beneficiaries').where('phone', '==', phone).limit(1).get()
-  if (snapshot.empty) return null
-  return docToObject(snapshot.docs[0])
+  await connectToDatabase()
+  const doc = await Beneficiary.findOne({ phone }).lean()
+  if (!doc) return null
+  return convertTimestamps(docToObject(doc))
 }
 
 export async function getBeneficiaryById(id: string) {
-  checkFirebase()
-  const doc = await firestore.collection('beneficiaries').doc(id).get()
-  if (!doc.exists) return null
-  return docToObject(doc)
+  await connectToDatabase()
+  const doc = await Beneficiary.findById(id).lean()
+  if (!doc) return null
+  return convertTimestamps(docToObject(doc))
 }
 
 export async function createBeneficiary(data: {
@@ -201,57 +444,82 @@ export async function createBeneficiary(data: {
   password: string
   status?: string
 }) {
-  checkFirebase()
-  const docRef = await firestore.collection('beneficiaries').add({
+  await connectToDatabase()
+  const doc = await Beneficiary.create({
     ...data,
     status: data.status || 'active',
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    loyaltyPoints: 0,
+    createdAt: new Date(),
+    updatedAt: new Date(),
   })
-  return { id: docRef.id, ...data, status: data.status || 'active' }
+  const obj = docToObject(doc)
+  return { id: obj.id, ...data, status: data.status || 'active' }
 }
 
 export async function updateBeneficiary(id: string, data: Record<string, any>) {
-  checkFirebase()
-  await firestore.collection('beneficiaries').doc(id).update({
-    ...data,
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  })
-  const doc = await firestore.collection('beneficiaries').doc(id).get()
-  return docToObject(doc)
+  await connectToDatabase()
+  await Beneficiary.findByIdAndUpdate(id, { ...data, updatedAt: new Date() })
+  const doc = await Beneficiary.findById(id).lean()
+  if (!doc) return null
+  return convertTimestamps(docToObject(doc))
 }
 
 export async function countBeneficiaries() {
-  checkFirebase()
-  const snapshot = await firestore.collection('beneficiaries').get()
-  return snapshot.size
+  await connectToDatabase()
+  return Beneficiary.countDocuments()
+}
+
+export async function getAllBeneficiaries() {
+  await connectToDatabase()
+  const docs = await Beneficiary.find().sort({ createdAt: -1 }).lean()
+  return docs.map((doc: any) => {
+    const obj = convertTimestamps(docToObject(doc))
+    const { password, ...rest } = obj
+    return rest
+  })
+}
+
+export async function deleteBeneficiary(id: string) {
+  await connectToDatabase()
+  await ServiceRequest.deleteMany({ beneficiaryId: id })
+  await Beneficiary.findByIdAndDelete(id)
+}
+
+export async function blockBeneficiary(id: string) {
+  await connectToDatabase()
+  await Beneficiary.findByIdAndUpdate(id, { status: 'blocked', updatedAt: new Date() })
+  const doc = await Beneficiary.findById(id).lean()
+  if (!doc) return null
+  return convertTimestamps(docToObject(doc))
+}
+
+export async function unblockBeneficiary(id: string) {
+  await connectToDatabase()
+  await Beneficiary.findByIdAndUpdate(id, { status: 'active', updatedAt: new Date() })
+  const doc = await Beneficiary.findById(id).lean()
+  if (!doc) return null
+  return convertTimestamps(docToObject(doc))
 }
 
 // ==================== SERVICES ====================
 
 export async function getAllServices() {
-  checkFirebase()
-  const snapshot = await firestore.collection('services').orderBy('createdAt', 'desc').get()
-  return snapshot.docs.map(docToObject)
+  await connectToDatabase()
+  const docs = await Service.find().sort({ createdAt: -1 }).lean()
+  return docs.map((doc: any) => convertTimestamps(docToObject(doc)))
 }
 
 export async function getActiveServices() {
-  checkFirebase()
-  // Fetch all services ordered by createdAt, then filter active ones in code
-  // This avoids the need for a composite Firestore index
-  const snapshot = await firestore.collection('services')
-    .orderBy('createdAt', 'desc')
-    .get()
-  return snapshot.docs
-    .filter(doc => doc.data().isActive === true)
-    .map(docToObject)
+  await connectToDatabase()
+  const docs = await Service.find({ isActive: true }).sort({ createdAt: -1 }).lean()
+  return docs.map((doc: any) => convertTimestamps(docToObject(doc)))
 }
 
 export async function getServiceById(id: string) {
-  checkFirebase()
-  const doc = await firestore.collection('services').doc(id).get()
-  if (!doc.exists) return null
-  return docToObject(doc)
+  await connectToDatabase()
+  const doc = await Service.findById(id).lean()
+  if (!doc) return null
+  return convertTimestamps(docToObject(doc))
 }
 
 export async function createService(data: {
@@ -261,87 +529,92 @@ export async function createService(data: {
   category: string
   isActive: boolean
 }) {
-  checkFirebase()
-  const docRef = await firestore.collection('services').add({
+  await connectToDatabase()
+  const doc = await Service.create({
     ...data,
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    createdAt: new Date(),
+    updatedAt: new Date(),
   })
-  return { id: docRef.id, ...data }
+  const obj = docToObject(doc)
+  return { id: obj.id, ...data }
 }
 
 export async function updateService(id: string, data: Record<string, any>) {
-  checkFirebase()
-  await firestore.collection('services').doc(id).update({
-    ...data,
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  })
-  const doc = await firestore.collection('services').doc(id).get()
-  return docToObject(doc)
+  await connectToDatabase()
+  await Service.findByIdAndUpdate(id, { ...data, updatedAt: new Date() })
+  const doc = await Service.findById(id).lean()
+  if (!doc) return null
+  return convertTimestamps(docToObject(doc))
 }
 
 export async function deleteService(id: string) {
-  checkFirebase()
-  await firestore.collection('services').doc(id).delete()
+  await connectToDatabase()
+  await Service.findByIdAndDelete(id)
 }
 
 export async function countServices(isActive?: boolean) {
-  checkFirebase()
-  let query: FirebaseFirestore.Query = firestore.collection('services')
-  if (isActive !== undefined) {
-    query = query.where('isActive', '==', isActive)
+  await connectToDatabase()
+  const filter: any = {}
+  if (isActive !== undefined) filter.isActive = isActive
+  return Service.countDocuments(filter)
+}
+
+export async function searchServices(query: string, category?: string) {
+  await connectToDatabase()
+  const filter: any = { isActive: true }
+  if (query) {
+    filter.$or = [
+      { name: { $regex: query, $options: 'i' } },
+      { description: { $regex: query, $options: 'i' } },
+    ]
   }
-  const snapshot = await query.get()
-  return snapshot.size
+  if (category) filter.category = category
+  const docs = await Service.find(filter).lean()
+  return docs.map((doc: any) => convertTimestamps(docToObject(doc)))
 }
 
 // ==================== SERVICE REQUESTS ====================
 
 export async function getAllServiceRequests() {
-  checkFirebase()
-  const snapshot = await firestore.collection('serviceRequests')
-    .orderBy('createdAt', 'desc')
-    .get()
-  const requests = []
-  for (const doc of snapshot.docs) {
-    const data = doc.data()
-    const beneficiaryDoc = await firestore.collection('beneficiaries').doc(data.beneficiaryId).get()
-    const serviceDoc = await firestore.collection('services').doc(data.serviceId).get()
-    
-    // Check for assignment
-    const assignmentSnapshot = await firestore.collection('serviceAssignments')
-      .where('requestId', '==', doc.id)
-      .limit(1)
-      .get()
-    
+  await connectToDatabase()
+  const docs = await ServiceRequest.find().sort({ createdAt: -1 }).lean()
+  const requests: any[] = []
+  for (const doc of docs) {
+    const data = convertTimestamps(docToObject(doc))
+
+    const beneficiaryDoc = await Beneficiary.findById(data.beneficiaryId).lean()
+    const serviceDoc = await Service.findById(data.serviceId).lean()
+
+    const assignDoc = await ServiceAssignment.findOne({ requestId: data.id }).lean()
+
     let assignment = null
-    if (!assignmentSnapshot.empty) {
-      const assignData = convertTimestamps(assignmentSnapshot.docs[0].data())
-      const nurseDoc = await firestore.collection('nurses').doc(assignData.nurseId).get()
+    if (assignDoc) {
+      const assignData = convertTimestamps(docToObject(assignDoc))
+      const nurseDoc = await Nurse.findById(assignData.nurseId).lean()
       assignment = {
-        id: assignmentSnapshot.docs[0].id,
+        id: assignData.id,
         ...assignData,
-        nurse: nurseDoc.exists
+        nurse: nurseDoc
           ? {
-              id: nurseDoc.id,
-              firstName: nurseDoc.data()!.firstName,
-              secondName: nurseDoc.data()!.secondName,
-              thirdName: nurseDoc.data()!.thirdName,
-              lastName: nurseDoc.data()!.lastName,
-              phone: nurseDoc.data()!.phone || null,
+              id: docToObject(nurseDoc).id,
+              firstName: nurseDoc.firstName,
+              secondName: nurseDoc.secondName,
+              thirdName: nurseDoc.thirdName,
+              lastName: nurseDoc.lastName,
+              phone: nurseDoc.phone || null,
             }
           : null,
       }
     }
 
     requests.push({
-      id: doc.id,
-      ...convertTimestamps(data),
-      beneficiary: beneficiaryDoc.exists
-        ? { id: beneficiaryDoc.id, name: beneficiaryDoc.data()!.name, phone: beneficiaryDoc.data()!.phone, location: beneficiaryDoc.data()!.location || null }
+      id: data.id,
+      ...data,
+      beneficiary: beneficiaryDoc
+        ? { id: docToObject(beneficiaryDoc).id, name: beneficiaryDoc.name, phone: beneficiaryDoc.phone, location: beneficiaryDoc.location || null }
         : null,
-      service: serviceDoc.exists
-        ? { id: serviceDoc.id, name: serviceDoc.data()!.name, price: serviceDoc.data()!.price }
+      service: serviceDoc
+        ? { id: docToObject(serviceDoc).id, name: serviceDoc.name, price: serviceDoc.price }
         : null,
       assignment,
     })
@@ -350,48 +623,41 @@ export async function getAllServiceRequests() {
 }
 
 export async function getServiceRequestsByBeneficiary(beneficiaryId: string) {
-  checkFirebase()
-  // Fetch all requests for beneficiary, filter and sort in code to avoid composite index
-  const snapshot = await firestore.collection('serviceRequests')
-    .where('beneficiaryId', '==', beneficiaryId)
-    .get()
-  
-  const requests = []
-  for (const doc of snapshot.docs) {
-    const data = doc.data()
-    const serviceDoc = await firestore.collection('services').doc(data.serviceId).get()
-    
-    // Check for assignment
-    const assignmentSnapshot = await firestore.collection('serviceAssignments')
-      .where('requestId', '==', doc.id)
-      .limit(1)
-      .get()
-    
+  await connectToDatabase()
+  const docs = await ServiceRequest.find({ beneficiaryId }).sort({ createdAt: -1 }).lean()
+
+  const requests: any[] = []
+  for (const doc of docs) {
+    const data = convertTimestamps(docToObject(doc))
+    const serviceDoc = await Service.findById(data.serviceId).lean()
+
+    const assignDoc = await ServiceAssignment.findOne({ requestId: data.id }).lean()
+
     let assignment = null
-    if (!assignmentSnapshot.empty) {
-      const assignData = convertTimestamps(assignmentSnapshot.docs[0].data())
-      const nurseDoc = await firestore.collection('nurses').doc(assignData.nurseId).get()
+    if (assignDoc) {
+      const assignData = convertTimestamps(docToObject(assignDoc))
+      const nurseDoc = await Nurse.findById(assignData.nurseId).lean()
       assignment = {
-        id: assignmentSnapshot.docs[0].id,
+        id: assignData.id,
         ...assignData,
-        nurse: nurseDoc.exists
+        nurse: nurseDoc
           ? {
-              id: nurseDoc.id,
-              firstName: nurseDoc.data()!.firstName,
-              secondName: nurseDoc.data()!.secondName,
-              thirdName: nurseDoc.data()!.thirdName,
-              lastName: nurseDoc.data()!.lastName,
-              phone: nurseDoc.data()!.phone || null,
+              id: docToObject(nurseDoc).id,
+              firstName: nurseDoc.firstName,
+              secondName: nurseDoc.secondName,
+              thirdName: nurseDoc.thirdName,
+              lastName: nurseDoc.lastName,
+              phone: nurseDoc.phone || null,
             }
           : null,
       }
     }
 
     requests.push({
-      id: doc.id,
-      ...convertTimestamps(data),
-      service: serviceDoc.exists
-        ? { id: serviceDoc.id, name: serviceDoc.data()!.name, price: serviceDoc.data()!.price, description: serviceDoc.data()!.description }
+      id: data.id,
+      ...data,
+      service: serviceDoc
+        ? { id: docToObject(serviceDoc).id, name: serviceDoc.name, price: serviceDoc.price, description: serviceDoc.description }
         : null,
       assignment,
     })
@@ -400,10 +666,10 @@ export async function getServiceRequestsByBeneficiary(beneficiaryId: string) {
 }
 
 export async function getServiceRequestById(id: string) {
-  checkFirebase()
-  const doc = await firestore.collection('serviceRequests').doc(id).get()
-  if (!doc.exists) return null
-  return docToObject(doc)
+  await connectToDatabase()
+  const doc = await ServiceRequest.findById(id).lean()
+  if (!doc) return null
+  return convertTimestamps(docToObject(doc))
 }
 
 export async function createServiceRequest(data: {
@@ -424,102 +690,88 @@ export async function createServiceRequest(data: {
   commission?: Record<string, any> | null
   paymentStatus?: string
 }) {
-  checkFirebase()
-  const docRef = await firestore.collection('serviceRequests').add({
+  await connectToDatabase()
+  const doc = await ServiceRequest.create({
     ...data,
     adminNotes: null,
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    createdAt: new Date(),
+    updatedAt: new Date(),
   })
-  
-  // Fetch service for the response
-  const serviceDoc = await firestore.collection('services').doc(data.serviceId).get()
+  const obj = docToObject(doc)
+
+  const serviceDoc = await Service.findById(data.serviceId).lean()
   return {
-    id: docRef.id,
+    id: obj.id,
     ...data,
     adminNotes: null,
-    service: serviceDoc.exists
-      ? { id: serviceDoc.id, name: serviceDoc.data()!.name, price: serviceDoc.data()!.price }
+    service: serviceDoc
+      ? { id: docToObject(serviceDoc).id, name: serviceDoc.name, price: serviceDoc.price }
       : null,
   }
 }
 
 export async function updateServiceRequest(id: string, data: Record<string, any>) {
-  checkFirebase()
-  await firestore.collection('serviceRequests').doc(id).update({
-    ...data,
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  })
-  
-  // Return the updated request with joined data
-  const doc = await firestore.collection('serviceRequests').doc(id).get()
-  const requestData = convertTimestamps(doc.data()!)
-  
-  const beneficiaryDoc = await firestore.collection('beneficiaries').doc(requestData.beneficiaryId).get()
-  const serviceDoc = await firestore.collection('services').doc(requestData.serviceId).get()
-  
-  // Check for assignment
-  const assignmentSnapshot = await firestore.collection('serviceAssignments')
-    .where('requestId', '==', id)
-    .limit(1)
-    .get()
-  
+  await connectToDatabase()
+  await ServiceRequest.findByIdAndUpdate(id, { ...data, updatedAt: new Date() })
+
+  const updatedDoc = await ServiceRequest.findById(id).lean()
+  if (!updatedDoc) return null
+  const requestData = convertTimestamps(docToObject(updatedDoc))
+
+  const beneficiaryDoc = await Beneficiary.findById(requestData.beneficiaryId).lean()
+  const serviceDoc = await Service.findById(requestData.serviceId).lean()
+
+  const assignDoc = await ServiceAssignment.findOne({ requestId: id }).lean()
+
   let assignment = null
-  if (!assignmentSnapshot.empty) {
-    const assignData = convertTimestamps(assignmentSnapshot.docs[0].data())
-    const nurseDoc = await firestore.collection('nurses').doc(assignData.nurseId).get()
+  if (assignDoc) {
+    const assignData = convertTimestamps(docToObject(assignDoc))
+    const nurseDoc = await Nurse.findById(assignData.nurseId).lean()
     assignment = {
-      id: assignmentSnapshot.docs[0].id,
+      id: assignData.id,
       ...assignData,
-      nurse: nurseDoc.exists
+      nurse: nurseDoc
         ? {
-            id: nurseDoc.id,
-            firstName: nurseDoc.data()!.firstName,
-            secondName: nurseDoc.data()!.secondName,
-            thirdName: nurseDoc.data()!.thirdName,
-            lastName: nurseDoc.data()!.lastName,
-            phone: nurseDoc.data()!.phone || null,
+            id: docToObject(nurseDoc).id,
+            firstName: nurseDoc.firstName,
+            secondName: nurseDoc.secondName,
+            thirdName: nurseDoc.thirdName,
+            lastName: nurseDoc.lastName,
+            phone: nurseDoc.phone || null,
           }
         : null,
     }
   }
 
   return {
-    id: doc.id,
+    id: requestData.id,
     ...requestData,
-    beneficiary: beneficiaryDoc.exists
-      ? { id: beneficiaryDoc.id, name: beneficiaryDoc.data()!.name, phone: beneficiaryDoc.data()!.phone }
+    beneficiary: beneficiaryDoc
+      ? { id: docToObject(beneficiaryDoc).id, name: beneficiaryDoc.name, phone: beneficiaryDoc.phone }
       : null,
-    service: serviceDoc.exists
-      ? { id: serviceDoc.id, name: serviceDoc.data()!.name, price: serviceDoc.data()!.price }
+    service: serviceDoc
+      ? { id: docToObject(serviceDoc).id, name: serviceDoc.name, price: serviceDoc.price }
       : null,
     assignment,
   }
 }
 
 export async function countServiceRequests(status?: string) {
-  checkFirebase()
-  if (status) {
-    // Filter in code to avoid composite index
-    const snapshot = await firestore.collection('serviceRequests').get()
-    return snapshot.docs.filter(d => d.data().status === status).length
-  }
-  const snapshot = await firestore.collection('serviceRequests').get()
-  return snapshot.size
+  await connectToDatabase()
+  const filter: any = {}
+  if (status) filter.status = status
+  return ServiceRequest.countDocuments(filter)
 }
 
 export async function getCompletedServiceRevenue() {
-  checkFirebase()
-  const snapshot = await firestore.collection('serviceRequests')
-    .where('status', '==', 'completed')
-    .get()
-  
+  await connectToDatabase()
+  const completedRequests = await ServiceRequest.find({ status: 'completed' }).lean()
+
   let totalRevenue = 0
-  for (const doc of snapshot.docs) {
-    const data = doc.data()
-    const serviceDoc = await firestore.collection('services').doc(data.serviceId).get()
-    if (serviceDoc.exists) {
-      totalRevenue += serviceDoc.data()!.price || 0
+  for (const req of completedRequests) {
+    const serviceDoc = await Service.findById(req.serviceId).lean()
+    if (serviceDoc) {
+      totalRevenue += serviceDoc.price || 0
     }
   }
   return totalRevenue
@@ -528,43 +780,37 @@ export async function getCompletedServiceRevenue() {
 // ==================== SERVICE ASSIGNMENTS ====================
 
 export async function getAssignmentByRequestId(requestId: string) {
-  checkFirebase()
-  const snapshot = await firestore.collection('serviceAssignments')
-    .where('requestId', '==', requestId)
-    .limit(1)
-    .get()
-  if (snapshot.empty) return null
-  return docToObject(snapshot.docs[0])
+  await connectToDatabase()
+  const doc = await ServiceAssignment.findOne({ requestId }).lean()
+  if (!doc) return null
+  return convertTimestamps(docToObject(doc))
 }
 
 export async function getAssignmentsByNurseId(nurseId: string) {
-  checkFirebase()
-  // Fetch assignments for nurse, sort in code to avoid composite index
-  const snapshot = await firestore.collection('serviceAssignments')
-    .where('nurseId', '==', nurseId)
-    .get()
-  
-  const assignments = []
-  for (const doc of snapshot.docs) {
-    const data = convertTimestamps(doc.data())
-    const requestDoc = await firestore.collection('serviceRequests').doc(data.requestId).get()
-    
-    if (requestDoc.exists) {
-      const requestData = convertTimestamps(requestDoc.data()!)
-      const beneficiaryDoc = await firestore.collection('beneficiaries').doc(requestData.beneficiaryId).get()
-      const serviceDoc = await firestore.collection('services').doc(requestData.serviceId).get()
-      
+  await connectToDatabase()
+  const assignmentDocs = await ServiceAssignment.find({ nurseId }).lean()
+
+  const assignments: any[] = []
+  for (const doc of assignmentDocs) {
+    const data = convertTimestamps(docToObject(doc))
+    const requestDoc = await ServiceRequest.findById(data.requestId).lean()
+
+    if (requestDoc) {
+      const requestData = convertTimestamps(docToObject(requestDoc))
+      const beneficiaryDoc = await Beneficiary.findById(requestData.beneficiaryId).lean()
+      const serviceDoc = await Service.findById(requestData.serviceId).lean()
+
       assignments.push({
-        id: doc.id,
+        id: data.id,
         ...data,
         request: {
-          id: requestDoc.id,
+          id: requestData.id,
           ...requestData,
-          beneficiary: beneficiaryDoc.exists
-            ? { id: beneficiaryDoc.id, name: beneficiaryDoc.data()!.name, phone: beneficiaryDoc.data()!.phone, location: beneficiaryDoc.data()!.location }
+          beneficiary: beneficiaryDoc
+            ? { id: docToObject(beneficiaryDoc).id, name: beneficiaryDoc.name, phone: beneficiaryDoc.phone, location: beneficiaryDoc.location }
             : null,
-          service: serviceDoc.exists
-            ? { id: serviceDoc.id, name: serviceDoc.data()!.name, price: serviceDoc.data()!.price, description: serviceDoc.data()!.description }
+          service: serviceDoc
+            ? { id: docToObject(serviceDoc).id, name: serviceDoc.name, price: serviceDoc.price, description: serviceDoc.description }
             : null,
         },
       })
@@ -578,78 +824,74 @@ export async function createAssignment(data: {
   nurseId: string
   status: string
 }) {
-  checkFirebase()
-  const docRef = await firestore.collection('serviceAssignments').add({
+  await connectToDatabase()
+  const doc = await ServiceAssignment.create({
     ...data,
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    createdAt: new Date(),
+    updatedAt: new Date(),
   })
+  const obj = docToObject(doc)
 
-  // Fetch the nurse for the response
-  const nurseDoc = await firestore.collection('nurses').doc(data.nurseId).get()
-  // Fetch the request with beneficiary and service
-  const requestDoc = await firestore.collection('serviceRequests').doc(data.requestId).get()
-  const requestData = convertTimestamps(requestDoc.data()!)
-  const beneficiaryDoc = await firestore.collection('beneficiaries').doc(requestData.beneficiaryId).get()
-  const serviceDoc = await firestore.collection('services').doc(requestData.serviceId).get()
+  const nurseDoc = await Nurse.findById(data.nurseId).lean()
+  const requestDoc = await ServiceRequest.findById(data.requestId).lean()
+  const requestData = convertTimestamps(docToObject(requestDoc!))
+  const beneficiaryDoc = await Beneficiary.findById(requestData.beneficiaryId).lean()
+  const serviceDoc = await Service.findById(requestData.serviceId).lean()
 
   return {
-    id: docRef.id,
+    id: obj.id,
     ...data,
-    nurse: nurseDoc.exists
-      ? { id: nurseDoc.id, firstName: nurseDoc.data()!.firstName, secondName: nurseDoc.data()!.secondName, thirdName: nurseDoc.data()!.thirdName, lastName: nurseDoc.data()!.lastName, phone: nurseDoc.data()!.phone || null }
+    nurse: nurseDoc
+      ? { id: docToObject(nurseDoc).id, firstName: nurseDoc.firstName, secondName: nurseDoc.secondName, thirdName: nurseDoc.thirdName, lastName: nurseDoc.lastName, phone: nurseDoc.phone || null }
       : null,
     request: {
-      id: requestDoc.id,
+      id: requestData.id,
       ...requestData,
-      beneficiary: beneficiaryDoc.exists
-        ? { id: beneficiaryDoc.id, name: beneficiaryDoc.data()!.name }
+      beneficiary: beneficiaryDoc
+        ? { id: docToObject(beneficiaryDoc).id, name: beneficiaryDoc.name }
         : null,
-      service: serviceDoc.exists
-        ? { id: serviceDoc.id, name: serviceDoc.data()!.name, price: serviceDoc.data()!.price }
+      service: serviceDoc
+        ? { id: docToObject(serviceDoc).id, name: serviceDoc.name, price: serviceDoc.price }
         : null,
     },
   }
 }
 
 export async function getAssignmentById(id: string) {
-  checkFirebase()
-  const doc = await firestore.collection('serviceAssignments').doc(id).get()
-  if (!doc.exists) return null
-  return docToObject(doc)
+  await connectToDatabase()
+  const doc = await ServiceAssignment.findById(id).lean()
+  if (!doc) return null
+  return convertTimestamps(docToObject(doc))
 }
 
 export async function updateAssignment(id: string, data: Record<string, any>) {
-  checkFirebase()
-  await firestore.collection('serviceAssignments').doc(id).update({
-    ...data,
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  })
-  
-  // Return the updated assignment with joined data
-  const doc = await firestore.collection('serviceAssignments').doc(id).get()
-  const assignData = convertTimestamps(doc.data()!)
-  
-  const requestDoc = await firestore.collection('serviceRequests').doc(assignData.requestId).get()
+  await connectToDatabase()
+  await ServiceAssignment.findByIdAndUpdate(id, { ...data, updatedAt: new Date() })
+
+  const updatedDoc = await ServiceAssignment.findById(id).lean()
+  if (!updatedDoc) return null
+  const assignData = convertTimestamps(docToObject(updatedDoc))
+
+  const requestDoc = await ServiceRequest.findById(assignData.requestId).lean()
   let requestWithJoins = null
-  if (requestDoc.exists) {
-    const requestData = convertTimestamps(requestDoc.data()!)
-    const beneficiaryDoc = await firestore.collection('beneficiaries').doc(requestData.beneficiaryId).get()
-    const serviceDoc = await firestore.collection('services').doc(requestData.serviceId).get()
+  if (requestDoc) {
+    const requestData = convertTimestamps(docToObject(requestDoc))
+    const beneficiaryDoc = await Beneficiary.findById(requestData.beneficiaryId).lean()
+    const serviceDoc = await Service.findById(requestData.serviceId).lean()
     requestWithJoins = {
-      id: requestDoc.id,
+      id: requestData.id,
       ...requestData,
-      beneficiary: beneficiaryDoc.exists
-        ? { id: beneficiaryDoc.id, name: beneficiaryDoc.data()!.name, phone: beneficiaryDoc.data()!.phone }
+      beneficiary: beneficiaryDoc
+        ? { id: docToObject(beneficiaryDoc).id, name: beneficiaryDoc.name, phone: beneficiaryDoc.phone }
         : null,
-      service: serviceDoc.exists
-        ? { id: serviceDoc.id, name: serviceDoc.data()!.name, price: serviceDoc.data()!.price }
+      service: serviceDoc
+        ? { id: docToObject(serviceDoc).id, name: serviceDoc.name, price: serviceDoc.price }
         : null,
     }
   }
 
   return {
-    id: doc.id,
+    id: assignData.id,
     ...assignData,
     request: requestWithJoins,
   }
@@ -658,28 +900,22 @@ export async function updateAssignment(id: string, data: Record<string, any>) {
 // ==================== PAYMENT METHODS ====================
 
 export async function getAllPaymentMethods() {
-  checkFirebase()
-  const snapshot = await firestore.collection('paymentMethods').orderBy('createdAt', 'desc').get()
-  return snapshot.docs.map(docToObject)
+  await connectToDatabase()
+  const docs = await PaymentMethodModel.find().sort({ createdAt: -1 }).lean()
+  return docs.map((doc: any) => convertTimestamps(docToObject(doc)))
 }
 
 export async function getActivePaymentMethods() {
-  checkFirebase()
-  // Fetch all payment methods ordered by createdAt, then filter active ones in code
-  // This avoids the need for a composite Firestore index
-  const snapshot = await firestore.collection('paymentMethods')
-    .orderBy('createdAt', 'desc')
-    .get()
-  return snapshot.docs
-    .filter(doc => doc.data().isActive === true)
-    .map(docToObject)
+  await connectToDatabase()
+  const docs = await PaymentMethodModel.find({ isActive: true }).sort({ createdAt: -1 }).lean()
+  return docs.map((doc: any) => convertTimestamps(docToObject(doc)))
 }
 
 export async function getPaymentMethodById(id: string) {
-  checkFirebase()
-  const doc = await firestore.collection('paymentMethods').doc(id).get()
-  if (!doc.exists) return null
-  return docToObject(doc)
+  await connectToDatabase()
+  const doc = await PaymentMethodModel.findById(id).lean()
+  if (!doc) return null
+  return convertTimestamps(docToObject(doc))
 }
 
 export async function createPaymentMethod(data: {
@@ -687,28 +923,27 @@ export async function createPaymentMethod(data: {
   accountInfo: string
   isActive: boolean
 }) {
-  checkFirebase()
-  const docRef = await firestore.collection('paymentMethods').add({
+  await connectToDatabase()
+  const doc = await PaymentMethodModel.create({
     ...data,
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    createdAt: new Date(),
+    updatedAt: new Date(),
   })
-  return { id: docRef.id, ...data }
+  const obj = docToObject(doc)
+  return { id: obj.id, ...data }
 }
 
 export async function updatePaymentMethod(id: string, data: Record<string, any>) {
-  checkFirebase()
-  await firestore.collection('paymentMethods').doc(id).update({
-    ...data,
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  })
-  const doc = await firestore.collection('paymentMethods').doc(id).get()
-  return docToObject(doc)
+  await connectToDatabase()
+  await PaymentMethodModel.findByIdAndUpdate(id, { ...data, updatedAt: new Date() })
+  const doc = await PaymentMethodModel.findById(id).lean()
+  if (!doc) return null
+  return convertTimestamps(docToObject(doc))
 }
 
 export async function deletePaymentMethod(id: string) {
-  checkFirebase()
-  await firestore.collection('paymentMethods').doc(id).delete()
+  await connectToDatabase()
+  await PaymentMethodModel.findByIdAndDelete(id)
 }
 
 // ==================== ACTIVITY LOG ====================
@@ -720,57 +955,78 @@ export async function createActivityLog(data: {
   userName?: string
   metadata?: Record<string, any>
 }) {
-  checkFirebase()
-  const docRef = await firestore.collection('activityLog').add({
+  await connectToDatabase()
+  const doc = await ActivityLog.create({
     ...data,
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    createdAt: new Date(),
   })
-  return { id: docRef.id, ...data }
+  const obj = docToObject(doc)
+  return { id: obj.id, ...data }
 }
 
 export async function getActivityLogs(limitCount: number = 20) {
-  checkFirebase()
-  const snapshot = await firestore.collection('activityLog')
-    .orderBy('createdAt', 'desc')
+  await connectToDatabase()
+  const docs = await ActivityLog.find()
+    .sort({ createdAt: -1 })
     .limit(limitCount)
-    .get()
-  return snapshot.docs.map(docToObject)
+    .lean()
+  return docs.map((doc: any) => convertTimestamps(docToObject(doc)))
 }
 
-// ==================== ALL BENEFICIARIES WITH DETAILS ====================
+export async function getDetailedAuditLogs(filters?: {
+  userId?: string
+  type?: string
+  startDate?: string
+  endDate?: string
+  limitCount?: number
+}) {
+  await connectToDatabase()
+  const filter: any = {}
 
-export async function getAllBeneficiaries() {
-  checkFirebase()
-  const snapshot = await firestore.collection('beneficiaries')
-    .orderBy('createdAt', 'desc')
-    .get()
-  return snapshot.docs.map(doc => {
-    const data = convertTimestamps(doc.data())
-    const { password, ...rest } = data
-    return { id: doc.id, ...rest }
-  })
+  if (filters?.userId) filter.userId = filters.userId
+  if (filters?.type) filter.type = filters.type
+
+  if (filters?.startDate || filters?.endDate) {
+    filter.createdAt = {}
+    if (filters.startDate) filter.createdAt.$gte = new Date(filters.startDate)
+    if (filters.endDate) filter.createdAt.$lte = new Date(filters.endDate)
+  }
+
+  const docs = await ActivityLog.find(filter)
+    .sort({ createdAt: -1 })
+    .limit(filters?.limitCount || 100)
+    .lean()
+
+  return docs.map((doc: any) => convertTimestamps(docToObject(doc)))
+}
+
+export async function exportAuditLogs(format: string = 'json') {
+  await connectToDatabase()
+  const docs = await ActivityLog.find()
+    .sort({ createdAt: -1 })
+    .limit(1000)
+    .lean()
+  return docs.map((doc: any) => convertTimestamps(docToObject(doc)))
+}
+
+export async function getSubAdminActivityLogs(subAdminId: string) {
+  await connectToDatabase()
+  const docs = await ActivityLog.find({ userId: subAdminId })
+    .sort({ createdAt: -1 })
+    .limit(100)
+    .lean()
+  return docs.map((doc: any) => convertTimestamps(docToObject(doc)))
 }
 
 // ==================== CHAT SYSTEM ====================
 
 export async function getChatMessages(requestId: string, limitCount: number = 50) {
-  checkFirebase()
-  // Fetch without orderBy to avoid needing a composite Firestore index
-  const snapshot = await firestore.collection('chats')
-    .where('requestId', '==', requestId)
+  await connectToDatabase()
+  const docs = await Chat.find({ requestId })
+    .sort({ createdAt: 1 })
     .limit(limitCount)
-    .get()
-  const docs = snapshot.docs.map(docToObject)
-  // Sort by createdAt ascending in code
-  docs.sort((a: any, b: any) => {
-    const getTime = (t: any) => {
-      if (!t) return 0
-      if (typeof t === 'object' && t !== null && 'seconds' in t) return t.seconds * 1000
-      return new Date(t).getTime() || 0
-    }
-    return getTime(a.createdAt) - getTime(b.createdAt)
-  })
-  return docs
+    .lean()
+  return docs.map((doc: any) => convertTimestamps(docToObject(doc)))
 }
 
 export async function sendChatMessage(data: {
@@ -780,28 +1036,19 @@ export async function sendChatMessage(data: {
   senderType: 'nurse' | 'beneficiary' | 'admin'
   message: string
 }) {
-  checkFirebase()
-  const docRef = await firestore.collection('chats').add({
+  await connectToDatabase()
+  const doc = await Chat.create({
     ...data,
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    createdAt: new Date(),
   })
-  return { id: docRef.id, ...data }
+  const obj = docToObject(doc)
+  return { id: obj.id, ...data }
 }
 
 export async function deleteChatMessages(requestId: string) {
-  checkFirebase()
-  const snapshot = await firestore.collection('chats')
-    .where('requestId', '==', requestId)
-    .get()
-
-  if (snapshot.empty) return { deletedCount: 0 }
-
-  const batch = firestore.batch()
-  snapshot.docs.forEach((doc: any) => {
-    batch.delete(doc.ref)
-  })
-  await batch.commit()
-  return { deletedCount: snapshot.size }
+  await connectToDatabase()
+  const result = await Chat.deleteMany({ requestId })
+  return { deletedCount: result.deletedCount }
 }
 
 // ==================== COUPONS ====================
@@ -813,161 +1060,140 @@ export async function createCoupon(data: {
   expiresAt: string
   isActive: boolean
 }) {
-  checkFirebase()
-  const docRef = await firestore.collection('coupons').add({
+  await connectToDatabase()
+  const doc = await Coupon.create({
     ...data,
     usedCount: 0,
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    createdAt: new Date(),
+    updatedAt: new Date(),
   })
-  return { id: docRef.id, ...data, usedCount: 0 }
+  const obj = docToObject(doc)
+  return { id: obj.id, ...data, usedCount: 0 }
 }
 
 export async function getAllCoupons() {
-  checkFirebase()
-  const snapshot = await firestore.collection('coupons')
-    .orderBy('createdAt', 'desc')
-    .get()
-  return snapshot.docs.map(docToObject)
+  await connectToDatabase()
+  const docs = await Coupon.find().sort({ createdAt: -1 }).lean()
+  return docs.map((doc: any) => convertTimestamps(docToObject(doc)))
 }
 
 export async function getCouponById(id: string) {
-  checkFirebase()
-  const doc = await firestore.collection('coupons').doc(id).get()
-  if (!doc.exists) return null
-  return docToObject(doc)
+  await connectToDatabase()
+  const doc = await Coupon.findById(id).lean()
+  if (!doc) return null
+  return convertTimestamps(docToObject(doc))
 }
 
 export async function updateCoupon(id: string, data: Record<string, any>) {
-  checkFirebase()
-  await firestore.collection('coupons').doc(id).update({
-    ...data,
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  })
-  const doc = await firestore.collection('coupons').doc(id).get()
-  return docToObject(doc)
+  await connectToDatabase()
+  await Coupon.findByIdAndUpdate(id, { ...data, updatedAt: new Date() })
+  const doc = await Coupon.findById(id).lean()
+  if (!doc) return null
+  return convertTimestamps(docToObject(doc))
 }
 
 export async function deleteCoupon(id: string) {
-  checkFirebase()
-  await firestore.collection('coupons').doc(id).delete()
+  await connectToDatabase()
+  await Coupon.findByIdAndDelete(id)
 }
 
 export async function validateCoupon(code: string) {
-  checkFirebase()
-  // Use single where clause to avoid needing a composite Firestore index
-  // Filter isActive in code instead
-  const snapshot = await firestore.collection('coupons')
-    .where('code', '==', code)
-    .limit(1)
-    .get()
-  if (snapshot.empty) return null
+  await connectToDatabase()
+  const doc = await Coupon.findOne({ code, isActive: true }).lean()
+  if (!doc) return null
 
-  const coupon = docToObject(snapshot.docs[0])
-  
-  // Check if coupon is active
+  const coupon = convertTimestamps(docToObject(doc))
+
   if (!coupon.isActive) return null
 
   const now = new Date()
-
-  // Check expiry
-  if (coupon.expiresAt && new Date(coupon.expiresAt) < now) {
-    return null
-  }
-
-  // Check max uses
-  if (coupon.maxUses && coupon.usedCount >= coupon.maxUses) {
-    return null
-  }
+  if (coupon.expiresAt && new Date(coupon.expiresAt) < now) return null
+  if (coupon.maxUses && coupon.usedCount >= coupon.maxUses) return null
 
   return coupon
 }
 
 export async function incrementCouponUsage(couponId: string) {
-  checkFirebase()
-  await firestore.collection('coupons').doc(couponId).update({
-    usedCount: admin.firestore.FieldValue.increment(1),
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  await connectToDatabase()
+  await Coupon.findByIdAndUpdate(couponId, {
+    $inc: { usedCount: 1 },
+    updatedAt: new Date(),
   })
 }
 
 // ==================== LOYALTY PROGRAM ====================
 
 export async function getLoyaltyPoints(beneficiaryId: string) {
-  checkFirebase()
-  // Fetch without orderBy to avoid needing a composite Firestore index
-  const snapshot = await firestore.collection('loyaltyPoints')
-    .where('beneficiaryId', '==', beneficiaryId)
-    .get()
-  const docs = snapshot.docs.map(docToObject)
-  // Sort by createdAt descending in code
-  docs.sort((a: any, b: any) => {
-    const getTime = (t: any) => {
-      if (!t) return 0
-      if (typeof t === 'object' && t !== null && 'seconds' in t) return t.seconds * 1000
-      return new Date(t).getTime() || 0
-    }
-    return getTime(b.createdAt) - getTime(a.createdAt)
-  })
-  return docs
+  await connectToDatabase()
+  const docs = await LoyaltyPoint.find({ beneficiaryId })
+    .sort({ createdAt: -1 })
+    .lean()
+  return docs.map((doc: any) => convertTimestamps(docToObject(doc)))
 }
 
 export async function addLoyaltyPoints(beneficiaryId: string, points: number, reason: string) {
-  checkFirebase()
-  const docRef = await firestore.collection('loyaltyPoints').add({
+  await connectToDatabase()
+  const doc = await LoyaltyPoint.create({
     beneficiaryId,
     points,
     reason,
     type: 'earn',
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    createdAt: new Date(),
+  })
+  const obj = docToObject(doc)
+
+  // Update beneficiary total points atomically using $inc
+  await Beneficiary.findByIdAndUpdate(beneficiaryId, {
+    $inc: { loyaltyPoints: points },
+    updatedAt: new Date(),
   })
 
-  // Update beneficiary total points atomically using FieldValue.increment
-  await firestore.collection('beneficiaries').doc(beneficiaryId).update({
-    loyaltyPoints: admin.firestore.FieldValue.increment(points),
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  })
-
-  return { id: docRef.id, beneficiaryId, points, reason, type: 'earn' as const }
+  return { id: obj.id, beneficiaryId, points, reason, type: 'earn' as const }
 }
 
 export async function redeemLoyaltyPoints(beneficiaryId: string, points: number) {
-  checkFirebase()
-  // Use Firestore transaction for atomic read-check-write
-  const result = await firestore.runTransaction(async (transaction) => {
-    const benefDoc = await transaction.get(firestore.collection('beneficiaries').doc(beneficiaryId))
-    if (!benefDoc.exists) throw new Error('المستفيد غير موجود')
+  await connectToDatabase()
 
-    const currentPoints = benefDoc.data()!.loyaltyPoints || 0
-    if (currentPoints < points) throw new Error('رصيد النقاط غير كافٍ')
+  // Use Mongoose session for atomic read-check-write
+  const session = await mongoose.startSession()
+  try {
+    let result: any = null
 
-    // Add redemption record
-    const docRef = firestore.collection('loyaltyPoints').doc()
-    transaction.set(docRef, {
-      beneficiaryId,
-      points: -points,
-      reason: `استبدال ${points} نقطة`,
-      type: 'redeem',
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    await session.withTransaction(async () => {
+      const benefDoc = await Beneficiary.findById(beneficiaryId).session(session)
+      if (!benefDoc) throw new Error('المستفيد غير موجود')
+
+      const currentPoints = benefDoc.loyaltyPoints || 0
+      if (currentPoints < points) throw new Error('رصيد النقاط غير كافٍ')
+
+      // Add redemption record
+      const [loyaltyDoc] = await LoyaltyPoint.create([{
+        beneficiaryId,
+        points: -points,
+        reason: `استبدال ${points} نقطة`,
+        type: 'redeem',
+        createdAt: new Date(),
+      }], { session })
+
+      // Update beneficiary points atomically
+      benefDoc.loyaltyPoints = currentPoints - points
+      benefDoc.updatedAt = new Date()
+      await benefDoc.save({ session })
+
+      result = { id: docToObject(loyaltyDoc).id, beneficiaryId, points: -points, reason: `استبدال ${points} نقطة`, type: 'redeem' as const }
     })
 
-    // Update beneficiary points atomically
-    transaction.update(firestore.collection('beneficiaries').doc(beneficiaryId), {
-      loyaltyPoints: currentPoints - points,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    })
-
-    return { id: docRef.id, beneficiaryId, points: -points, reason: `استبدال ${points} نقطة`, type: 'redeem' as const }
-  })
-
-  return result
+    return result
+  } finally {
+    await session.endSession()
+  }
 }
 
 export async function getLoyaltyBalance(beneficiaryId: string) {
-  checkFirebase()
-  const doc = await firestore.collection('beneficiaries').doc(beneficiaryId).get()
-  if (!doc.exists) return 0
-  return doc.data()!.loyaltyPoints || 0
+  await connectToDatabase()
+  const doc = await Beneficiary.findById(beneficiaryId).lean()
+  if (!doc) return 0
+  return doc.loyaltyPoints || 0
 }
 
 // ==================== EMERGENCY REQUESTS ====================
@@ -986,14 +1212,14 @@ export async function createEmergencyRequest(data: {
   paymentStatus?: string
   status?: string
 }) {
-  checkFirebase()
-  const benefDoc = await firestore.collection('beneficiaries').doc(data.beneficiaryId).get()
-  const beneficiaryName = benefDoc.exists ? benefDoc.data()!.name : 'غير معروف'
+  await connectToDatabase()
+  const benefDoc = await Beneficiary.findById(data.beneficiaryId).lean()
+  const beneficiaryName = benefDoc ? benefDoc.name : 'غير معروف'
 
   const { status: providedStatus, paymentStatus, ...restData } = data
   const finalStatus = providedStatus || 'pending'
 
-  // Filter out undefined values to prevent Firestore errors
+  // Filter out undefined values
   const cleanData: Record<string, any> = {}
   for (const [key, value] of Object.entries(restData)) {
     if (value !== undefined) {
@@ -1001,118 +1227,138 @@ export async function createEmergencyRequest(data: {
     }
   }
 
-  const docRef = await firestore.collection('emergencyRequests').add({
+  const doc = await EmergencyRequest.create({
     ...cleanData,
     beneficiaryName,
     status: finalStatus,
     paymentStatus: paymentStatus || 'unpaid',
     isEmergency: true,
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    createdAt: new Date(),
+    updatedAt: new Date(),
   })
-  return { id: docRef.id, ...cleanData, beneficiaryName, status: finalStatus, paymentStatus: paymentStatus || 'unpaid', isEmergency: true }
+  const obj = docToObject(doc)
+  return { id: obj.id, ...cleanData, beneficiaryName, status: finalStatus, paymentStatus: paymentStatus || 'unpaid', isEmergency: true }
 }
 
 export async function getEmergencyRequestsByBeneficiary(beneficiaryId: string) {
-  checkFirebase()
-  // Fetch without orderBy to avoid needing a composite Firestore index
-  // Sort in code instead (same pattern as other beneficiary queries)
-  const snapshot = await firestore.collection('emergencyRequests')
-    .where('beneficiaryId', '==', beneficiaryId)
-    .get()
+  await connectToDatabase()
+  const docs = await EmergencyRequest.find({ beneficiaryId })
+    .sort({ createdAt: -1 })
+    .lean()
 
-  const requests = []
-  for (const doc of snapshot.docs) {
-    const data = convertTimestamps(doc.data())
+  const requests: any[] = []
+  for (const doc of docs) {
+    const data = convertTimestamps(docToObject(doc))
 
-    // Check for emergency assignment
-    const assignmentSnapshot = await firestore.collection('emergencyAssignments')
-      .where('emergencyRequestId', '==', doc.id)
-      .limit(1)
-      .get()
+    const assignDoc = await EmergencyAssignment.findOne({ emergencyRequestId: data.id }).lean()
 
     let assignment = null
-    if (!assignmentSnapshot.empty) {
-      const assignData = convertTimestamps(assignmentSnapshot.docs[0].data())
-      const nurseDoc = await firestore.collection('nurses').doc(assignData.nurseId).get()
+    if (assignDoc) {
+      const assignData = convertTimestamps(docToObject(assignDoc))
+      const nurseDoc = await Nurse.findById(assignData.nurseId).lean()
       assignment = {
-        id: assignmentSnapshot.docs[0].id,
+        id: assignData.id,
         ...assignData,
-        nurse: nurseDoc.exists
+        nurse: nurseDoc
           ? {
-              id: nurseDoc.id,
-              firstName: nurseDoc.data()!.firstName,
-              lastName: nurseDoc.data()!.lastName,
-              phone: nurseDoc.data()!.phone || null,
+              id: docToObject(nurseDoc).id,
+              firstName: nurseDoc.firstName,
+              lastName: nurseDoc.lastName,
+              phone: nurseDoc.phone || null,
             }
           : null,
       }
     }
 
     requests.push({
-      id: doc.id,
+      id: data.id,
       ...data,
       assignment,
     })
   }
 
-  // Sort by createdAt descending in code
-  requests.sort((a: any, b: any) => {
-    const getTime = (t: any) => {
-      if (!t) return 0
-      if (typeof t === 'object' && t !== null && 'seconds' in t) return t.seconds * 1000
-      return new Date(t).getTime() || 0
-    }
-    return getTime(b.createdAt) - getTime(a.createdAt)
-  })
   return requests
+}
+
+export async function getEmergencyRequests() {
+  await connectToDatabase()
+  const docs = await EmergencyRequest.find().sort({ createdAt: -1 }).lean()
+  return docs.map((doc: any) => convertTimestamps(docToObject(doc)))
+}
+
+export async function updateEmergencyRequest(id: string, data: Record<string, any>) {
+  await connectToDatabase()
+  await EmergencyRequest.findByIdAndUpdate(id, { ...data, updatedAt: new Date() })
+  const doc = await EmergencyRequest.findById(id).lean()
+  if (!doc) return null
+  return convertTimestamps(docToObject(doc))
+}
+
+export async function getEmergencyRequestById(id: string) {
+  await connectToDatabase()
+  const doc = await EmergencyRequest.findById(id).lean()
+  if (!doc) return null
+  return convertTimestamps(docToObject(doc))
+}
+
+// ==================== EMERGENCY ASSIGNMENTS ====================
+
+export async function createEmergencyAssignment(data: {
+  emergencyRequestId: string
+  nurseId: string
+  status: string
+}) {
+  await connectToDatabase()
+  const doc = await EmergencyAssignment.create({
+    ...data,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  })
+  const obj = docToObject(doc)
+
+  const nurseDoc = await Nurse.findById(data.nurseId).lean()
+  return {
+    id: obj.id,
+    ...data,
+    nurse: nurseDoc
+      ? { id: docToObject(nurseDoc).id, firstName: nurseDoc.firstName, lastName: nurseDoc.lastName, phone: nurseDoc.phone || null }
+      : null,
+  }
 }
 
 // ==================== REFERRAL SYSTEM ====================
 
 export async function generateReferralCode(beneficiaryId: string) {
-  checkFirebase()
-  // Check if already has a code
-  const snapshot = await firestore.collection('referrals')
-    .where('beneficiaryId', '==', beneficiaryId)
-    .limit(1)
-    .get()
-
-  if (!snapshot.empty) {
-    return docToObject(snapshot.docs[0])
+  await connectToDatabase()
+  const existing = await Referral.findOne({ beneficiaryId }).lean()
+  if (existing) {
+    return convertTimestamps(docToObject(existing))
   }
 
-  // Generate unique code
   const code = 'AFY-' + Math.random().toString(36).substring(2, 8).toUpperCase()
-  const docRef = await firestore.collection('referrals').add({
+  const doc = await Referral.create({
     beneficiaryId,
     code,
     uses: 0,
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    createdAt: new Date(),
   })
-  return { id: docRef.id, beneficiaryId, code, uses: 0 }
+  const obj = docToObject(doc)
+  return { id: obj.id, beneficiaryId, code, uses: 0 }
 }
 
 export async function applyReferralCode(code: string, newBeneficiaryId: string) {
-  checkFirebase()
-  const snapshot = await firestore.collection('referrals')
-    .where('code', '==', code)
-    .limit(1)
-    .get()
+  await connectToDatabase()
+  const doc = await Referral.findOne({ code }).lean()
+  if (!doc) return null
 
-  if (snapshot.empty) return null
+  const referral = convertTimestamps(docToObject(doc))
 
-  const referral = docToObject(snapshot.docs[0])
-
-  // Can't use own code
   if (referral.beneficiaryId === newBeneficiaryId) {
     throw new Error('لا يمكنك استخدام كود الإحالة الخاص بك')
   }
 
-  // Increment uses
-  await firestore.collection('referrals').doc(referral.id).update({
-    uses: admin.firestore.FieldValue.increment(1),
-  })
+  // Increment uses using $inc
+  await Referral.findByIdAndUpdate(referral.id, { $inc: { uses: 1 } })
 
   // Give both parties loyalty points
   await addLoyaltyPoints(referral.beneficiaryId, 50, 'مكافأة إحالة - شخص جديد استخدم كودك')
@@ -1122,138 +1368,13 @@ export async function applyReferralCode(code: string, newBeneficiaryId: string) 
 }
 
 export async function getReferralByBeneficiary(beneficiaryId: string) {
-  checkFirebase()
-  const snapshot = await firestore.collection('referrals')
-    .where('beneficiaryId', '==', beneficiaryId)
-    .limit(1)
-    .get()
-  if (snapshot.empty) return null
-  return docToObject(snapshot.docs[0])
-}
-
-// ==================== NURSE DELETE / BLOCK / UNBLOCK ====================
-
-export async function deleteNurse(id: string) {
-  checkFirebase()
-  // Delete nurse's assignments first
-  const assignmentsSnapshot = await firestore.collection('serviceAssignments')
-    .where('nurseId', '==', id)
-    .get()
-  const batch = firestore.batch()
-  for (const doc of assignmentsSnapshot.docs) {
-    batch.delete(doc.ref)
-  }
-  await batch.commit()
-  // Delete the nurse document
-  await firestore.collection('nurses').doc(id).delete()
-}
-
-export async function blockNurse(id: string) {
-  checkFirebase()
-  await firestore.collection('nurses').doc(id).update({
-    status: 'blocked',
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  })
-  const doc = await firestore.collection('nurses').doc(id).get()
-  return docToObject(doc)
-}
-
-export async function unblockNurse(id: string) {
-  checkFirebase()
-  await firestore.collection('nurses').doc(id).update({
-    status: 'approved',
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  })
-  const doc = await firestore.collection('nurses').doc(id).get()
-  return docToObject(doc)
-}
-
-// ==================== BENEFICIARY DELETE / BLOCK / UNBLOCK ====================
-
-export async function deleteBeneficiary(id: string) {
-  checkFirebase()
-  // Delete beneficiary's service requests first
-  const requestsSnapshot = await firestore.collection('serviceRequests')
-    .where('beneficiaryId', '==', id)
-    .get()
-  const batch = firestore.batch()
-  for (const doc of requestsSnapshot.docs) {
-    batch.delete(doc.ref)
-  }
-  await batch.commit()
-  // Delete the beneficiary document
-  await firestore.collection('beneficiaries').doc(id).delete()
-}
-
-export async function blockBeneficiary(id: string) {
-  checkFirebase()
-  await firestore.collection('beneficiaries').doc(id).update({
-    status: 'blocked',
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  })
-  const doc = await firestore.collection('beneficiaries').doc(id).get()
-  return docToObject(doc)
-}
-
-export async function unblockBeneficiary(id: string) {
-  checkFirebase()
-  await firestore.collection('beneficiaries').doc(id).update({
-    status: 'active',
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  })
-  const doc = await firestore.collection('beneficiaries').doc(id).get()
-  return docToObject(doc)
-}
-
-// ==================== ADMIN SETTINGS ====================
-
-export async function getAdminSettings(subAdminId?: string) {
-  checkFirebase()
-  const docId = subAdminId ? `sub-admin-${subAdminId}` : 'admin'
-  const doc = await firestore.collection('appSettings').doc(docId).get()
-  if (!doc.exists) return null
-  return docToObject(doc)
-}
-
-export async function updateAdminSettings(data: Record<string, any>, subAdminId?: string) {
-  checkFirebase()
-  const docId = subAdminId ? `sub-admin-${subAdminId}` : 'admin'
-  await firestore.collection('appSettings').doc(docId).set({
-    ...data,
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  }, { merge: true })
-  const doc = await firestore.collection('appSettings').doc(docId).get()
-  return docToObject(doc)
+  await connectToDatabase()
+  const doc = await Referral.findOne({ beneficiaryId }).lean()
+  if (!doc) return null
+  return convertTimestamps(docToObject(doc))
 }
 
 // ==================== RATINGS ====================
-
-export async function getNurseRatings(nurseId: string) {
-  checkFirebase()
-  // Fetch without orderBy to avoid needing a composite Firestore index
-  const snapshot = await firestore.collection('ratings')
-    .where('nurseId', '==', nurseId)
-    .get()
-  const docs = snapshot.docs.map(docToObject)
-  // Sort by createdAt descending in code
-  docs.sort((a: any, b: any) => {
-    const getTime = (t: any) => {
-      if (!t) return 0
-      if (typeof t === 'object' && t !== null && 'seconds' in t) return t.seconds * 1000
-      return new Date(t).getTime() || 0
-    }
-    return getTime(b.createdAt) - getTime(a.createdAt)
-  })
-  return docs
-}
-
-export async function getAllRatings() {
-  checkFirebase()
-  const snapshot = await firestore.collection('ratings')
-    .orderBy('createdAt', 'desc')
-    .get()
-  return snapshot.docs.map(docToObject)
-}
 
 export async function createRating(data: {
   requestId: string
@@ -1265,407 +1386,55 @@ export async function createRating(data: {
   comment?: string
   serviceName?: string
 }) {
-  checkFirebase()
-  const docRef = await firestore.collection('ratings').add({
+  await connectToDatabase()
+  const doc = await Rating.create({
     ...data,
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    createdAt: new Date(),
+    updatedAt: new Date(),
   })
-  return { id: docRef.id, ...data }
+  const obj = docToObject(doc)
+  return { id: obj.id, ...data }
 }
 
-// ==================== SUB-ADMINS ====================
-
-export async function getSubAdminByPhone(phone: string) {
-  checkFirebase()
-  const snapshot = await firestore.collection('subAdmins').where('phone', '==', phone).limit(1).get()
-  if (snapshot.empty) return null
-  return docToObject(snapshot.docs[0])
+export async function getNurseRatings(nurseId: string) {
+  await connectToDatabase()
+  const docs = await Rating.find({ nurseId }).sort({ createdAt: -1 }).lean()
+  return docs.map((doc: any) => convertTimestamps(docToObject(doc)))
 }
 
-export async function getSubAdmins(adminId: string) {
-  checkFirebase()
-  try {
-    const snapshot = await firestore.collection('subAdmins')
-      .where('adminId', '==', adminId)
-      .orderBy('createdAt', 'desc')
-      .get()
-    return snapshot.docs.map(doc => {
-      const data = convertTimestamps(doc.data())
-      const { password, ...rest } = data
-      return { id: doc.id, ...rest }
-    })
-  } catch (error: any) {
-    // Fallback: try without orderBy (composite index may not exist yet)
-    console.warn('getSubAdmins: orderBy failed, trying without sort:', error.message)
-    try {
-      const snapshot = await firestore.collection('subAdmins')
-        .where('adminId', '==', adminId)
-        .get()
-      const docs = snapshot.docs.map(doc => {
-        const data = convertTimestamps(doc.data())
-        const { password, ...rest } = data
-        return { id: doc.id, ...rest }
-      })
-      // Sort client-side
-      docs.sort((a: any, b: any) => {
-        const getTime = (ts: any) => {
-          if (!ts) return 0
-          if (typeof ts === 'object' && ts !== null && 'seconds' in ts) return ts.seconds * 1000
-          return new Date(ts).getTime() || 0
-        }
-        return getTime(b.createdAt) - getTime(a.createdAt)
-      })
-      return docs
-    } catch (fallbackError: any) {
-      console.error('getSubAdmins fallback also failed:', fallbackError.message)
-      return []
-    }
-  }
+export async function getAllRatings() {
+  await connectToDatabase()
+  const docs = await Rating.find().sort({ createdAt: -1 }).lean()
+  return docs.map((doc: any) => convertTimestamps(docToObject(doc)))
 }
 
-export async function createSubAdmin(data: {
-  adminId: string
-  name: string
-  phone: string
-  password: string
-  permissions: Record<string, boolean>
-}) {
-  checkFirebase()
-  const hashedPassword = await import('bcryptjs').then(bcrypt => bcrypt.hash(data.password, 10))
-  const docRef = await firestore.collection('subAdmins').add({
-    ...data,
-    password: hashedPassword,
-    status: 'active',
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+export async function getRatingsByUser(userId: string, userType: string) {
+  await connectToDatabase()
+  const filter = userType === 'nurse'
+    ? { toUserId: userId, toUserType: userType }
+    : { fromUserId: userId, fromUserType: userType }
+  const docs = await Rating.find(filter).sort({ createdAt: -1 }).lean()
+  return docs.map((doc: any) => convertTimestamps(docToObject(doc)))
+}
+
+export async function getRatingByRequestId(requestId: string) {
+  await connectToDatabase()
+  const doc = await Rating.findOne({ requestId }).lean()
+  if (!doc) return null
+  return convertTimestamps(docToObject(doc))
+}
+
+export async function replyToRating(ratingId: string, reply: string) {
+  await connectToDatabase()
+  await Rating.findByIdAndUpdate(ratingId, {
+    reply,
+    replyCreatedAt: new Date(),
+    updatedAt: new Date(),
   })
-  const { password: _, ...safeData } = data
-  return { id: docRef.id, ...safeData, status: 'active' }
+  const doc = await Rating.findById(ratingId).lean()
+  if (!doc) return null
+  return convertTimestamps(docToObject(doc))
 }
-
-export async function updateSubAdmin(id: string, data: Record<string, any>) {
-  checkFirebase()
-  const updateData: Record<string, any> = { ...data, updatedAt: admin.firestore.FieldValue.serverTimestamp() }
-  // If password is being updated, hash it
-  if (data.password) {
-    const hashedPassword = await import('bcryptjs').then(bcrypt => bcrypt.hash(data.password, 10))
-    updateData.password = hashedPassword
-  }
-  await firestore.collection('subAdmins').doc(id).update(updateData)
-  const doc = await firestore.collection('subAdmins').doc(id).get()
-  const docData = convertTimestamps(doc.data()!)
-  const { password, ...rest } = docData
-  return { id: doc.id, ...rest }
-}
-
-export async function deleteSubAdmin(id: string) {
-  checkFirebase()
-  await firestore.collection('subAdmins').doc(id).delete()
-}
-
-// ==================== EMERGENCY REQUESTS (ADMIN) ====================
-
-export async function getEmergencyRequests() {
-  checkFirebase()
-  const snapshot = await firestore.collection('emergencyRequests')
-    .orderBy('createdAt', 'desc')
-    .get()
-  return snapshot.docs.map(docToObject)
-}
-
-export async function updateEmergencyRequest(id: string, data: Record<string, any>) {
-  checkFirebase()
-  await firestore.collection('emergencyRequests').doc(id).update({
-    ...data,
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  })
-  const doc = await firestore.collection('emergencyRequests').doc(id).get()
-  return docToObject(doc)
-}
-
-export async function getEmergencyRequestById(id: string) {
-  checkFirebase()
-  const doc = await firestore.collection('emergencyRequests').doc(id).get()
-  if (!doc.exists) return null
-  return docToObject(doc)
-}
-
-// ==================== EMERGENCY ASSIGNMENTS ====================
-
-export async function createEmergencyAssignment(data: {
-  emergencyRequestId: string
-  nurseId: string
-  status: string
-}) {
-  checkFirebase()
-  const docRef = await firestore.collection('emergencyAssignments').add({
-    ...data,
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  })
-
-  // Fetch the nurse for the response
-  const nurseDoc = await firestore.collection('nurses').doc(data.nurseId).get()
-  return {
-    id: docRef.id,
-    ...data,
-    nurse: nurseDoc.exists
-      ? { id: nurseDoc.id, firstName: nurseDoc.data()!.firstName, lastName: nurseDoc.data()!.lastName, phone: nurseDoc.data()!.phone || null }
-      : null,
-  }
-}
-
-// ==================== NURSE PORTFOLIO ====================
-
-export async function updateNursePortfolio(id: string, portfolio: {
-  bio?: string
-  experience?: number
-  specializations?: string[]
-  certifications?: string[]
-  workPhotos?: string[]
-  completedCases?: number
-}) {
-  checkFirebase()
-  await firestore.collection('nurses').doc(id).update({
-    portfolio,
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  })
-  const doc = await firestore.collection('nurses').doc(id).get()
-  return docToObject(doc)
-}
-
-// ==================== NURSE LIVE LOCATION ====================
-
-export async function updateNurseLocation(nurseId: string, latitude: number, longitude: number) {
-  checkFirebase()
-  await firestore.collection('nurses').doc(nurseId).update({
-    currentLocation: { latitude, longitude, updatedAt: admin.firestore.FieldValue.serverTimestamp() },
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  })
-  const doc = await firestore.collection('nurses').doc(nurseId).get()
-  return docToObject(doc)
-}
-
-export async function getNurseLocation(nurseId: string) {
-  checkFirebase()
-  const doc = await firestore.collection('nurses').doc(nurseId).get()
-  if (!doc.exists) return null
-  const data = doc.data()
-  return data.currentLocation || null
-}
-
-// ==================== APPOINTMENTS ====================
-
-export async function createAppointment(data: {
-  beneficiaryId: string
-  serviceId: string
-  nurseId?: string
-  date: string
-  time: string
-  notes?: string
-}) {
-  checkFirebase()
-  const docRef = await firestore.collection('appointments').add({
-    ...data,
-    status: 'scheduled',
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  })
-  return { id: docRef.id, ...data, status: 'scheduled' }
-}
-
-export async function getAppointmentsByBeneficiary(beneficiaryId: string) {
-  checkFirebase()
-  const snapshot = await firestore.collection('appointments')
-    .where('beneficiaryId', '==', beneficiaryId)
-    .get()
-  const docs = snapshot.docs.map(docToObject)
-  docs.sort((a: any, b: any) => {
-    const getTime = (t: any) => {
-      if (!t) return 0
-      if (typeof t === 'object' && t !== null && 'seconds' in t) return t.seconds * 1000
-      return new Date(t).getTime() || 0
-    }
-    return getTime(b.createdAt) - getTime(a.createdAt)
-  })
-  return docs
-}
-
-export async function getAppointmentsByNurse(nurseId: string) {
-  checkFirebase()
-  const snapshot = await firestore.collection('appointments')
-    .where('nurseId', '==', nurseId)
-    .get()
-  const docs = snapshot.docs.map(docToObject)
-  docs.sort((a: any, b: any) => {
-    const getTime = (t: any) => {
-      if (!t) return 0
-      if (typeof t === 'object' && t !== null && 'seconds' in t) return t.seconds * 1000
-      return new Date(t).getTime() || 0
-    }
-    return getTime(b.createdAt) - getTime(a.createdAt)
-  })
-  return docs
-}
-
-export async function getAppointmentById(id: string) {
-  checkFirebase()
-  const doc = await firestore.collection('appointments').doc(id).get()
-  if (!doc.exists) return null
-  return docToObject(doc)
-}
-
-export async function updateAppointment(id: string, data: Record<string, any>) {
-  checkFirebase()
-  await firestore.collection('appointments').doc(id).update({
-    ...data,
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  })
-  const doc = await firestore.collection('appointments').doc(id).get()
-  return docToObject(doc)
-}
-
-export async function deleteAppointment(id: string) {
-  checkFirebase()
-  await firestore.collection('appointments').doc(id).delete()
-}
-
-// ==================== REPORTS / COMPLAINTS ====================
-
-export async function createReport(data: {
-  reporterId: string
-  reporterType: 'beneficiary' | 'nurse'
-  reportedId: string
-  reportedType: 'nurse' | 'beneficiary'
-  type: string
-  description: string
-  images?: string[]
-}) {
-  checkFirebase()
-  const docRef = await firestore.collection('reports').add({
-    ...data,
-    status: 'open',
-    adminResponse: null,
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  })
-  return { id: docRef.id, ...data, status: 'open' }
-}
-
-export async function getReports(status?: string) {
-  checkFirebase()
-  let snapshot
-  if (status) {
-    snapshot = await firestore.collection('reports').where('status', '==', status).get()
-  } else {
-    snapshot = await firestore.collection('reports').orderBy('createdAt', 'desc').get()
-  }
-  return snapshot.docs.map(docToObject)
-}
-
-export async function updateReport(id: string, data: Record<string, any>) {
-  checkFirebase()
-  await firestore.collection('reports').doc(id).update({
-    ...data,
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  })
-  const doc = await firestore.collection('reports').doc(id).get()
-  return docToObject(doc)
-}
-
-// ==================== PAYMENT TRANSACTIONS ====================
-
-export async function createTransaction(data: {
-  requestId: string
-  beneficiaryId: string
-  amount: number
-  paymentMethod: string
-  transactionRef?: string
-  status: string
-}) {
-  checkFirebase()
-  const docRef = await firestore.collection('transactions').add({
-    ...data,
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  })
-  return { id: docRef.id, ...data }
-}
-
-export async function getTransactionsByBeneficiary(beneficiaryId: string) {
-  checkFirebase()
-  const snapshot = await firestore.collection('transactions')
-    .where('beneficiaryId', '==', beneficiaryId)
-    .get()
-  const docs = snapshot.docs.map(docToObject)
-  docs.sort((a: any, b: any) => {
-    const getTime = (t: any) => {
-      if (!t) return 0
-      if (typeof t === 'object' && t !== null && 'seconds' in t) return t.seconds * 1000
-      return new Date(t).getTime() || 0
-    }
-    return getTime(b.createdAt) - getTime(a.createdAt)
-  })
-  return docs
-}
-
-export async function updateTransaction(id: string, data: Record<string, any>) {
-  checkFirebase()
-  await firestore.collection('transactions').doc(id).update({
-    ...data,
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  })
-  const doc = await firestore.collection('transactions').doc(id).get()
-  return docToObject(doc)
-}
-
-// ==================== PUSH NOTIFICATIONS ====================
-
-export async function createPushNotification(data: {
-  userId: string
-  userType: 'nurse' | 'beneficiary' | 'admin'
-  title: string
-  message: string
-  type: string
-  data?: Record<string, any>
-}) {
-  checkFirebase()
-  const docRef = await firestore.collection('pushNotifications').add({
-    ...data,
-    read: false,
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
-  })
-  return { id: docRef.id, ...data, read: false }
-}
-
-export async function getUserNotifications(userId: string, userType: string, limitCount: number = 50) {
-  checkFirebase()
-  const snapshot = await firestore.collection('pushNotifications')
-    .where('userId', '==', userId)
-    .where('userType', '==', userType)
-    .limit(limitCount)
-    .get()
-  const docs = snapshot.docs.map(docToObject)
-  docs.sort((a: any, b: any) => {
-    const getTime = (t: any) => {
-      if (!t) return 0
-      if (typeof t === 'object' && t !== null && 'seconds' in t) return t.seconds * 1000
-      return new Date(t).getTime() || 0
-    }
-    return getTime(b.createdAt) - getTime(a.createdAt)
-  })
-  return docs
-}
-
-export async function markNotificationRead(notificationId: string) {
-  checkFirebase()
-  await firestore.collection('pushNotifications').doc(notificationId).update({
-    read: true,
-  })
-}
-
-// ==================== ENHANCED RATINGS ====================
 
 export async function createEnhancedRating(data: {
   requestId: string
@@ -1685,130 +1454,460 @@ export async function createEnhancedRating(data: {
   beforePhotos?: string[]
   afterPhotos?: string[]
 }) {
-  checkFirebase()
-  const docRef = await firestore.collection('ratings').add({
+  await connectToDatabase()
+  const doc = await Rating.create({
     ...data,
     rating: data.overallRating,
     nurseReply: null,
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    createdAt: new Date(),
+    updatedAt: new Date(),
   })
-  return { id: docRef.id, ...data }
+  const obj = docToObject(doc)
+  return { id: obj.id, ...data }
 }
 
 export async function addNurseReplyToRating(ratingId: string, nurseId: string, reply: string) {
-  checkFirebase()
-  await firestore.collection('ratings').doc(ratingId).update({
-    nurseReply: { text: reply, createdAt: admin.firestore.FieldValue.serverTimestamp() },
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  await connectToDatabase()
+  await Rating.findByIdAndUpdate(ratingId, {
+    nurseReply: { text: reply, createdAt: new Date() },
+    updatedAt: new Date(),
   })
-  const doc = await firestore.collection('ratings').doc(ratingId).get()
-  return docToObject(doc)
+  const doc = await Rating.findById(ratingId).lean()
+  if (!doc) return null
+  return convertTimestamps(docToObject(doc))
+}
+
+// ==================== ADMIN SETTINGS ====================
+
+export async function getAdminSettings(subAdminId?: string) {
+  await connectToDatabase()
+  const docId = subAdminId ? `sub-admin-${subAdminId}` : 'admin'
+  const doc = await AppSetting.findById(docId).lean()
+  if (!doc) return null
+  return convertTimestamps(docToObject(doc))
+}
+
+export async function updateAdminSettings(data: Record<string, any>, subAdminId?: string) {
+  await connectToDatabase()
+  const docId = subAdminId ? `sub-admin-${subAdminId}` : 'admin'
+  await AppSetting.findByIdAndUpdate(docId, {
+    ...data,
+    updatedAt: new Date(),
+  }, { upsert: true, new: true, setDefaultsOnInsert: true })
+  const doc = await AppSetting.findById(docId).lean()
+  if (!doc) return null
+  return convertTimestamps(docToObject(doc))
+}
+
+// ==================== FCM TOKENS ====================
+
+export async function saveFcmToken(data: {
+  userId: string
+  userType: string
+  token: string
+  deviceInfo?: Record<string, any>
+}) {
+  await connectToDatabase()
+  const doc = await FcmToken.findOneAndUpdate(
+    { userId: data.userId, userType: data.userType, token: data.token },
+    {
+      ...data,
+      isActive: true,
+      updatedAt: new Date(),
+      createdAt: new Date(),
+    },
+    { upsert: true, new: true, setDefaultsOnInsert: true }
+  ).lean()
+  return convertTimestamps(docToObject(doc))
+}
+
+export async function deactivateFcmToken(token: string) {
+  await connectToDatabase()
+  await FcmToken.updateMany({ token }, { isActive: false, updatedAt: new Date() })
+}
+
+export async function getFcmTokensByUser(userId: string, userType: string) {
+  await connectToDatabase()
+  const docs = await FcmToken.find({ userId, userType, isActive: true }).lean()
+  return docs.map((doc: any) => convertTimestamps(docToObject(doc)))
+}
+
+// ==================== PUSH NOTIFICATIONS ====================
+
+export async function createPushNotification(data: {
+  userId: string
+  userType: 'nurse' | 'beneficiary' | 'admin'
+  title: string
+  message: string
+  type: string
+  data?: Record<string, any>
+}) {
+  await connectToDatabase()
+  const doc = await PushNotification.create({
+    ...data,
+    read: false,
+    isRead: false,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  })
+  const obj = docToObject(doc)
+  return { id: obj.id, ...data, read: false }
+}
+
+export async function getNotificationsByUser(userId: string, userType: string, limitCount: number = 50) {
+  await connectToDatabase()
+  const docs = await PushNotification.find({ userId, userType })
+    .sort({ createdAt: -1 })
+    .limit(limitCount)
+    .lean()
+  return docs.map((doc: any) => convertTimestamps(docToObject(doc)))
+}
+
+export async function getUserNotifications(userId: string, userType: string, limitCount: number = 50) {
+  return getNotificationsByUser(userId, userType, limitCount)
+}
+
+export async function markNotificationAsRead(notificationId: string) {
+  await connectToDatabase()
+  await PushNotification.findByIdAndUpdate(notificationId, {
+    read: true,
+    isRead: true,
+    updatedAt: new Date(),
+  })
+}
+
+export async function markNotificationRead(notificationId: string) {
+  return markNotificationAsRead(notificationId)
+}
+
+export async function markAllNotificationsAsRead(userId: string, userType: string) {
+  await connectToDatabase()
+  await PushNotification.updateMany(
+    { userId, userType, read: { $ne: true } },
+    { read: true, isRead: true, updatedAt: new Date() }
+  )
+}
+
+export async function getUnreadNotificationCount(userId: string, userType: string) {
+  await connectToDatabase()
+  return PushNotification.countDocuments({ userId, userType, read: { $ne: true } })
+}
+
+// ==================== WHATSAPP ====================
+
+export async function queueWhatsAppMessage(data: {
+  phone: string
+  message: string
+  type: string
+  userId?: string
+}) {
+  await connectToDatabase()
+  const doc = await WhatsappQueue.create({
+    ...data,
+    status: 'pending',
+    attempts: 0,
+    createdAt: new Date(),
+  })
+  const obj = docToObject(doc)
+  return { id: obj.id, ...data, status: 'pending' }
+}
+
+// ==================== DASHBOARD STATS ====================
+
+export async function getAdminDashboardStats() {
+  await connectToDatabase()
+  const [
+    totalNurses,
+    pendingNurses,
+    totalBeneficiaries,
+    totalServiceRequests,
+    pendingRequests,
+    completedRequests,
+    totalServices,
+    activeServices,
+    totalRevenue,
+  ] = await Promise.all([
+    Nurse.countDocuments(),
+    Nurse.countDocuments({ status: 'pending' }),
+    Beneficiary.countDocuments(),
+    ServiceRequest.countDocuments(),
+    ServiceRequest.countDocuments({ status: 'pending' }),
+    ServiceRequest.countDocuments({ status: 'completed' }),
+    Service.countDocuments(),
+    Service.countDocuments({ isActive: true }),
+    getCompletedServiceRevenue(),
+  ])
+
+  return {
+    totalNurses,
+    pendingNurses,
+    totalBeneficiaries,
+    totalServiceRequests,
+    pendingRequests,
+    completedRequests,
+    totalServices,
+    activeServices,
+    totalRevenue,
+  }
+}
+
+// ==================== NURSE PORTFOLIO ====================
+
+export async function updateNursePortfolio(id: string, portfolio: {
+  bio?: string
+  experience?: number
+  specializations?: string[]
+  certifications?: string[]
+  workPhotos?: string[]
+  completedCases?: number
+}) {
+  await connectToDatabase()
+  await Nurse.findByIdAndUpdate(id, { portfolio, updatedAt: new Date() })
+  const doc = await Nurse.findById(id).lean()
+  if (!doc) return null
+  return convertTimestamps(docToObject(doc))
+}
+
+// ==================== NURSE LIVE LOCATION ====================
+
+export async function updateNurseLocation(nurseId: string, latitude: number, longitude: number) {
+  await connectToDatabase()
+  await Nurse.findByIdAndUpdate(nurseId, {
+    currentLocation: { latitude, longitude, updatedAt: new Date() },
+    updatedAt: new Date(),
+  })
+  const doc = await Nurse.findById(nurseId).lean()
+  if (!doc) return null
+  return convertTimestamps(docToObject(doc))
+}
+
+export async function getNurseLocation(nurseId: string) {
+  await connectToDatabase()
+  const doc = await Nurse.findById(nurseId).lean()
+  if (!doc) return null
+  return doc.currentLocation || null
+}
+
+// ==================== APPOINTMENTS ====================
+
+export async function createAppointment(data: {
+  beneficiaryId: string
+  serviceId: string
+  nurseId?: string
+  date: string
+  time: string
+  notes?: string
+}) {
+  await connectToDatabase()
+  const doc = await Appointment.create({
+    ...data,
+    status: 'scheduled',
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  })
+  const obj = docToObject(doc)
+  return { id: obj.id, ...data, status: 'scheduled' }
+}
+
+export async function getAppointmentsByBeneficiary(beneficiaryId: string) {
+  await connectToDatabase()
+  const docs = await Appointment.find({ beneficiaryId }).sort({ createdAt: -1 }).lean()
+  return docs.map((doc: any) => convertTimestamps(docToObject(doc)))
+}
+
+export async function getAppointmentsByNurse(nurseId: string) {
+  await connectToDatabase()
+  const docs = await Appointment.find({ nurseId }).sort({ createdAt: -1 }).lean()
+  return docs.map((doc: any) => convertTimestamps(docToObject(doc)))
+}
+
+export async function getAppointmentById(id: string) {
+  await connectToDatabase()
+  const doc = await Appointment.findById(id).lean()
+  if (!doc) return null
+  return convertTimestamps(docToObject(doc))
+}
+
+export async function updateAppointment(id: string, data: Record<string, any>) {
+  await connectToDatabase()
+  await Appointment.findByIdAndUpdate(id, { ...data, updatedAt: new Date() })
+  const doc = await Appointment.findById(id).lean()
+  if (!doc) return null
+  return convertTimestamps(docToObject(doc))
+}
+
+export async function deleteAppointment(id: string) {
+  await connectToDatabase()
+  await Appointment.findByIdAndDelete(id)
+}
+
+// ==================== REPORTS / COMPLAINTS ====================
+
+export async function createReport(data: {
+  reporterId: string
+  reporterType: 'beneficiary' | 'nurse'
+  reportedId: string
+  reportedType: 'nurse' | 'beneficiary'
+  type: string
+  description: string
+  images?: string[]
+}) {
+  await connectToDatabase()
+  const doc = await Report.create({
+    ...data,
+    status: 'open',
+    adminResponse: null,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  })
+  const obj = docToObject(doc)
+  return { id: obj.id, ...data, status: 'open' }
+}
+
+export async function getReports(status?: string) {
+  await connectToDatabase()
+  const filter: any = {}
+  if (status) filter.status = status
+  const docs = await Report.find(filter).sort({ createdAt: -1 }).lean()
+  return docs.map((doc: any) => convertTimestamps(docToObject(doc)))
+}
+
+export async function updateReport(id: string, data: Record<string, any>) {
+  await connectToDatabase()
+  await Report.findByIdAndUpdate(id, { ...data, updatedAt: new Date() })
+  const doc = await Report.findById(id).lean()
+  if (!doc) return null
+  return convertTimestamps(docToObject(doc))
+}
+
+// ==================== PAYMENT TRANSACTIONS ====================
+
+export async function createTransaction(data: {
+  requestId: string
+  beneficiaryId: string
+  amount: number
+  paymentMethod: string
+  transactionRef?: string
+  status: string
+}) {
+  await connectToDatabase()
+  const doc = await Transaction.create({
+    ...data,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  })
+  const obj = docToObject(doc)
+  return { id: obj.id, ...data }
+}
+
+export async function getTransactionsByBeneficiary(beneficiaryId: string) {
+  await connectToDatabase()
+  const docs = await Transaction.find({ beneficiaryId }).sort({ createdAt: -1 }).lean()
+  return docs.map((doc: any) => convertTimestamps(docToObject(doc)))
+}
+
+export async function updateTransaction(id: string, data: Record<string, any>) {
+  await connectToDatabase()
+  await Transaction.findByIdAndUpdate(id, { ...data, updatedAt: new Date() })
+  const doc = await Transaction.findById(id).lean()
+  if (!doc) return null
+  return convertTimestamps(docToObject(doc))
 }
 
 // ==================== FAVORITE NURSE (FAMILY DOCTOR) ====================
 
 export async function setFavoriteNurse(beneficiaryId: string, nurseId: string) {
-  checkFirebase()
-  await firestore.collection('beneficiaries').doc(beneficiaryId).update({
+  await connectToDatabase()
+  await Beneficiary.findByIdAndUpdate(beneficiaryId, {
     favoriteNurseId: nurseId,
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: new Date(),
   })
-  const doc = await firestore.collection('beneficiaries').doc(beneficiaryId).get()
-  return docToObject(doc)
+  const doc = await Beneficiary.findById(beneficiaryId).lean()
+  if (!doc) return null
+  return convertTimestamps(docToObject(doc))
 }
 
 export async function removeFavoriteNurse(beneficiaryId: string) {
-  checkFirebase()
-  await firestore.collection('beneficiaries').doc(beneficiaryId).update({
-    favoriteNurseId: admin.firestore.FieldValue.delete(),
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  await connectToDatabase()
+  // Use $unset to remove the field (equivalent to FieldValue.delete())
+  await Beneficiary.findByIdAndUpdate(beneficiaryId, {
+    $unset: { favoriteNurseId: '' },
+    updatedAt: new Date(),
   })
 }
 
 export async function getFavoriteNurse(beneficiaryId: string) {
-  checkFirebase()
-  const doc = await firestore.collection('beneficiaries').doc(beneficiaryId).get()
-  if (!doc.exists) return null
-  const favoriteNurseId = doc.data()!.favoriteNurseId
+  await connectToDatabase()
+  const doc = await Beneficiary.findById(beneficiaryId).lean()
+  if (!doc) return null
+  const favoriteNurseId = doc.favoriteNurseId
   if (!favoriteNurseId) return null
-  const nurseDoc = await firestore.collection('nurses').doc(favoriteNurseId).get()
-  if (!nurseDoc.exists) return null
-  const { password, ...nurseData } = nurseDoc.data()!
-  return { id: nurseDoc.id, ...nurseData }
+  const nurseDoc = await Nurse.findById(favoriteNurseId).lean()
+  if (!nurseDoc) return null
+  const { password, ...nurseData } = nurseDoc
+  return { id: docToObject(nurseDoc).id, ...nurseData }
 }
 
 // ==================== NURSE EARNINGS ====================
 
 export async function getNurseEarnings(nurseId: string, period?: 'week' | 'month') {
-  checkFirebase()
-  const snapshot = await firestore.collection('serviceAssignments')
-    .where('nurseId', '==', nurseId)
-    .where('status', '==', 'completed')
-    .get()
-  
+  await connectToDatabase()
   const now = new Date()
   const periodStart = period === 'week'
     ? new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
     : new Date(now.getFullYear(), now.getMonth(), 1)
-  
+
+  const assignmentDocs = await ServiceAssignment.find({
+    nurseId,
+    status: 'completed',
+  }).lean()
+
   let totalEarnings = 0
-  const assignments = []
-  
-  for (const doc of snapshot.docs) {
-    const data = doc.data()
-    const updatedAt = data.updatedAt
-    let assignDate: Date | null = null
-    
-    if (typeof updatedAt === 'object' && updatedAt !== null && 'seconds' in updatedAt) {
-      assignDate = new Date(updatedAt.seconds * 1000)
-    } else if (typeof updatedAt === 'string') {
-      assignDate = new Date(updatedAt)
-    }
-    
+  const assignments: any[] = []
+
+  for (const doc of assignmentDocs) {
+    const data = docToObject(doc)
+    const assignDate = data.updatedAt ? new Date(data.updatedAt) : null
+
     if (assignDate && assignDate >= periodStart) {
-      const requestDoc = await firestore.collection('serviceRequests').doc(data.requestId).get()
-      if (requestDoc.exists) {
-        const requestData = requestDoc.data()!
-        const serviceDoc = await firestore.collection('services').doc(requestData.serviceId).get()
-        if (serviceDoc.exists) {
-          const price = serviceDoc.data()!.price || 0
+      const requestDoc = await ServiceRequest.findById(data.requestId).lean()
+      if (requestDoc) {
+        const serviceDoc = await Service.findById(requestDoc.serviceId).lean()
+        if (serviceDoc) {
+          const price = serviceDoc.price || 0
           totalEarnings += price
           assignments.push({
-            id: doc.id,
+            id: data.id,
             ...data,
-            service: { name: serviceDoc.data()!.name, price },
+            service: { name: serviceDoc.name, price },
           })
         }
       }
     }
   }
-  
+
   return { totalEarnings, assignments, period }
 }
 
 // ==================== DYNAMIC PRICING ====================
 
 export async function calculateDynamicPrice(serviceId: string, hour?: number, distanceKm?: number) {
-  checkFirebase()
-  const serviceDoc = await firestore.collection('services').doc(serviceId).get()
-  if (!serviceDoc.exists) throw new Error('الخدمة غير موجودة')
-  
-  const service = serviceDoc.data()!
-  let basePrice = service.price || 0
-  
-  // Time multiplier: night hours (10pm-6am) cost 30% more
+  await connectToDatabase()
+  const serviceDoc = await Service.findById(serviceId).lean()
+  if (!serviceDoc) throw new Error('الخدمة غير موجودة')
+
+  let basePrice = serviceDoc.price || 0
+
   const currentHour = hour ?? new Date().getHours()
   const timeMultiplier = (currentHour >= 22 || currentHour < 6) ? 1.3 : 1.0
-  
-  // Distance surcharge: after 5km, add 5% per km
+
   let distanceSurcharge = 0
   if (distanceKm && distanceKm > 5) {
     distanceSurcharge = basePrice * 0.05 * (distanceKm - 5)
   }
-  
+
   const finalPrice = Math.round(basePrice * timeMultiplier + distanceSurcharge)
-  
+
   return {
     basePrice,
     timeMultiplier,
@@ -1825,139 +1924,27 @@ export async function calculateDynamicPrice(serviceId: string, hour?: number, di
 // ==================== SEARCH ====================
 
 export async function searchNurses(query: string, specialization?: string) {
-  checkFirebase()
-  const snapshot = await firestore.collection('nurses')
-    .where('status', '==', 'approved')
-    .get()
-  
-  const results = snapshot.docs
-    .map(doc => {
-      const data = doc.data()
-      const { password, ...rest } = data
-      return { id: doc.id, ...rest }
-    })
-    .filter(nurse => {
-      const fullName = `${nurse.firstName} ${nurse.secondName} ${nurse.thirdName} ${nurse.lastName}`
-      const matchesQuery = !query || 
-        fullName.includes(query) || 
-        (nurse.portfolio?.specializations || []).some((s: string) => s.includes(query))
-      const matchesSpec = !specialization || 
-        (nurse.portfolio?.specializations || []).some((s: string) => s.includes(specialization))
-      return matchesQuery && matchesSpec
-    })
-  
-  return results
-}
+  await connectToDatabase()
+  const filter: any = { status: 'approved' }
 
-export async function searchServices(query: string, category?: string) {
-  checkFirebase()
-  const snapshot = await firestore.collection('services')
-    .where('isActive', '==', true)
-    .get()
-  
-  return snapshot.docs
-    .map(docToObject)
-    .filter(service => {
-      const matchesQuery = !query || 
-        service.name.includes(query) || 
-        service.description?.includes(query)
-      const matchesCategory = !category || service.category === category
-      return matchesQuery && matchesCategory
-    })
-}
+  if (query) {
+    filter.$or = [
+      { firstName: { $regex: query, $options: 'i' } },
+      { secondName: { $regex: query, $options: 'i' } },
+      { thirdName: { $regex: query, $options: 'i' } },
+      { lastName: { $regex: query, $options: 'i' } },
+      { 'portfolio.specializations': { $regex: query, $options: 'i' } },
+    ]
+  }
 
-// ==================== WHATSAPP INTEGRATION ====================
+  if (specialization) {
+    filter['portfolio.specializations'] = { $regex: specialization, $options: 'i' }
+  }
 
-export async function queueWhatsAppMessage(data: {
-  phone: string
-  message: string
-  type: string
-  userId?: string
-}) {
-  checkFirebase()
-  const docRef = await firestore.collection('whatsappQueue').add({
-    ...data,
-    status: 'pending',
-    attempts: 0,
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  const docs = await Nurse.find(filter).lean()
+  return docs.map((doc: any) => {
+    const obj = convertTimestamps(docToObject(doc))
+    const { password, ...rest } = obj
+    return rest
   })
-  return { id: docRef.id, ...data, status: 'pending' }
-}
-
-// ==================== DETAILED AUDIT LOG ====================
-
-export async function getDetailedAuditLogs(filters?: {
-  userId?: string
-  type?: string
-  startDate?: string
-  endDate?: string
-  limitCount?: number
-}) {
-  checkFirebase()
-  let query: FirebaseFirestore.Query = firestore.collection('activityLog')
-  
-  if (filters?.userId) {
-    query = query.where('userId', '==', filters.userId)
-  }
-  if (filters?.type) {
-    query = query.where('type', '==', filters.type)
-  }
-  
-  const snapshot = await query
-    .orderBy('createdAt', 'desc')
-    .limit(filters?.limitCount || 100)
-    .get()
-  
-  let docs = snapshot.docs.map(docToObject)
-  
-  // Client-side date filtering if needed
-  if (filters?.startDate || filters?.endDate) {
-    docs = docs.filter((doc: any) => {
-      const getTime = (t: any) => {
-        if (!t) return 0
-        if (typeof t === 'object' && t !== null && 'seconds' in t) return t.seconds * 1000
-        return new Date(t).getTime() || 0
-      }
-      const docTime = getTime(doc.createdAt)
-      const start = filters.startDate ? new Date(filters.startDate).getTime() : 0
-      const end = filters.endDate ? new Date(filters.endDate).getTime() : Infinity
-      return docTime >= start && docTime <= end
-    })
-  }
-  
-  return docs
-}
-
-export async function exportAuditLogs(format: string = 'json') {
-  checkFirebase()
-  const snapshot = await firestore.collection('activityLog')
-    .orderBy('createdAt', 'desc')
-    .limit(1000)
-    .get()
-  return snapshot.docs.map(docToObject)
-}
-
-// ==================== SUB-ADMIN ACTIVITY LOG ====================
-
-export async function getSubAdminActivityLogs(subAdminId: string) {
-  checkFirebase()
-  const snapshot = await firestore.collection('activityLog')
-    .where('userId', '==', subAdminId)
-    .orderBy('createdAt', 'desc')
-    .limit(100)
-    .get()
-  return snapshot.docs.map(docToObject)
-}
-
-// ==================== NURSE VERIFICATION ====================
-
-export async function verifyNurse(nurseId: string, verified: boolean) {
-  checkFirebase()
-  await firestore.collection('nurses').doc(nurseId).update({
-    isVerified: verified,
-    verifiedAt: verified ? admin.firestore.FieldValue.serverTimestamp() : admin.firestore.FieldValue.delete(),
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  })
-  const doc = await firestore.collection('nurses').doc(nurseId).get()
-  return docToObject(doc)
 }

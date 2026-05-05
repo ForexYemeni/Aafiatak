@@ -1,44 +1,35 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { firestore, admin, firebaseInitialized, initializationError } from '@/lib/firebase-admin'
+import { getBeneficiaryById, updateServiceRequest, updateEmergencyRequest } from '@/lib/firestore'
+import { connectToDatabase } from '@/lib/mongodb'
+import { mongoose } from '@/lib/mongodb'
+import { convertTimestamps } from '@/lib/mongodb'
 
-function checkFirebase() {
-  if (!firebaseInitialized || !firestore) {
-    throw new Error(initializationError || 'Firebase غير مهيأ')
-  }
-}
-
-function docToObject(doc: FirebaseFirestore.QueryDocumentSnapshot | FirebaseFirestore.DocumentSnapshot) {
-  const data = doc.data()
-  const converted = {} as Record<string, any>
-  for (const key of Object.keys(data || {})) {
-    const val = data![key]
-    if (val && typeof val === 'object' && 'seconds' in val && 'nanoseconds' in val) {
-      converted[key] = { seconds: val.seconds, nanoseconds: val.nanoseconds }
-    } else if (val && typeof val === 'object' && '_seconds' in val && '_nanoseconds' in val) {
-      converted[key] = { seconds: val._seconds, nanoseconds: val._nanoseconds }
-    } else {
-      converted[key] = val
-    }
-  }
-  return { id: doc.id, ...converted }
+function docToObject(doc: any) {
+  if (!doc) return null
+  const obj = doc.toObject ? doc.toObject() : doc
+  const { _id, __v, ...rest } = obj
+  return { id: _id.toString(), ...rest }
 }
 
 export async function GET(request: NextRequest) {
   try {
-    checkFirebase()
     const { searchParams } = new URL(request.url)
     const status = searchParams.get('status') // 'pending', 'paid', 'all'
 
-    let query = firestore.collection('transactions').orderBy('createdAt', 'desc')
+    await connectToDatabase()
+    const Transaction = mongoose.models.Transaction
 
-    const snapshot = await query.limit(200).get()
-    let transactions = snapshot.docs.map(docToObject)
+    let transactions = Transaction
+      ? await Transaction.find().sort({ createdAt: -1 }).limit(200).lean()
+      : []
+
+    let result = transactions.map(docToObject).map(convertTimestamps)
 
     if (status && status !== 'all') {
-      transactions = transactions.filter((t: any) => t.status === status)
+      result = result.filter((t: any) => t.status === status)
     }
 
-    return NextResponse.json(transactions)
+    return NextResponse.json(result)
   } catch (error: any) {
     console.error('Get transactions error:', error.message)
     return NextResponse.json({ error: 'حدث خطأ في الخادم' }, { status: 500 })
@@ -47,7 +38,6 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    checkFirebase()
     const body = await request.json()
     const { requestId, beneficiaryId, amount, paymentMethod, transactionRef, senderName, senderPhone, exchangeName, isEmergency } = body
 
@@ -71,28 +61,32 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify beneficiary exists
-    const benefDoc = await firestore.collection('beneficiaries').doc(beneficiaryId).get()
-    if (!benefDoc.exists) {
+    const benef = await getBeneficiaryById(beneficiaryId)
+    if (!benef) {
       return NextResponse.json({ error: 'المستفيد غير موجود' }, { status: 404 })
     }
 
-    // Determine the request collection based on isEmergency flag
-    const requestCollection = isEmergency ? 'emergencyRequests' : 'serviceRequests'
+    await connectToDatabase()
+    const Transaction = mongoose.models.Transaction
+    const ServiceRequest = mongoose.models.ServiceRequest
+    const EmergencyRequest = mongoose.models.EmergencyRequest
+
+    // Determine the request model based on isEmergency flag
+    const RequestModel = isEmergency ? EmergencyRequest : ServiceRequest
 
     // Verify request exists
-    const requestDoc = await firestore.collection(requestCollection).doc(requestId).get()
-    if (!requestDoc.exists) {
+    const requestDoc = RequestModel ? await RequestModel.findById(requestId).lean() : null
+    if (!requestDoc) {
       return NextResponse.json({ error: 'الطلب غير موجود' }, { status: 404 })
     }
 
     // Prevent duplicate transactions for the same request
-    const existingTxSnapshot = await firestore.collection('transactions')
-      .where('requestId', '==', requestId)
-      .where('status', 'in', ['pending', 'pending_confirmation', 'paid'])
-      .limit(1)
-      .get()
-    if (!existingTxSnapshot.empty) {
-      return NextResponse.json({ error: 'يوجد معاملة دفع سابقة لهذا الطلب', existingTransactionId: existingTxSnapshot.docs[0].id }, { status: 409 })
+    const existingTx = Transaction ? await Transaction.findOne({
+      requestId,
+      status: { $in: ['pending', 'pending_confirmation', 'paid'] },
+    }).lean() : null
+    if (existingTx) {
+      return NextResponse.json({ error: 'يوجد معاملة دفع سابقة لهذا الطلب', existingTransactionId: existingTx._id.toString() }, { status: 409 })
     }
 
     // For wallet/exchange/bank: payment proof submitted via WhatsApp
@@ -100,10 +94,10 @@ export async function POST(request: NextRequest) {
     const isCashOnDelivery = paymentMethod === 'cash'
     const paymentStatus = isCashOnDelivery ? 'pending' : 'pending_confirmation'
 
-    const transactionData = {
+    const transactionData: Record<string, any> = {
       requestId,
       beneficiaryId,
-      beneficiaryName: benefDoc.data()!.name || 'غير معروف',
+      beneficiaryName: benef.name || 'غير معروف',
       amount,
       paymentMethod,
       transactionRef: transactionRef || null,
@@ -114,18 +108,19 @@ export async function POST(request: NextRequest) {
       status: paymentStatus,
       confirmedBy: null,
       confirmedAt: null,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: new Date(),
+      updatedAt: new Date(),
     }
 
-    const docRef = await firestore.collection('transactions').add(transactionData)
+    const doc = Transaction ? await Transaction.create(transactionData) : null
+    const docId = doc ? doc._id.toString() : ''
 
     // Update the request with payment info and change status to pending_confirmation
     const requestUpdateData: Record<string, any> = {
       paymentStatus: paymentStatus,
       paymentMethod,
-      transactionId: docRef.id,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      transactionId: docId,
+      updatedAt: new Date(),
     }
     // If electronic payment, change request status to pending_confirmation
     if (!isCashOnDelivery) {
@@ -134,25 +129,16 @@ export async function POST(request: NextRequest) {
       requestUpdateData.status = 'pending_confirmation'
       requestUpdateData.paymentMethod = 'cash_on_delivery'
     }
-    await firestore.collection(requestCollection).doc(requestId).update(requestUpdateData)
+    if (RequestModel) {
+      await RequestModel.findByIdAndUpdate(requestId, requestUpdateData)
+    }
 
-    // Re-read to get actual timestamps
-    const createdDoc = await firestore.collection('transactions').doc(docRef.id).get()
-    const createdData = createdDoc.data()
+    // Return the created transaction data
+    const createdData = doc ? convertTimestamps(docToObject(doc)) : transactionData
+
     return NextResponse.json({
-      id: docRef.id,
-      ...createdData ? (() => {
-        const c = {} as Record<string, any>
-        for (const key of Object.keys(createdData)) {
-          const val = createdData[key]
-          if (val && typeof val === 'object' && 'seconds' in val && 'nanoseconds' in val) {
-            c[key] = { seconds: val.seconds, nanoseconds: val.nanoseconds }
-          } else {
-            c[key] = val
-          }
-        }
-        return c
-      })() : transactionData,
+      id: docId,
+      ...createdData,
       message: paymentStatus === 'pending_confirmation'
         ? 'تم إرسال إثبات الدفع بنجاح. سيتم مراجعته من قبل الإدارة وتأكيد الطلب'
         : 'تم إنشاء معاملة الدفع بنجاح',
@@ -166,7 +152,6 @@ export async function POST(request: NextRequest) {
 // PUT: Confirm a payment (admin action)
 export async function PUT(request: NextRequest) {
   try {
-    checkFirebase()
     const body = await request.json()
     const { transactionId, action, adminId } = body // action: 'confirm' or 'reject'
 
@@ -174,66 +159,77 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'معرف المعاملة والإجراء ومعرف المدير مطلوبون' }, { status: 400 })
     }
 
+    await connectToDatabase()
+    const Transaction = mongoose.models.Transaction
+    const Admin = mongoose.models.Admin
+    const SubAdmin = mongoose.models.SubAdmin
+    const ServiceRequest = mongoose.models.ServiceRequest
+    const EmergencyRequest = mongoose.models.EmergencyRequest
+
     // Verify admin exists and has proper role
-    const adminDoc = await firestore.collection('admins').doc(adminId).get()
-    if (!adminDoc.exists) {
-      const subAdminDoc = await firestore.collection('subAdmins').doc(adminId).get()
-      if (!subAdminDoc.exists) {
+    const adminDoc = Admin ? await Admin.findById(adminId).lean() : null
+    if (!adminDoc) {
+      const subAdminDoc = SubAdmin ? await SubAdmin.findById(adminId).lean() : null
+      if (!subAdminDoc) {
         return NextResponse.json({ error: 'المدير غير موجود أو غير مصرح له' }, { status: 403 })
       }
-      const subAdminData = subAdminDoc.data()!
-      if (subAdminData.status === 'blocked') {
+      if (subAdminDoc.status === 'blocked') {
         return NextResponse.json({ error: 'حساب المدير معطل' }, { status: 403 })
       }
     } else {
-      const adminData = adminDoc.data()!
-      if (adminData.status === 'blocked') {
+      if (adminDoc.status === 'blocked') {
         return NextResponse.json({ error: 'حساب المدير معطل' }, { status: 403 })
       }
     }
 
-    const transDoc = await firestore.collection('transactions').doc(transactionId).get()
-    if (!transDoc.exists) {
+    const transDoc = Transaction ? await Transaction.findById(transactionId).lean() : null
+    if (!transDoc) {
       return NextResponse.json({ error: 'المعاملة غير موجودة' }, { status: 404 })
     }
 
-    const transData = transDoc.data()!
-
     if (action === 'confirm') {
       // Mark payment as confirmed/paid
-      await firestore.collection('transactions').doc(transactionId).update({
-        status: 'paid',
-        confirmedBy: adminId,
-        confirmedAt: admin.firestore.FieldValue.serverTimestamp(),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      })
+      if (Transaction) {
+        await Transaction.findByIdAndUpdate(transactionId, {
+          status: 'paid',
+          confirmedBy: adminId,
+          confirmedAt: new Date(),
+          updatedAt: new Date(),
+        })
+      }
 
       // Update request payment status to 'paid' (support both service and emergency requests)
-      if (transData.requestId) {
-        const requestCollection = transData.isEmergency ? 'emergencyRequests' : 'serviceRequests'
-        await firestore.collection(requestCollection).doc(transData.requestId).update({
-          paymentStatus: 'paid',
-          status: 'pending_confirmation',
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        })
+      if (transDoc.requestId) {
+        const RequestModel = transDoc.isEmergency ? EmergencyRequest : ServiceRequest
+        if (RequestModel) {
+          await RequestModel.findByIdAndUpdate(transDoc.requestId, {
+            paymentStatus: 'paid',
+            status: 'pending_confirmation',
+            updatedAt: new Date(),
+          })
+        }
       }
 
       return NextResponse.json({ message: 'تم تأكيد الدفع بنجاح. يمكن الآن تنفيذ الطلب' })
     } else if (action === 'reject') {
-      await firestore.collection('transactions').doc(transactionId).update({
-        status: 'rejected',
-        confirmedBy: adminId,
-        confirmedAt: admin.firestore.FieldValue.serverTimestamp(),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      })
+      if (Transaction) {
+        await Transaction.findByIdAndUpdate(transactionId, {
+          status: 'rejected',
+          confirmedBy: adminId,
+          confirmedAt: new Date(),
+          updatedAt: new Date(),
+        })
+      }
 
       // Update request payment status to 'rejected' (support both service and emergency requests)
-      if (transData.requestId) {
-        const requestCollection = transData.isEmergency ? 'emergencyRequests' : 'serviceRequests'
-        await firestore.collection(requestCollection).doc(transData.requestId).update({
-          paymentStatus: 'rejected',
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        })
+      if (transDoc.requestId) {
+        const RequestModel = transDoc.isEmergency ? EmergencyRequest : ServiceRequest
+        if (RequestModel) {
+          await RequestModel.findByIdAndUpdate(transDoc.requestId, {
+            paymentStatus: 'rejected',
+            updatedAt: new Date(),
+          })
+        }
       }
 
       return NextResponse.json({ message: 'تم رفض الدفع' })

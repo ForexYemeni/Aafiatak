@@ -1,28 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { firestore, admin } from '@/lib/firebase-admin'
+import { connectToDatabase } from '@/lib/mongodb'
+import { mongoose } from '@/lib/mongodb'
 import bcrypt from 'bcryptjs'
-
-// Helper to delete all documents in a collection in batches
-async function deleteCollection(collectionName: string) {
-  if (!firestore) return 0
-  const snapshot = await firestore.collection(collectionName).get()
-  if (snapshot.empty) return 0
-
-  let deletedCount = 0
-  const batchSize = 500
-
-  for (let i = 0; i < snapshot.docs.length; i += batchSize) {
-    const batch = firestore.batch()
-    const chunk = snapshot.docs.slice(i, i + batchSize)
-    for (const doc of chunk) {
-      batch.delete(doc.ref)
-    }
-    await batch.commit()
-    deletedCount += chunk.length
-  }
-
-  return deletedCount
-}
 
 export async function POST(request: NextRequest) {
   try {
@@ -33,57 +12,57 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'معرف المدير وكلمة المرور مطلوبان' }, { status: 400 })
     }
 
-    // Verify admin exists and password is correct
-    if (!firestore) {
-      return NextResponse.json({ error: 'قاعدة البيانات غير متصلة' }, { status: 500 })
-    }
+    await connectToDatabase()
+    const Admin = mongoose.models.Admin
 
-    const adminDoc = await firestore.collection('admins').doc(adminId).get()
-    if (!adminDoc.exists) {
+    // Verify admin exists and password is correct
+    const adminDoc = Admin ? await Admin.findById(adminId).lean() : null
+    if (!adminDoc) {
       return NextResponse.json({ error: 'حساب المدير غير موجود' }, { status: 404 })
     }
 
-    const adminData = adminDoc.data()!
-    const isValidPassword = await bcrypt.compare(password, adminData.password)
+    const isValidPassword = await bcrypt.compare(password, adminDoc.password)
     if (!isValidPassword) {
       return NextResponse.json({ error: 'كلمة المرور غير صحيحة' }, { status: 401 })
     }
 
     // Collections to delete (all except 'admins')
-    const collectionsToDelete = [
-      'nurses',
-      'beneficiaries',
-      'serviceRequests',
-      'serviceAssignments',
-      'services',
-      'paymentMethods',
-      'coupons',
-      'ratings',
-      'activityLog',
-      'emergencyRequests',
-      'emergencyAssignments',
-      'subAdmins',
-      'chats',
-      'loyaltyPoints',
-      'referrals',
-      'reports',
-      'transactions',
-      'appointments',
-      'pushNotifications',
-      'calendarSync',
-      'whatsappQueue',
-      'favoriteNurses',
-      'notifications',
-    ]
+    const collectionsToDelete: Record<string, any> = {
+      nurses: mongoose.models.Nurse,
+      beneficiaries: mongoose.models.Beneficiary,
+      serviceRequests: mongoose.models.ServiceRequest,
+      serviceAssignments: mongoose.models.ServiceAssignment,
+      services: mongoose.models.Service,
+      paymentMethods: mongoose.models.PaymentMethod,
+      coupons: mongoose.models.Coupon,
+      ratings: mongoose.models.Rating,
+      activityLog: mongoose.models.ActivityLog,
+      emergencyRequests: mongoose.models.EmergencyRequest,
+      emergencyAssignments: mongoose.models.EmergencyAssignment,
+      subAdmins: mongoose.models.SubAdmin,
+      chats: mongoose.models.Chat,
+      loyaltyPoints: mongoose.models.LoyaltyPoint,
+      referrals: mongoose.models.Referral,
+      reports: mongoose.models.Report,
+      transactions: mongoose.models.Transaction,
+      appointments: mongoose.models.Appointment,
+      pushNotifications: mongoose.models.PushNotification,
+      fcmtokens: mongoose.models.FcmToken,
+      whatsappQueue: mongoose.models.WhatsappQueue,
+    }
 
     const results: Record<string, number> = {}
     let totalDeleted = 0
 
-    for (const collectionName of collectionsToDelete) {
+    for (const [collectionName, model] of Object.entries(collectionsToDelete)) {
       try {
-        const count = await deleteCollection(collectionName)
-        results[collectionName] = count
-        totalDeleted += count
+        if (model) {
+          const deleteResult = await model.deleteMany({})
+          results[collectionName] = deleteResult.deletedCount
+          totalDeleted += deleteResult.deletedCount
+        } else {
+          results[collectionName] = 0
+        }
       } catch (err: any) {
         results[collectionName] = -1 // Error marker
         console.error(`Error deleting collection ${collectionName}:`, err.message)
@@ -92,13 +71,16 @@ export async function POST(request: NextRequest) {
 
     // Reset app settings
     try {
-      await firestore.collection('appSettings').doc('admin').set({
-        emergencyPhone: '',
-        referralBonusPoints: 50,
-        referralBonusPointsReceiver: 25,
-        referralEnabled: true,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      })
+      const AppSetting = mongoose.models.AppSetting
+      if (AppSetting) {
+        await AppSetting.findByIdAndUpdate('admin', {
+          emergencyPhone: '',
+          referralBonusPoints: 50,
+          referralBonusPointsReceiver: 25,
+          referralEnabled: true,
+          updatedAt: new Date(),
+        }, { upsert: true, new: true, setDefaultsOnInsert: true })
+      }
     } catch (err: any) {
       console.error('Error resetting settings:', err.message)
     }

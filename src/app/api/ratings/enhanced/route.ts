@@ -1,15 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { firestore, admin, firebaseInitialized, initializationError } from '@/lib/firebase-admin'
-
-function checkFirebase() {
-  if (!firebaseInitialized || !firestore) {
-    throw new Error(initializationError || 'Firebase غير مهيأ')
-  }
-}
+import { createEnhancedRating, getNurseById, getServiceById, getBeneficiaryById } from '@/lib/firestore'
+import { connectToDatabase } from '@/lib/mongodb'
+import { mongoose } from '@/lib/mongodb'
 
 export async function POST(request: NextRequest) {
   try {
-    checkFirebase()
     const body = await request.json()
     const {
       requestId,
@@ -40,26 +35,24 @@ export async function POST(request: NextRequest) {
         if (!validKeys.includes(key)) {
           return NextResponse.json({ error: `معيار غير صالح: ${key}` }, { status: 400 })
         }
-        if (typeof value !== 'number' || value < 1 || value > 5) {
+        if (typeof value !== 'number' || (value as number) < 1 || (value as number) > 5) {
           return NextResponse.json({ error: `قيمة المعيار ${key} يجب أن تكون رقماً بين 1 و 5` }, { status: 400 })
         }
       }
     }
 
     // Verify the service request exists
-    const requestDoc = await firestore.collection('serviceRequests').doc(requestId).get()
-    if (!requestDoc.exists) {
+    await connectToDatabase()
+    const ServiceRequest = mongoose.models.ServiceRequest
+    const requestDoc = await ServiceRequest.findById(requestId).lean()
+    if (!requestDoc) {
       return NextResponse.json({ error: 'الطلب غير موجود' }, { status: 404 })
     }
 
     // Check if already rated for this request
-    const existingRating = await firestore.collection('ratings')
-      .where('requestId', '==', requestId)
-      .where('beneficiaryId', '==', beneficiaryId)
-      .limit(1)
-      .get()
-
-    if (!existingRating.empty) {
+    const Rating = mongoose.models.Rating
+    const existingRating = await Rating.findOne({ requestId, beneficiaryId }).lean()
+    if (existingRating) {
       return NextResponse.json({ error: 'تم تقييم هذا الطلب مسبقاً' }, { status: 400 })
     }
 
@@ -71,10 +64,9 @@ export async function POST(request: NextRequest) {
     // Fetch nurse name
     if (!resolvedNurseName) {
       try {
-        const nurseDoc = await firestore.collection('nurses').doc(nurseId).get()
-        if (nurseDoc.exists) {
-          const nd = nurseDoc.data()!
-          resolvedNurseName = `${nd.firstName || ''} ${nd.secondName || ''} ${nd.thirdName || ''} ${nd.lastName || ''}`.replace(/\s+/g, ' ').trim()
+        const nurse = await getNurseById(nurseId)
+        if (nurse) {
+          resolvedNurseName = `${nurse.firstName || ''} ${nurse.secondName || ''} ${nurse.thirdName || ''} ${nurse.lastName || ''}`.replace(/\s+/g, ' ').trim()
         }
       } catch {}
     }
@@ -82,9 +74,9 @@ export async function POST(request: NextRequest) {
     // Fetch beneficiary name
     if (!resolvedBeneficiaryName) {
       try {
-        const benefDoc = await firestore.collection('beneficiaries').doc(beneficiaryId).get()
-        if (benefDoc.exists) {
-          resolvedBeneficiaryName = benefDoc.data()!.name || ''
+        const benef = await getBeneficiaryById(beneficiaryId)
+        if (benef) {
+          resolvedBeneficiaryName = benef.name || ''
         }
       } catch {}
     }
@@ -92,11 +84,11 @@ export async function POST(request: NextRequest) {
     // Fetch service name from the request
     if (!resolvedServiceName) {
       try {
-        const reqData = requestDoc.data()!
-        if (reqData.serviceId) {
-          const serviceDoc = await firestore.collection('services').doc(reqData.serviceId).get()
-          if (serviceDoc.exists) {
-            resolvedServiceName = serviceDoc.data()!.name || ''
+        const requestData = requestDoc
+        if (requestData.serviceId) {
+          const service = await getServiceById(requestData.serviceId)
+          if (service) {
+            resolvedServiceName = service.name || ''
           }
         }
       } catch {}
@@ -117,8 +109,8 @@ export async function POST(request: NextRequest) {
       beforePhotos: beforePhotos || [],
       afterPhotos: afterPhotos || [],
       nurseReply: null,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: new Date(),
+      updatedAt: new Date(),
     }
 
     // Calculate average from criteria if available
@@ -128,27 +120,38 @@ export async function POST(request: NextRequest) {
       ratingData.criteriaAverage = Math.round(criteriaAvg * 10) / 10
     }
 
-    const docRef = await firestore.collection('ratings').add(ratingData)
+    // Create the rating
+    const newRating = await createEnhancedRating({
+      requestId,
+      nurseId,
+      beneficiaryId,
+      beneficiaryName: resolvedBeneficiaryName,
+      nurseName: resolvedNurseName,
+      serviceName: resolvedServiceName,
+      criteria: criteria || { punctuality: 0, professionalism: 0, cleanliness: 0, communication: 0 },
+      overallRating,
+      comment: comment || undefined,
+      beforePhotos: beforePhotos || undefined,
+      afterPhotos: afterPhotos || undefined,
+    })
 
     // Update nurse's average rating
-    const nurseRatingsSnapshot = await firestore.collection('ratings')
-      .where('nurseId', '==', nurseId)
-      .get()
-
-    if (!nurseRatingsSnapshot.empty) {
-      const allRatings = nurseRatingsSnapshot.docs.map(d => d.data().overallRating || d.data().rating || 0)
-      const avgRating = allRatings.reduce((sum, r) => sum + r, 0) / allRatings.length
+    const nurseRatings = await Rating.find({ nurseId }).lean()
+    if (nurseRatings.length > 0) {
+      const allRatings = nurseRatings.map((d: any) => d.overallRating || d.rating || 0)
+      const avgRating = allRatings.reduce((sum: number, r: number) => sum + r, 0) / allRatings.length
       const totalRatings = allRatings.length
 
-      await firestore.collection('nurses').doc(nurseId).update({
-        averageRating: Math.round(avgRating * 10) / 10,
+      const Nurse = mongoose.models.Nurse
+      await Nurse.findByIdAndUpdate(nurseId, {
+        rating: Math.round(avgRating * 10) / 10,
         totalRatings,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: new Date(),
       })
     }
 
     return NextResponse.json({
-      id: docRef.id,
+      id: newRating.id,
       ...ratingData,
       message: 'تم إنشاء التقييم بنجاح',
     }, { status: 201 })

@@ -1,16 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServiceRequestById, getAssignmentByRequestId, getNurseById, createAssignment } from '@/lib/firestore'
-import { firestore, admin, firebaseInitialized, initializationError } from '@/lib/firebase-admin'
-
-function checkFirebase() {
-  if (!firebaseInitialized || !firestore) {
-    throw new Error(initializationError || 'Firebase غير مهيأ')
-  }
-}
+import { connectToDatabase } from '@/lib/mongodb'
+import { mongoose } from '@/lib/mongodb'
 
 export async function POST(request: NextRequest) {
   try {
-    checkFirebase()
     const body = await request.json()
     const { requestId, nurseId } = body
 
@@ -55,9 +49,14 @@ export async function POST(request: NextRequest) {
 
     // Clear assignmentRejection info from request since we're reassigning
     if (serviceRequest.assignmentRejection) {
-      await firestore.collection('serviceRequests').doc(requestId).update({
-        assignmentRejection: admin.firestore.FieldValue.delete(),
-      })
+      await connectToDatabase()
+      const ServiceRequest = mongoose.models.ServiceRequest
+      if (ServiceRequest) {
+        await ServiceRequest.findByIdAndUpdate(requestId, {
+          $unset: { assignmentRejection: '' },
+          updatedAt: new Date(),
+        })
+      }
     }
 
     return NextResponse.json(assignment)

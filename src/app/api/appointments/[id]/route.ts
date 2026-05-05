@@ -1,22 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { firestore, admin, firebaseInitialized, initializationError } from '@/lib/firebase-admin'
-
-function checkFirebase() {
-  if (!firebaseInitialized || !firestore) {
-    throw new Error(initializationError || 'Firebase غير مهيأ')
-  }
-}
-
-function docToObject(doc: FirebaseFirestore.QueryDocumentSnapshot | FirebaseFirestore.DocumentSnapshot) {
-  return { id: doc.id, ...doc.data() }
-}
+import { updateAppointment, deleteAppointment, getAppointmentById, getServiceById } from '@/lib/firestore'
+import { connectToDatabase } from '@/lib/mongodb'
+import { mongoose } from '@/lib/mongodb'
 
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    checkFirebase()
     const { id } = await params
     const body = await request.json()
     const { status, date, time, notes } = body
@@ -26,8 +17,8 @@ export async function PUT(
     }
 
     // Check appointment exists
-    const aptDoc = await firestore.collection('appointments').doc(id).get()
-    if (!aptDoc.exists) {
+    const aptDoc = await getAppointmentById(id)
+    if (!aptDoc) {
       return NextResponse.json({ error: 'الموعد غير موجود' }, { status: 404 })
     }
 
@@ -48,23 +39,18 @@ export async function PUT(
       return NextResponse.json({ error: 'لا توجد بيانات للتحديث' }, { status: 400 })
     }
 
-    updateData.updatedAt = admin.firestore.FieldValue.serverTimestamp()
-
-    await firestore.collection('appointments').doc(id).update(updateData)
-
-    // Fetch and return updated document
-    const updatedDoc = await firestore.collection('appointments').doc(id).get()
-    const updatedApt = docToObject(updatedDoc)
+    const updatedApt = await updateAppointment(id, updateData)
 
     // Enrich with service info
-    if (updatedApt.serviceId) {
-      const serviceDoc = await firestore.collection('services').doc(updatedApt.serviceId).get()
-      updatedApt.service = serviceDoc.exists
-        ? { id: serviceDoc.id, name: serviceDoc.data()!.name, price: serviceDoc.data()!.price }
+    const result: Record<string, any> = { ...updatedApt }
+    if (updatedApt?.serviceId) {
+      const service = await getServiceById(updatedApt.serviceId)
+      result.service = service
+        ? { id: service.id, name: service.name, price: service.price }
         : null
     }
 
-    return NextResponse.json(updatedApt)
+    return NextResponse.json(result)
   } catch (error: any) {
     console.error('Update appointment error:', error.message)
     return NextResponse.json({ error: 'حدث خطأ في الخادم' }, { status: 500 })
@@ -76,7 +62,6 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    checkFirebase()
     const { id } = await params
 
     if (!id) {
@@ -84,12 +69,12 @@ export async function DELETE(
     }
 
     // Check appointment exists
-    const aptDoc = await firestore.collection('appointments').doc(id).get()
-    if (!aptDoc.exists) {
+    const aptDoc = await getAppointmentById(id)
+    if (!aptDoc) {
       return NextResponse.json({ error: 'الموعد غير موجود' }, { status: 404 })
     }
 
-    await firestore.collection('appointments').doc(id).delete()
+    await deleteAppointment(id)
 
     return NextResponse.json({ message: 'تم حذف الموعد بنجاح' })
   } catch (error: any) {

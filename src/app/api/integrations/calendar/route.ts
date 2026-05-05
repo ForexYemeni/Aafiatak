@@ -1,15 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { firestore, admin, firebaseInitialized, initializationError } from '@/lib/firebase-admin'
-
-function checkFirebase() {
-  if (!firebaseInitialized || !firestore) {
-    throw new Error(initializationError || 'Firebase غير مهيأ')
-  }
-}
-
-function docToObject(doc: FirebaseFirestore.QueryDocumentSnapshot | FirebaseFirestore.DocumentSnapshot) {
-  return { id: doc.id, ...doc.data() }
-}
+import { getNurseById, getServiceById, getBeneficiaryById } from '@/lib/firestore'
+import { connectToDatabase } from '@/lib/mongodb'
+import { mongoose } from '@/lib/mongodb'
 
 function sortByCreatedAt(docs: any[], order: 'asc' | 'desc' = 'desc') {
   docs.sort((a: any, b: any) => {
@@ -25,7 +17,6 @@ function sortByCreatedAt(docs: any[], order: 'asc' | 'desc' = 'desc') {
 
 export async function GET(request: NextRequest) {
   try {
-    checkFirebase()
     const { searchParams } = new URL(request.url)
     const nurseId = searchParams.get('nurseId')
 
@@ -34,70 +25,72 @@ export async function GET(request: NextRequest) {
     }
 
     // Verify nurse exists
-    const nurseDoc = await firestore.collection('nurses').doc(nurseId).get()
-    if (!nurseDoc.exists) {
+    const nurse = await getNurseById(nurseId)
+    if (!nurse) {
       return NextResponse.json({ error: 'الممرض غير موجود' }, { status: 404 })
     }
 
+    await connectToDatabase()
+    const Appointment = mongoose.models.Appointment
+    const ServiceAssignment = mongoose.models.ServiceAssignment
+    const ServiceRequest = mongoose.models.ServiceRequest
+    const Service = mongoose.models.Service
+    const Beneficiary = mongoose.models.Beneficiary
+
     // Fetch nurse's appointments
-    const appointmentsSnapshot = await firestore.collection('appointments')
-      .where('nurseId', '==', nurseId)
-      .get()
+    const appointmentsDocs = Appointment ? await Appointment.find({ nurseId }).lean() : []
 
     // Also fetch assignments as calendar events
-    const assignmentsSnapshot = await firestore.collection('serviceAssignments')
-      .where('nurseId', '==', nurseId)
-      .get()
+    const assignmentsDocs = ServiceAssignment ? await ServiceAssignment.find({ nurseId }).lean() : []
 
     const calendarEvents: any[] = []
 
     // Convert appointments to calendar events
-    for (const doc of appointmentsSnapshot.docs) {
-      const apt = docToObject(doc)
-      const serviceDoc = await firestore.collection('services').doc(apt.serviceId).get()
-      const benefDoc = await firestore.collection('beneficiaries').doc(apt.beneficiaryId).get()
+    for (const doc of appointmentsDocs) {
+      const apt = { id: doc._id.toString(), ...doc }
+      const service = apt.serviceId && Service ? await Service.findById(apt.serviceId).lean() : null
+      const benef = apt.beneficiaryId && Beneficiary ? await Beneficiary.findById(apt.beneficiaryId).lean() : null
 
       calendarEvents.push({
         id: apt.id,
         type: 'appointment',
-        title: serviceDoc.exists ? `موعد: ${serviceDoc.data()!.name}` : 'موعد',
+        title: service ? `موعد: ${service.name}` : 'موعد',
         date: apt.date,
         time: apt.time,
         status: apt.status,
         notes: apt.notes || null,
-        beneficiary: benefDoc.exists
-          ? { id: benefDoc.id, name: benefDoc.data()!.name }
+        beneficiary: benef
+          ? { id: benef._id.toString(), name: benef.name }
           : null,
-        service: serviceDoc.exists
-          ? { id: serviceDoc.id, name: serviceDoc.data()!.name }
+        service: service
+          ? { id: service._id.toString(), name: service.name }
           : null,
         createdAt: apt.createdAt,
       })
     }
 
     // Convert assignments to calendar events
-    for (const doc of assignmentsSnapshot.docs) {
-      const assignment = docToObject(doc)
-      const requestDoc = await firestore.collection('serviceRequests').doc(assignment.requestId).get()
+    for (const doc of assignmentsDocs) {
+      const assignment = { id: doc._id.toString(), ...doc }
+      const requestDoc = assignment.requestId && ServiceRequest ? await ServiceRequest.findById(assignment.requestId).lean() : null
 
-      if (requestDoc.exists) {
-        const requestData = requestDoc.data()!
-        const serviceDoc = await firestore.collection('services').doc(requestData.serviceId).get()
-        const benefDoc = await firestore.collection('beneficiaries').doc(requestData.beneficiaryId).get()
+      if (requestDoc) {
+        const service = requestDoc.serviceId && Service ? await Service.findById(requestDoc.serviceId).lean() : null
+        const benef = requestDoc.beneficiaryId && Beneficiary ? await Beneficiary.findById(requestDoc.beneficiaryId).lean() : null
 
         calendarEvents.push({
           id: assignment.id,
           type: 'assignment',
-          title: serviceDoc.exists ? `تعيين: ${serviceDoc.data()!.name}` : 'تعيين',
+          title: service ? `تعيين: ${service.name}` : 'تعيين',
           date: null, // Assignments may not have a specific date/time
           time: null,
           status: assignment.status,
-          notes: requestData.notes || null,
-          beneficiary: benefDoc.exists
-            ? { id: benefDoc.id, name: benefDoc.data()!.name, phone: benefDoc.data()!.phone }
+          notes: requestDoc.notes || null,
+          beneficiary: benef
+            ? { id: benef._id.toString(), name: benef.name, phone: benef.phone }
             : null,
-          service: serviceDoc.exists
-            ? { id: serviceDoc.id, name: serviceDoc.data()!.name }
+          service: service
+            ? { id: service._id.toString(), name: service.name }
             : null,
           createdAt: assignment.createdAt,
         })
@@ -120,7 +113,6 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    checkFirebase()
     const body = await request.json()
     const { nurseId, appointmentId } = body
 
@@ -129,63 +121,83 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify nurse exists
-    const nurseDoc = await firestore.collection('nurses').doc(nurseId).get()
-    if (!nurseDoc.exists) {
+    const nurse = await getNurseById(nurseId)
+    if (!nurse) {
       return NextResponse.json({ error: 'الممرض غير موجود' }, { status: 404 })
     }
 
+    await connectToDatabase()
+    const Appointment = mongoose.models.Appointment
+    const Service = mongoose.models.Service
+    const Beneficiary = mongoose.models.Beneficiary
+
     // Verify appointment exists
-    const appointmentDoc = await firestore.collection('appointments').doc(appointmentId).get()
-    if (!appointmentDoc.exists) {
+    const appointmentDoc = Appointment ? await Appointment.findById(appointmentId).lean() : null
+    if (!appointmentDoc) {
       return NextResponse.json({ error: 'الموعد غير موجود' }, { status: 404 })
     }
 
-    const appointmentData = appointmentDoc.data()!
-
     // Verify appointment belongs to this nurse
-    if (appointmentData.nurseId !== nurseId) {
+    if (appointmentDoc.nurseId !== nurseId) {
       return NextResponse.json({ error: 'هذا الموعد لا ينتمي لهذا الممرض' }, { status: 403 })
     }
 
     // Fetch related data for calendar event
-    const serviceDoc = appointmentData.serviceId
-      ? await firestore.collection('services').doc(appointmentData.serviceId).get()
+    const service = appointmentDoc.serviceId && Service
+      ? await Service.findById(appointmentDoc.serviceId).lean()
       : null
-    const benefDoc = appointmentData.beneficiaryId
-      ? await firestore.collection('beneficiaries').doc(appointmentData.beneficiaryId).get()
+    const benef = appointmentDoc.beneficiaryId && Beneficiary
+      ? await Beneficiary.findById(appointmentDoc.beneficiaryId).lean()
       : null
 
-    // Create calendar sync record
+    // Create calendar sync record (using a generic approach with mongoose)
+    // We'll use the AppSetting model pattern for storing calendar sync records
+    const calendarSyncSchema = new mongoose.Schema({
+      nurseId: String,
+      appointmentId: String,
+      eventType: String,
+      title: String,
+      description: String,
+      date: String,
+      time: String,
+      beneficiary: Object,
+      service: Object,
+      syncedAt: Date,
+      status: String,
+      createdAt: Date,
+    }, { strict: false })
+    const CalendarSync = mongoose.models.CalendarSync || mongoose.model('CalendarSync', calendarSyncSchema, 'calendarsync')
+
     const syncData = {
       nurseId,
       appointmentId,
       eventType: 'appointment',
-      title: serviceDoc?.exists ? `موعد: ${serviceDoc.data()!.name}` : 'موعد',
-      description: appointmentData.notes || '',
-      date: appointmentData.date || null,
-      time: appointmentData.time || null,
-      beneficiary: benefDoc?.exists
-        ? { id: benefDoc.id, name: benefDoc.data()!.name }
+      title: service ? `موعد: ${service.name}` : 'موعد',
+      description: appointmentDoc.notes || '',
+      date: appointmentDoc.date || null,
+      time: appointmentDoc.time || null,
+      beneficiary: benef
+        ? { id: benef._id.toString(), name: benef.name }
         : null,
-      service: serviceDoc?.exists
-        ? { id: serviceDoc.id, name: serviceDoc.data()!.name }
+      service: service
+        ? { id: service._id.toString(), name: service.name }
         : null,
-      syncedAt: admin.firestore.FieldValue.serverTimestamp(),
+      syncedAt: new Date(),
       status: 'synced',
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: new Date(),
     }
 
-    const docRef = await firestore.collection('calendarSync').add(syncData)
+    const syncDoc = await CalendarSync.create(syncData)
 
     // Update appointment to mark as synced
-    await firestore.collection('appointments').doc(appointmentId).update({
+    await Appointment.findByIdAndUpdate(appointmentId, {
       calendarSynced: true,
-      calendarSyncId: docRef.id,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      calendarSyncId: syncDoc._id.toString(),
+      updatedAt: new Date(),
     })
 
     return NextResponse.json({
-      id: docRef.id,
+      id: syncDoc._id.toString(),
       ...syncData,
       message: 'تم مزامنة الموعد مع التقويم بنجاح',
     }, { status: 201 })

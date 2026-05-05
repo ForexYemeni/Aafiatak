@@ -3,18 +3,11 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { firestore, admin, firebaseInitialized, initializationError } from '@/lib/firebase-admin'
-
-function checkFirebase() {
-  if (!firebaseInitialized || !firestore) {
-    throw new Error(initializationError || 'Firebase غير مهيأ')
-  }
-}
+import { markNotificationAsRead } from '@/lib/firestore'
 
 // ─── PATCH: Update notification (mark as read) ───
 export async function PATCH(request: NextRequest) {
   try {
-    checkFirebase()
     const body = await request.json()
     const { notificationId, isRead } = body
 
@@ -22,10 +15,7 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'معرف الإشعار مطلوب' }, { status: 400 })
     }
 
-    await firestore.collection('pushNotifications').doc(notificationId).update({
-      isRead: isRead !== undefined ? isRead : true,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    })
+    await markNotificationAsRead(notificationId)
 
     return NextResponse.json({ success: true })
   } catch (error: any) {

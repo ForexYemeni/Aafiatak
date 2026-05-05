@@ -1,17 +1,13 @@
 /**
  * عافيتك — Send Push Notification API
- * Sends FCM push notifications to users AND stores in Firestore
+ * Sends FCM push notifications to users AND stores in MongoDB
  * Works even when the app is closed via service worker
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { firestore, admin, firebaseInitialized, initializationError } from '@/lib/firebase-admin'
-
-function checkFirebase() {
-  if (!firebaseInitialized || !firestore) {
-    throw new Error(initializationError || 'Firebase غير مهيأ')
-  }
-}
+import { messaging, admin, firebaseInitialized, initializationError } from '@/lib/firebase-admin'
+import { connectToDatabase, docToObject } from '@/lib/mongodb'
+import { mongoose } from '@/lib/mongodb'
 
 // ─── Send FCM push notification to all tokens of a user ───
 async function sendFCMNotification(
@@ -26,23 +22,25 @@ async function sendFCMNotification(
   let failed = 0
 
   try {
-    // Get all active FCM tokens for this user
-    const tokenSnapshot = await firestore
-      .collection('fcmTokens')
-      .where('userId', '==', userId)
-      .where('userType', '==', userType)
-      .where('isActive', '==', true)
-      .get()
+    if (!firebaseInitialized || !messaging) {
+      console.warn('FCM not initialized, skipping push notification')
+      return { sent: 0, failed: 0 }
+    }
 
-    if (tokenSnapshot.empty) {
+    await connectToDatabase()
+    const FcmToken = mongoose.models.FcmToken
+
+    // Get all active FCM tokens for this user
+    const tokens = await FcmToken.find({ userId, userType, isActive: true }).lean()
+
+    if (!tokens || tokens.length === 0) {
       console.log(`No FCM tokens found for ${userType}/${userId}`)
       return { sent: 0, failed: 0 }
     }
 
-    const tokens = tokenSnapshot.docs.map(doc => doc.data().token)
-
     // Send to each token individually (better error handling)
-    for (const token of tokens) {
+    for (const tokenDoc of tokens) {
+      const token = tokenDoc.token
       try {
         const message: admin.messaging.Message = {
           token,
@@ -93,11 +91,11 @@ async function sendFCMNotification(
           },
         }
 
-        await admin.messaging().send(message)
+        await messaging.send(message)
         sent++
       } catch (error: any) {
         failed++
-        console.error(`FCM send failed for token ${token.substring(0, 20)}...:`, error.message)
+        console.error(`FCM send failed for token ${token?.substring(0, 20)}...:`, error.message)
 
         // If token is invalid, deactivate it
         if (
@@ -105,10 +103,7 @@ async function sendFCMNotification(
           error.code === 'messaging/registration-token-not-registered'
         ) {
           try {
-            const tokenDoc = tokenSnapshot.docs.find(d => d.data().token === token)
-            if (tokenDoc) {
-              await tokenDoc.ref.update({ isActive: false })
-            }
+            await FcmToken.updateOne({ _id: tokenDoc._id }, { isActive: false })
           } catch {
             // Ignore cleanup errors
           }
@@ -146,7 +141,9 @@ async function sendBulkFCMNotification(
 // ─── POST: Send a push notification ───
 export async function POST(request: NextRequest) {
   try {
-    checkFirebase()
+    await connectToDatabase()
+    const PushNotification = mongoose.models.PushNotification
+
     const body = await request.json()
     const { userId, userType, title, message, type, data, userIds } = body
 
@@ -159,15 +156,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'نوع الإشعار غير صالح' }, { status: 400 })
     }
 
-    // Store notification in Firestore
+    // Store notification in MongoDB
     const notificationData: Record<string, any> = {
       title,
       message: message || '',
       type,
       data: data || null,
       isRead: false,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: new Date(),
+      updatedAt: new Date(),
     }
 
     let storedCount = 0
@@ -183,7 +180,7 @@ export async function POST(request: NextRequest) {
       notificationData.userId = userId
       notificationData.userType = userType
 
-      await firestore.collection('pushNotifications').add(notificationData)
+      await PushNotification.create(notificationData)
       storedCount = 1
 
       // Send FCM push notification
@@ -198,11 +195,7 @@ export async function POST(request: NextRequest) {
         userType,
       }))
 
-      const batch = firestore.batch()
-      bulkNotifications.forEach(notif => {
-        batch.create(firestore.collection('pushNotifications').doc(), notif)
-      })
-      await batch.commit()
+      await PushNotification.insertMany(bulkNotifications)
       storedCount = userIds.length
 
       // Send FCM to all users

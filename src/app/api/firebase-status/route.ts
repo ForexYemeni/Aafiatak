@@ -1,47 +1,32 @@
 import { NextResponse } from 'next/server'
-import { firebaseInitialized, initializationError } from '@/lib/firebase-admin'
+import { isDatabaseConnected, getDatabaseError } from '@/lib/mongodb'
+import { connectToDatabase } from '@/lib/mongodb'
 
 export async function GET() {
-  // Basic check: is the SDK initialized?
-  if (!firebaseInitialized) {
-    return NextResponse.json({
-      connected: false,
-      error: initializationError || 'Firebase غير مهيأ',
-    })
+  // Check if MongoDB is connected
+  if (!isDatabaseConnected()) {
+    const error = getDatabaseError()
+    // Try to connect once
+    try {
+      await connectToDatabase()
+    } catch {
+      return NextResponse.json({
+        connected: false,
+        error: error || 'قاعدة البيانات غير متصلة. يرجى التحقق من إعدادات MONGODB_URI',
+      })
+    }
   }
 
-  // Try a lightweight Firestore read to verify the database actually works
-  // Use a minimal document fetch to reduce quota usage
+  // Verify the database actually works by reading a document
   try {
-    const { firestore } = await import('@/lib/firebase-admin')
-    // Try to read from a dedicated health check document (single doc read = 1 operation vs collection query)
-    try {
-      await firestore.collection('_health_check').doc('ping').get()
-    } catch {
-      // If health check doc doesn't exist, try listing admins (which will be queried anyway)
-      await firestore.collection('admins').select('username').limit(1).get()
+    const { mongoose } = await import('@/lib/mongodb')
+    const Admin = mongoose.models.Admin
+    if (Admin) {
+      await Admin.findOne().select('_id').lean()
     }
     return NextResponse.json({ connected: true, error: null })
   } catch (error: any) {
     const msg = error.message || ''
-    const code = error.code || ''
-    
-    // Check for Firestore quota exceeded (Spark free plan limit)
-    if (msg.includes('RESOURCE_EXHAUSTED') || msg.includes('Quota exceeded') || code === '8') {
-      return NextResponse.json({
-        connected: false,
-        error: 'تم تجاوز الحصة المجانية لقاعدة البيانات. يرجى الترقية إلى خطة Blaze في Firebase Console.',
-        isQuotaExceeded: true,
-      })
-    }
-    
-    if (msg.includes('PERMISSION_DENIED') || msg.includes('has not been used')) {
-      return NextResponse.json({
-        connected: false,
-        error: 'يجب تفعيل Firestore Database من Firebase Console مع اختيار Test Mode',
-      })
-    }
-    // SDK initialized but Firestore might have issues
     return NextResponse.json({
       connected: false,
       error: `خطأ في الاتصال بقاعدة البيانات: ${msg.substring(0, 100)}`,

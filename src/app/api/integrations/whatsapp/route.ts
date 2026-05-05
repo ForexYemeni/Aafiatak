@@ -1,15 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { firestore, admin, firebaseInitialized, initializationError } from '@/lib/firebase-admin'
-
-function checkFirebase() {
-  if (!firebaseInitialized || !firestore) {
-    throw new Error(initializationError || 'Firebase غير مهيأ')
-  }
-}
+import { queueWhatsAppMessage } from '@/lib/firestore'
 
 export async function POST(request: NextRequest) {
   try {
-    checkFirebase()
     const body = await request.json()
     const { phone, message } = body
 
@@ -32,24 +25,18 @@ export async function POST(request: NextRequest) {
     }
 
     // Create WhatsApp message record in queue
-    const queueData = {
+    const queued = await queueWhatsAppMessage({
       phone: phone.replace(/[\s\-()]/g, ''),
       message: message.trim(),
-      status: 'queued',
-      attempts: 0,
-      maxAttempts: 3,
-      lastAttemptAt: null,
-      sentAt: null,
-      error: null,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    }
-
-    const docRef = await firestore.collection('whatsappQueue').add(queueData)
+      type: 'notification',
+    })
 
     return NextResponse.json({
-      id: docRef.id,
-      ...queueData,
+      id: queued.id,
+      phone: phone.replace(/[\s\-()]/g, ''),
+      messageContent: message.trim(),
+      status: 'queued',
+      attempts: 0,
       message: 'تم إضافة الرسالة إلى قائمة الانتظار',
     }, { status: 201 })
   } catch (error: any) {

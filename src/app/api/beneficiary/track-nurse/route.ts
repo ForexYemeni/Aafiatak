@@ -1,11 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { firestore, admin, firebaseInitialized, initializationError } from '@/lib/firebase-admin'
-
-function checkFirebase() {
-  if (!firebaseInitialized || !firestore) {
-    throw new Error(initializationError || 'Firebase غير مهيأ')
-  }
-}
+import { getNurseById, getBeneficiaryById } from '@/lib/firestore'
+import { connectToDatabase } from '@/lib/mongodb'
+import { mongoose } from '@/lib/mongodb'
 
 // Calculate distance between two points using Haversine formula (in km)
 function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -47,7 +43,6 @@ function extractCoordinates(location: any): { lat: number; lng: number } | null 
 
 export async function GET(request: NextRequest) {
   try {
-    checkFirebase()
     const { searchParams } = new URL(request.url)
     const assignmentId = searchParams.get('assignmentId')
 
@@ -55,25 +50,30 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'معرف التعيين مطلوب' }, { status: 400 })
     }
 
+    await connectToDatabase()
+    const ServiceAssignment = mongoose.models.ServiceAssignment
+    const ServiceRequest = mongoose.models.ServiceRequest
+    const Nurse = mongoose.models.Nurse
+    const Beneficiary = mongoose.models.Beneficiary
+
     // Fetch assignment
-    const assignmentDoc = await firestore.collection('serviceAssignments').doc(assignmentId).get()
-    if (!assignmentDoc.exists) {
+    const assignmentDoc = ServiceAssignment ? await ServiceAssignment.findById(assignmentId).lean() : null
+    if (!assignmentDoc) {
       return NextResponse.json({ error: 'التعيين غير موجود' }, { status: 404 })
     }
 
-    const assignmentData = assignmentDoc.data()!
-    const nurseId = assignmentData.nurseId
-    const requestId = assignmentData.requestId
+    const nurseId = assignmentDoc.nurseId
+    const requestId = assignmentDoc.requestId
 
     if (!nurseId) {
       return NextResponse.json({ error: 'لم يتم تعيين ممرض لهذا الطلب' }, { status: 400 })
     }
 
     // Check assignment status
-    if (assignmentData.status === 'completed' || assignmentData.status === 'cancelled') {
+    if (assignmentDoc.status === 'completed' || assignmentDoc.status === 'cancelled') {
       return NextResponse.json({
         nurseId,
-        assignmentStatus: assignmentData.status,
+        assignmentStatus: assignmentDoc.status,
         nurseLocation: null,
         beneficiaryLocation: null,
         message: 'التعيين مكتمل أو ملغي',
@@ -81,13 +81,12 @@ export async function GET(request: NextRequest) {
     }
 
     // Fetch nurse data with current location
-    const nurseDoc = await firestore.collection('nurses').doc(nurseId).get()
-    if (!nurseDoc.exists) {
+    const nurseDoc = Nurse ? await Nurse.findById(nurseId).lean() : null
+    if (!nurseDoc) {
       return NextResponse.json({ error: 'الممرض غير موجود' }, { status: 404 })
     }
 
-    const nurseData = nurseDoc.data()!
-    const currentLocation = nurseData.currentLocation || null
+    const currentLocation = nurseDoc.currentLocation || null
 
     // Parse nurse location
     let nurseLocation: { lat: number; lng: number; updatedAt?: string } | null = null
@@ -110,19 +109,17 @@ export async function GET(request: NextRequest) {
     // Fetch beneficiary location from the service request
     let beneficiaryLocation: { lat: number; lng: number } | null = null
     if (requestId) {
-      const requestDoc = await firestore.collection('serviceRequests').doc(requestId).get()
-      if (requestDoc.exists) {
-        const requestData = requestDoc.data()!
-        if (requestData.address) {
-          beneficiaryLocation = extractCoordinates(requestData.address)
+      const requestDoc = ServiceRequest ? await ServiceRequest.findById(requestId).lean() : null
+      if (requestDoc) {
+        if (requestDoc.address) {
+          beneficiaryLocation = extractCoordinates(requestDoc.address)
         }
         // Also check beneficiary's registered location
-        if (!beneficiaryLocation && requestData.beneficiaryId) {
-          const benefDoc = await firestore.collection('beneficiaries').doc(requestData.beneficiaryId).get()
-          if (benefDoc.exists) {
-            const benefData = benefDoc.data()!
-            if (benefData.location) {
-              beneficiaryLocation = extractCoordinates(benefData.location)
+        if (!beneficiaryLocation && requestDoc.beneficiaryId) {
+          const benefDoc = Beneficiary ? await Beneficiary.findById(requestDoc.beneficiaryId).lean() : null
+          if (benefDoc) {
+            if (benefDoc.location) {
+              beneficiaryLocation = extractCoordinates(benefDoc.location)
             }
           }
         }
@@ -143,11 +140,11 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       nurseId,
       nurse: {
-        firstName: nurseData.firstName || '',
-        lastName: nurseData.lastName || '',
-        phone: nurseData.phone || '',
+        firstName: nurseDoc.firstName || '',
+        lastName: nurseDoc.lastName || '',
+        phone: nurseDoc.phone || '',
       },
-      assignmentStatus: assignmentData.status,
+      assignmentStatus: assignmentDoc.status,
       nurseLocation,
       beneficiaryLocation,
       distanceKm,

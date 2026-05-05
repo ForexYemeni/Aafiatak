@@ -1,19 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { firestore, admin, firebaseInitialized, initializationError } from '@/lib/firebase-admin'
+import { connectToDatabase } from '@/lib/mongodb'
+import { mongoose } from '@/lib/mongodb'
 
-function checkFirebase() {
-  if (!firebaseInitialized || !firestore) {
-    throw new Error(initializationError || 'Firebase غير مهيأ')
-  }
-}
-
-function docToObject(doc: FirebaseFirestore.QueryDocumentSnapshot | FirebaseFirestore.DocumentSnapshot) {
-  return { id: doc.id, ...doc.data() }
+function docToObject(doc: any) {
+  if (!doc) return null
+  const obj = doc.toObject ? doc.toObject() : doc
+  const { _id, __v, ...rest } = obj
+  return { id: _id.toString(), ...rest }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    checkFirebase()
     const body = await request.json()
     const { assignmentId, nurseId, action, rejectionReason } = body
 
@@ -30,27 +27,30 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'يرجى إدخال سبب الرفض' }, { status: 400 })
     }
 
+    await connectToDatabase()
+    const ServiceAssignment = mongoose.models.ServiceAssignment
+    const ServiceRequest = mongoose.models.ServiceRequest
+    const Nurse = mongoose.models.Nurse
+
     // Fetch assignment
-    const assignmentDoc = await firestore.collection('serviceAssignments').doc(assignmentId).get()
-    if (!assignmentDoc.exists) {
+    const assignmentDoc = ServiceAssignment ? await ServiceAssignment.findById(assignmentId).lean() : null
+    if (!assignmentDoc) {
       return NextResponse.json({ error: 'التعيين غير موجود' }, { status: 404 })
     }
 
-    const assignmentData = assignmentDoc.data()!
-
     // Verify this assignment belongs to the nurse
-    if (assignmentData.nurseId !== nurseId) {
+    if (assignmentDoc.nurseId !== nurseId) {
       return NextResponse.json({ error: 'هذا التعيين لا ينتمي لهذا الممرض' }, { status: 403 })
     }
 
     // Check assignment is in a valid state for accept/reject
-    if (assignmentData.status !== 'assigned' && assignmentData.status !== 'pending') {
-      return NextResponse.json({ error: `لا يمكن تغيير حالة التعيين الحالية: ${assignmentData.status}` }, { status: 400 })
+    if (assignmentDoc.status !== 'assigned' && assignmentDoc.status !== 'pending') {
+      return NextResponse.json({ error: `لا يمكن تغيير حالة التعيين الحالية: ${assignmentDoc.status}` }, { status: 400 })
     }
 
     // Verify nurse exists and is approved
-    const nurseDoc = await firestore.collection('nurses').doc(nurseId).get()
-    if (!nurseDoc.exists) {
+    const nurseDoc = Nurse ? await Nurse.findById(nurseId).lean() : null
+    if (!nurseDoc) {
       return NextResponse.json({ error: 'الممرض غير موجود' }, { status: 404 })
     }
 
@@ -59,36 +59,38 @@ export async function POST(request: NextRequest) {
     // Update assignment status
     const updateData: Record<string, any> = {
       status: newStatus,
-      respondedAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      respondedAt: new Date(),
+      updatedAt: new Date(),
     }
 
     // Save rejection reason if rejecting
     if (action === 'reject' && rejectionReason) {
       updateData.rejectionReason = rejectionReason.trim()
-      updateData.rejectedAt = admin.firestore.FieldValue.serverTimestamp()
+      updateData.rejectedAt = new Date()
     }
 
-    await firestore.collection('serviceAssignments').doc(assignmentId).update(updateData)
+    if (ServiceAssignment) {
+      await ServiceAssignment.findByIdAndUpdate(assignmentId, updateData)
+    }
 
     // If accepted, also update the service request status
-    if (action === 'accept' && assignmentData.requestId) {
-      await firestore.collection('serviceRequests').doc(assignmentData.requestId).update({
-        status: 'in_progress',
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      })
+    if (action === 'accept' && assignmentDoc.requestId) {
+      if (ServiceRequest) {
+        await ServiceRequest.findByIdAndUpdate(assignmentDoc.requestId, {
+          status: 'in_progress',
+          updatedAt: new Date(),
+        })
+      }
     }
 
     // If rejected, update the service request to allow reassignment and store rejection info
-    if (action === 'reject' && assignmentData.requestId) {
+    if (action === 'reject' && assignmentDoc.requestId) {
       // Get nurse name for the rejection record
-      const nurseData = nurseDoc.data()!
-      const nurseName = `${nurseData.firstName || ''} ${nurseData.lastName || ''}`.trim()
+      const nurseName = `${nurseDoc.firstName || ''} ${nurseDoc.lastName || ''}`.trim()
 
       // Get existing rejected nurses list
-      const requestDoc = await firestore.collection('serviceRequests').doc(assignmentData.requestId).get()
-      const requestData = requestDoc.data() || {}
-      const rejectedNurses = requestData.rejectedNurses || []
+      const requestDoc = ServiceRequest ? await ServiceRequest.findById(assignmentDoc.requestId).lean() : null
+      const rejectedNurses = requestDoc?.rejectedNurses || []
 
       // Add this nurse to the rejected list if not already there
       if (!rejectedNurses.some((rn: any) => rn.nurseId === nurseId)) {
@@ -100,22 +102,24 @@ export async function POST(request: NextRequest) {
         })
       }
 
-      await firestore.collection('serviceRequests').doc(assignmentData.requestId).update({
-        status: 'approved', // Reset back to approved so admin can reassign
-        rejectedNurses,
-        assignmentRejection: {
-          nurseId,
-          nurseName,
-          reason: rejectionReason.trim(),
-          rejectedAt: new Date().toISOString(),
-        },
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      })
+      if (ServiceRequest) {
+        await ServiceRequest.findByIdAndUpdate(assignmentDoc.requestId, {
+          status: 'approved', // Reset back to approved so admin can reassign
+          rejectedNurses,
+          assignmentRejection: {
+            nurseId,
+            nurseName,
+            reason: rejectionReason.trim(),
+            rejectedAt: new Date().toISOString(),
+          },
+          updatedAt: new Date(),
+        })
+      }
     }
 
     // Fetch updated assignment
-    const updatedDoc = await firestore.collection('serviceAssignments').doc(assignmentId).get()
-    const updatedAssignment = docToObject(updatedDoc)
+    const updatedDoc = ServiceAssignment ? await ServiceAssignment.findById(assignmentId).lean() : null
+    const updatedAssignment = updatedDoc ? docToObject(updatedDoc) : null
 
     return NextResponse.json({
       ...updatedAssignment,

@@ -1,15 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { firestore, admin, firebaseInitialized, initializationError } from '@/lib/firebase-admin'
-
-function checkFirebase() {
-  if (!firebaseInitialized || !firestore) {
-    throw new Error(initializationError || 'Firebase غير مهيأ')
-  }
-}
+import { getServiceById, getAdminSettings } from '@/lib/firestore'
+import { connectToDatabase } from '@/lib/mongodb'
+import { mongoose } from '@/lib/mongodb'
 
 export async function GET(request: NextRequest) {
   try {
-    checkFirebase()
     const { searchParams } = new URL(request.url)
     const serviceIds = searchParams.get('serviceIds') // comma-separated for multiple services
     const singleServiceId = searchParams.get('serviceId') // single service (backward compat)
@@ -29,17 +24,16 @@ export async function GET(request: NextRequest) {
       commissionPercent: 15,
     }
     try {
-      const settingsDoc = await firestore.collection('appSettings').doc('admin').get()
-      if (settingsDoc.exists) {
-        const data = settingsDoc.data()!
-        if (data.nightSurchargePercent !== undefined) pricingSettings.nightSurchargePercent = data.nightSurchargePercent
-        if (data.fridaySurchargePercent !== undefined) pricingSettings.fridaySurchargePercent = data.fridaySurchargePercent
-        if (data.distanceFeesEnabled !== undefined) pricingSettings.distanceFeesEnabled = data.distanceFeesEnabled
-        if (data.distanceFeePerKm5to15 !== undefined) pricingSettings.distanceFeePerKm5to15 = data.distanceFeePerKm5to15
-        if (data.distanceFeePerKm15to30 !== undefined) pricingSettings.distanceFeePerKm15to30 = data.distanceFeePerKm15to30
-        if (data.distanceFeePerKmOver30 !== undefined) pricingSettings.distanceFeePerKmOver30 = data.distanceFeePerKmOver30
-        if (data.distanceFreeKm !== undefined) pricingSettings.distanceFreeKm = data.distanceFreeKm
-        if (data.commissionPercent !== undefined) pricingSettings.commissionPercent = data.commissionPercent
+      const settings = await getAdminSettings()
+      if (settings) {
+        if (settings.nightSurchargePercent !== undefined) pricingSettings.nightSurchargePercent = settings.nightSurchargePercent
+        if (settings.fridaySurchargePercent !== undefined) pricingSettings.fridaySurchargePercent = settings.fridaySurchargePercent
+        if (settings.distanceFeesEnabled !== undefined) pricingSettings.distanceFeesEnabled = settings.distanceFeesEnabled
+        if (settings.distanceFeePerKm5to15 !== undefined) pricingSettings.distanceFeePerKm5to15 = settings.distanceFeePerKm5to15
+        if (settings.distanceFeePerKm15to30 !== undefined) pricingSettings.distanceFeePerKm15to30 = settings.distanceFeePerKm15to30
+        if (settings.distanceFeePerKmOver30 !== undefined) pricingSettings.distanceFeePerKmOver30 = settings.distanceFeePerKmOver30
+        if (settings.distanceFreeKm !== undefined) pricingSettings.distanceFreeKm = settings.distanceFreeKm
+        if (settings.commissionPercent !== undefined) pricingSettings.commissionPercent = settings.commissionPercent
       }
     } catch {}
 
@@ -120,13 +114,12 @@ export async function GET(request: NextRequest) {
     let totalFinalPrice = 0
 
     for (const sid of ids) {
-      const serviceDoc = await firestore.collection('services').doc(sid).get()
-      if (!serviceDoc.exists) continue
+      const service = await getServiceById(sid)
+      if (!service) continue
 
-      const serviceData = serviceDoc.data()!
-      if (!serviceData.isActive) continue
+      if (!service.isActive) continue
 
-      const basePrice = serviceData.price || 0
+      const basePrice = service.price || 0
       const timeAdjustedPrice = Math.round(basePrice * timeMultiplier)
       const fridayAdjustedPrice = fridayMultiplier > 1
         ? Math.round(timeAdjustedPrice * fridayMultiplier)
@@ -134,7 +127,7 @@ export async function GET(request: NextRequest) {
 
       services.push({
         serviceId: sid,
-        serviceName: serviceData.name,
+        serviceName: service.name,
         basePrice,
         timeAdjustedPrice,
         fridayAdjustedPrice,

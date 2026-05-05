@@ -1,8 +1,14 @@
+/**
+ * عافيتك — Firebase Admin SDK (FCM Push Notifications ONLY)
+ * Data storage is now handled by MongoDB Atlas
+ * This file only handles Firebase Cloud Messaging for push notifications
+ */
+
 import * as admin from 'firebase-admin'
 
 let firebaseInitialized = false
 let initializationError: string | null = null
-let firestoreInstance: admin.firestore.Firestore | null = null
+let messagingInstance: admin.messaging.Messaging | null = null
 
 function parsePrivateKey(key: string | undefined): string | undefined {
   if (!key) return undefined
@@ -59,8 +65,8 @@ if (!admin.apps.length) {
         }),
       })
       firebaseInitialized = true
-      firestoreInstance = admin.firestore()
-      console.log('✅ Firebase Admin SDK initialized successfully')
+      messagingInstance = admin.messaging()
+      console.log('✅ Firebase Admin SDK initialized (FCM only - data uses MongoDB)')
     } catch (error: any) {
       initializationError = `فشل تهيئة Firebase: ${error.message}`
       console.error('❌ Firebase Admin SDK initialization failed:', error.message)
@@ -77,12 +83,12 @@ if (!admin.apps.length) {
     } else {
       initializationError = 'بيانات Firebase غير صالحة. تأكد من صحة المفتاح الخاص أنه يحتوي على -----BEGIN PRIVATE KEY-----'
     }
-    console.warn('⚠️ Firebase Admin SDK: Missing or invalid credentials.', missing.length > 0 ? `Missing: ${missing.join(', ')}` : '')
+    console.warn('⚠️ Firebase Admin SDK: Missing or invalid credentials (FCM only).', missing.length > 0 ? `Missing: ${missing.join(', ')}` : '')
   }
 } else {
   firebaseInitialized = true
-  firestoreInstance = admin.firestore()
+  messagingInstance = admin.messaging()
 }
 
-export const firestore = firestoreInstance as admin.firestore.Firestore
+export const messaging = messagingInstance
 export { admin, firebaseInitialized, initializationError }

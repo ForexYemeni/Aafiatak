@@ -1,15 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { firestore, admin, firebaseInitialized, initializationError } from '@/lib/firebase-admin'
-
-function checkFirebase() {
-  if (!firebaseInitialized || !firestore) {
-    throw new Error(initializationError || 'Firebase غير مهيأ')
-  }
-}
+import { createReport } from '@/lib/firestore'
+import { connectToDatabase } from '@/lib/mongodb'
+import { mongoose } from '@/lib/mongodb'
 
 export async function POST(request: NextRequest) {
   try {
-    checkFirebase()
     const body = await request.json()
     const { reporterId, reporterType, reportedId, reportedType, type, description, images, requestId, serviceName } = body
 
@@ -33,25 +28,53 @@ export async function POST(request: NextRequest) {
 
     // Fetch reporter name
     let reporterName = 'غير معروف'
-    const reporterCollection = reporterType === 'beneficiary' ? 'beneficiaries' : 'nurses'
-    const reporterDoc = await firestore.collection(reporterCollection).doc(reporterId).get()
-    if (reporterDoc.exists) {
-      const data = reporterDoc.data()!
-      reporterName = data.name || `${data.firstName || ''} ${data.lastName || ''}`.trim()
+    await connectToDatabase()
+    const reporterCollection = reporterType === 'beneficiary' ? mongoose.models.Beneficiary : mongoose.models.Nurse
+    if (reporterCollection) {
+      const reporterDoc = await reporterCollection.findById(reporterId).lean()
+      if (reporterDoc) {
+        reporterName = reporterDoc.name || `${reporterDoc.firstName || ''} ${reporterDoc.lastName || ''}`.trim()
+      }
     }
 
     // Fetch reported entity name
     let reportedName = 'غير محدد'
     if (reportedId && reportedType && reportedId !== 'general') {
-      const reportedCollection = reportedType === 'beneficiary' ? 'beneficiaries' : reportedType === 'nurse' ? 'nurses' : 'services'
-      const reportedDoc = await firestore.collection(reportedCollection).doc(reportedId).get()
-      if (reportedDoc.exists) {
-        const data = reportedDoc.data()!
-        reportedName = data.name || `${data.firstName || ''} ${data.lastName || ''}`.trim()
+      const reportedCollectionName = reportedType === 'beneficiary' ? 'Beneficiary' : reportedType === 'nurse' ? 'Nurse' : 'Service'
+      const reportedCollection = mongoose.models[reportedCollectionName]
+      if (reportedCollection) {
+        const reportedDoc = await reportedCollection.findById(reportedId).lean()
+        if (reportedDoc) {
+          reportedName = reportedDoc.name || `${reportedDoc.firstName || ''} ${reportedDoc.lastName || ''}`.trim()
+        }
       }
     }
 
-    const reportData = {
+    const report = await createReport({
+      reporterId,
+      reporterType,
+      reportedId: reportedId || 'general',
+      reportedType: reportedType || 'general',
+      type,
+      description,
+      images: images || [],
+    })
+
+    // Add extra fields that createReport doesn't cover
+    await connectToDatabase()
+    const Report = mongoose.models.Report
+    await Report.findByIdAndUpdate(report.id, {
+      reporterName,
+      reportedName,
+      requestId: requestId || null,
+      serviceName: serviceName || null,
+      adminNotes: null,
+      resolvedAt: null,
+      resolvedBy: null,
+    })
+
+    return NextResponse.json({
+      id: report.id,
       reporterId,
       reporterType,
       reporterName,
@@ -68,15 +91,6 @@ export async function POST(request: NextRequest) {
       adminResponse: null,
       resolvedAt: null,
       resolvedBy: null,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    }
-
-    const docRef = await firestore.collection('reports').add(reportData)
-
-    return NextResponse.json({
-      id: docRef.id,
-      ...reportData,
       message: 'تم إنشاء البلاغ بنجاح',
     }, { status: 201 })
   } catch (error: any) {
