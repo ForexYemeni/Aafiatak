@@ -25,6 +25,7 @@ import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/
 import { Progress } from '@/components/ui/progress'
 import { useToast } from '@/hooks/use-toast'
 import ChatSystem from '@/components/ChatSystem'
+import TrackingMap from '@/components/TrackingMap'
 import Image from 'next/image'
 
 // ===== Date Formatting Helpers =====
@@ -2929,14 +2930,28 @@ export default function BeneficiaryDashboard() {
 
                 {/* ===== TRACKING TAB ===== */}
                 {activeTab === 'tracking' && (
-                  <div className="space-y-6">
-                    <div>
-                      <h1 className="text-2xl font-bold bg-gradient-to-l from-violet-700 to-fuchsia-600 bg-clip-text text-transparent">تتبع الممرض</h1>
-                      <p className="text-muted-foreground text-sm mt-1">تتبع موقع الممرض/ة المعين/ة لطلبك</p>
+                  <div className="space-y-4">
+                    {/* Header */}
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h1 className="text-2xl font-bold bg-gradient-to-l from-violet-700 to-fuchsia-600 bg-clip-text text-transparent">تتبع الممرض</h1>
+                        <p className="text-muted-foreground text-sm mt-1">تتبع موقع الممرض/ة المعين/ة لطلبك في الوقت الفعلي</p>
+                      </div>
+                      {trackingAssignmentId && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="rounded-xl text-xs"
+                          onClick={() => { setTrackingAssignmentId(''); setTrackingData(null) }}
+                        >
+                          <X className="w-3.5 h-3.5 ml-1" />
+                          رجوع
+                        </Button>
+                      )}
                     </div>
 
                     {/* Select in-progress request for tracking */}
-                    {requests.filter(r => r.status === 'in_progress' && r.assignment?.id).length > 0 && !trackingAssignmentId && (
+                    {requests.filter(r => (r.status === 'in_progress' || r.status === 'accepted') && r.assignment?.id).length > 0 && !trackingAssignmentId && (
                       <Card className="border-0 bg-white/80 backdrop-blur-sm shadow-lg">
                         <CardContent className="p-6">
                           <h3 className="font-semibold text-base mb-4 flex items-center gap-2">
@@ -2944,16 +2959,24 @@ export default function BeneficiaryDashboard() {
                             اختر طلباً للتتبع
                           </h3>
                           <div className="space-y-3">
-                            {requests.filter(r => r.status === 'in_progress' && r.assignment?.id).map(req => (
+                            {requests.filter(r => (r.status === 'in_progress' || r.status === 'accepted') && r.assignment?.id).map(req => (
                               <button
                                 key={req.id}
-                                className="w-full text-right p-3 rounded-xl border border-violet-100 hover:bg-violet-50 transition-colors"
+                                className="w-full text-right p-4 rounded-xl border border-violet-100 hover:bg-violet-50 hover:border-violet-200 transition-all duration-200"
                                 onClick={() => setTrackingAssignmentId(req.assignment.id)}
                               >
-                                <p className="font-medium text-sm">{req.service?.name || 'خدمة'}</p>
-                                <p className="text-xs text-muted-foreground mt-0.5">
-                                  الممرض/ة: {req.assignment?.nurse?.firstName} {req.assignment?.nurse?.lastName}
-                                </p>
+                                <div className="flex items-center gap-3">
+                                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-violet-100 to-fuchsia-100 flex items-center justify-center shrink-0">
+                                    <MapPin className="w-5 h-5 text-violet-600" />
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="font-semibold text-sm">{req.service?.name || 'خدمة'}</p>
+                                    <p className="text-xs text-muted-foreground mt-0.5">
+                                      الممرض/ة: {req.assignment?.nurse?.firstName} {req.assignment?.nurse?.lastName}
+                                    </p>
+                                  </div>
+                                  <ChevronDown className="w-4 h-4 text-violet-400 -rotate-90 shrink-0" />
+                                </div>
                               </button>
                             ))}
                           </div>
@@ -2961,24 +2984,58 @@ export default function BeneficiaryDashboard() {
                       </Card>
                     )}
 
+                    {/* Tracking Data Display */}
                     {trackingAssignmentId && trackingData && (
                       <motion.div
                         initial={{ opacity: 0, y: 12 }}
                         animate={{ opacity: 1, y: 0 }}
                         className="space-y-4"
                       >
-                        {/* Map Embed */}
-                        {trackingData.nurseLocation && (
-                          <Card className="border-0 shadow-lg overflow-hidden">
-                            <iframe
-                              width="100%"
-                              height="350"
-                              frameBorder="0"
-                              scrolling="no"
-                              src={`https://www.openstreetmap.org/export/embed.html?bbox=${trackingData.nurseLocation.lng - 0.01},${trackingData.nurseLocation.lat - 0.01},${trackingData.nurseLocation.lng + 0.01},${trackingData.nurseLocation.lat + 0.01}&layer=mapnik&marker=${trackingData.nurseLocation.lat},${trackingData.nurseLocation.lng}`}
-                              title="موقع الممرض/ة"
-                              className="rounded-xl"
-                            />
+                        {/* Live Map */}
+                        <Card className="border-0 shadow-lg overflow-hidden">
+                          <div className="h-[400px]">
+                            {trackingData.nurseLocation || trackingData.beneficiaryLocation ? (
+                              <TrackingMap
+                                nurseLocation={trackingData.nurseLocation}
+                                beneficiaryLocation={trackingData.beneficiaryLocation}
+                                nurseName={`${trackingData.nurse?.firstName || ''} ${trackingData.nurse?.lastName || ''}`}
+                                distanceKm={trackingData.distanceKm}
+                              />
+                            ) : (
+                              <div className="h-full flex flex-col items-center justify-center bg-gray-50">
+                                <div className="w-16 h-16 bg-violet-100 rounded-full flex items-center justify-center mb-3">
+                                  <MapPin className="w-8 h-8 text-violet-400" />
+                                </div>
+                                <p className="text-muted-foreground font-medium">في انتظار مشاركة الممرض/ة للموقع</p>
+                                <p className="text-xs text-muted-foreground mt-1">سيظهر الموقع على الخريطة بمجرد تفعيله</p>
+                              </div>
+                            )}
+                          </div>
+                        </Card>
+
+                        {/* Distance & ETA Card */}
+                        {trackingData.nurseLocation && trackingData.distanceKm !== null && trackingData.distanceKm !== undefined && (
+                          <Card className="border-0 bg-gradient-to-l from-violet-500 to-fuchsia-600 text-white shadow-lg">
+                            <CardContent className="p-5">
+                              <div className="grid grid-cols-2 gap-4">
+                                <div className="text-center">
+                                  <div className="flex items-center justify-center gap-1.5 mb-1">
+                                    <Navigation className="w-4 h-4" />
+                                    <span className="text-xs text-violet-200">المسافة</span>
+                                  </div>
+                                  <p className="text-2xl font-bold">{trackingData.distanceKm}</p>
+                                  <p className="text-xs text-violet-200">كم</p>
+                                </div>
+                                <div className="text-center">
+                                  <div className="flex items-center justify-center gap-1.5 mb-1">
+                                    <Clock className="w-4 h-4" />
+                                    <span className="text-xs text-violet-200">الوقت المتوقع</span>
+                                  </div>
+                                  <p className="text-2xl font-bold">{trackingData.estimatedMinutes || '—'}</p>
+                                  <p className="text-xs text-violet-200">دقيقة</p>
+                                </div>
+                              </div>
+                            </CardContent>
                           </Card>
                         )}
 
@@ -2986,7 +3043,7 @@ export default function BeneficiaryDashboard() {
                         <Card className="border-0 bg-white/80 backdrop-blur-sm shadow-lg">
                           <CardContent className="p-5">
                             <div className="flex items-center gap-4">
-                              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center shadow-lg shadow-emerald-500/25">
+                              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-600 flex items-center justify-center shadow-lg shadow-violet-500/25 shrink-0">
                                 <span className="text-white font-bold text-xl">
                                   {trackingData.nurse?.firstName?.charAt(0) || '?'}
                                 </span>
@@ -2995,40 +3052,59 @@ export default function BeneficiaryDashboard() {
                                 <h3 className="font-semibold text-lg">
                                   {trackingData.nurse?.firstName} {trackingData.nurse?.lastName}
                                 </h3>
-                                {trackingData.nurse?.phone && (
-                                  <a
-                                    href={`tel:${trackingData.nurse.phone}`}
-                                    className="flex items-center gap-1.5 text-sm text-emerald-600 hover:text-emerald-800 hover:underline mt-1"
-                                    dir="ltr"
-                                  >
-                                    <Phone className="w-3.5 h-3.5" />
-                                    {trackingData.nurse.phone}
-                                  </a>
-                                )}
-                              </div>
-                              <Badge className="bg-gradient-to-r from-emerald-500 to-teal-500 text-white border-0">
-                                في الطريق
-                              </Badge>
-                            </div>
-
-                            {trackingData.estimatedArrival && (
-                              <div className="mt-4 p-3 rounded-xl bg-emerald-50 border border-emerald-100">
-                                <div className="flex items-center gap-2">
-                                  <Clock className="w-4 h-4 text-emerald-600" />
-                                  <span className="text-sm font-medium text-emerald-700">
-                                    الوقت المتوقع للوصول: {trackingData.estimatedArrival}
+                                <div className="flex items-center gap-2 mt-1">
+                                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0"></span>
+                                  <span className="text-sm text-emerald-600 font-medium">
+                                    {trackingData.nurseLocation ? 'في الطريق إليك' : 'بانتظار مشاركة الموقع'}
                                   </span>
                                 </div>
                               </div>
-                            )}
+                            </div>
+
+                            {/* Action Buttons */}
+                            <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-100">
+                              {trackingData.nurse?.phone && (
+                                <a href={`tel:${trackingData.nurse.phone}`} className="flex-1">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="w-full rounded-xl text-xs h-10 border-emerald-300 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800"
+                                  >
+                                    <Phone className="w-4 h-4 ml-1.5" />
+                                    اتصال
+                                  </Button>
+                                </a>
+                              )}
+                              <Button
+                                size="sm"
+                                className="flex-1 bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white rounded-xl text-xs h-10 hover:shadow-md"
+                                onClick={() => {
+                                  if (trackingAssignmentId) {
+                                    const req = requests.find(r => r.assignment?.id === trackingAssignmentId)
+                                    if (req?.assignment?.nurse) {
+                                      setActiveChatRequestId(req.id)
+                                      setActiveChatNurseName(`${req.assignment.nurse.firstName} ${req.assignment.nurse.lastName}`)
+                                    }
+                                  }
+                                }}
+                              >
+                                <MessageCircle className="w-4 h-4 ml-1.5" />
+                                محادثة
+                              </Button>
+                            </div>
                           </CardContent>
                         </Card>
 
-                        {/* Auto-refresh notice */}
-                        <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
-                          <RefreshCw className="w-3 h-3 animate-spin" />
-                          <span>يتم تحديث الموقع كل 30 ثانية</span>
-                        </div>
+                        {/* Last updated notice */}
+                        {trackingData.nurseLocation && (
+                          <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
+                            <RefreshCw className="w-3 h-3 animate-spin" />
+                            <span>يتم تحديث الموقع كل 30 ثانية</span>
+                            {trackingData.locationUpdatedAt && (
+                              <span>• آخر تحديث: {new Date(trackingData.locationUpdatedAt).toLocaleTimeString('ar-YE')}</span>
+                            )}
+                          </div>
+                        )}
                       </motion.div>
                     )}
 
@@ -3053,7 +3129,7 @@ export default function BeneficiaryDashboard() {
                       </motion.div>
                     )}
 
-                    {!trackingAssignmentId && requests.filter(r => r.status === 'in_progress' && r.assignment?.id).length === 0 && (
+                    {!trackingAssignmentId && requests.filter(r => (r.status === 'in_progress' || r.status === 'accepted') && r.assignment?.id).length === 0 && (
                       <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
