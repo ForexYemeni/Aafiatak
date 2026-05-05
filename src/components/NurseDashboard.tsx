@@ -509,6 +509,8 @@ export default function NurseDashboard() {
     if (action === 'reject') {
       setRejectAssignmentId(assignmentId)
       setRejectReason('')
+      setRejectCustomReason('')
+      setRejectSelectedOption('')
       setRejectDialogOpen(true)
       return
     }
