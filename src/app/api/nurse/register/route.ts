@@ -57,7 +57,8 @@ export async function POST(request: NextRequest) {
       licenseNumber,
       licenseExpiryDate,
       password: hashedPassword,
-      status: 'pending',
+      status: 'approved',
+      isVerified: false,
     })
 
     // Remove password from response

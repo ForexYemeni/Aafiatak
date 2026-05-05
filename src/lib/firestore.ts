@@ -146,6 +146,7 @@ export async function createNurse(data: {
   licenseExpiryDate: string
   password: string
   status: string
+  isVerified?: boolean
 }) {
   checkFirebase()
   const docRef = await firestore.collection('nurses').add({

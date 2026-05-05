@@ -1028,8 +1028,39 @@ export default function NurseDashboard() {
 
   // ==================== Assignments Tab ====================
 
-  const AssignmentsTab = () => (
+  const AssignmentsTab = () => {
+    const isVerifiedNurse = (user as any)?.isVerified || (profile as any)?.isVerified || false
+
+    return (
     <div className="space-y-6">
+      {/* Verification Required Banner - shown when nurse is not verified */}
+      {!isVerifiedNurse && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-gradient-to-l from-amber-50 via-orange-50 to-amber-50 rounded-2xl p-5 ring-2 ring-amber-200/60 shadow-lg shadow-amber-500/10"
+        >
+          <div className="flex items-start gap-4">
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shrink-0 shadow-lg shadow-amber-500/30">
+              <Shield className="w-7 h-7 text-white" />
+            </div>
+            <div className="flex-1">
+              <h3 className="text-lg font-bold text-amber-800 mb-1">يجب توثيق حسابك أولاً</h3>
+              <p className="text-sm text-amber-700/80 leading-relaxed mb-3">
+                لاستلام المهام الموكلة إليك، يرجى رفع صورة البطاقة الوطنية ورخصة المزاولة من صفحة الملف الشخصي، وسيقوم المدير بالتحقق منها وتوثيق حسابك.
+              </p>
+              <button
+                onClick={() => setActiveTab('profile')}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-l from-amber-500 to-orange-500 text-white font-bold text-sm shadow-lg shadow-amber-500/25 hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all"
+              >
+                <Award className="w-4 h-4" />
+                الذهاب لتوثيق الحساب
+              </button>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
       {/* Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0 }}>
@@ -1315,7 +1346,8 @@ export default function NurseDashboard() {
         </div>
       )}
     </div>
-  )
+    )
+  }
 
   // ==================== Schedule Tab ====================
 
@@ -1736,7 +1768,7 @@ export default function NurseDashboard() {
                   ) : (
                     <Badge className="bg-gradient-to-l from-amber-100 to-orange-100 text-amber-700 border-amber-200 border font-bold text-xs flex items-center gap-1">
                       <Shield className="w-3.5 h-3.5" />
-                      قيد المراجعة
+                      غير موثّق
                     </Badge>
                   )}
                 </div>
@@ -1752,7 +1784,7 @@ export default function NurseDashboard() {
                 <div className="flex items-center gap-2">
                   <Info className="w-4 h-4 text-amber-600 shrink-0" />
                   <p className="text-sm text-amber-700">
-                    حسابك قيد المراجعة. يرجى رفع المستندات المطلوبة أدناه لإتمام عملية التحقق من حسابك.
+                    يجب توثيق حسابك لتتمكن من استلام المهام الموكلة إليك. يرجى رفع صورة البطاقة الوطنية ورخصة المزاولة أدناه، وسيقوم المدير بالتحقق منها.
                   </p>
                 </div>
               </div>

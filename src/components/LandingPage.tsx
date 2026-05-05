@@ -302,8 +302,15 @@ export default function LandingPage() {
       })
       const data = await res.json()
       if (res.ok) {
-        setRegisterSuccess(true)
-        toast({ title: 'تم التسجيل بنجاح', description: 'سيتم مراجعة حسابك من قبل الإدارة' })
+        // Auto-login after successful nurse registration
+        toast({ title: 'تم التسجيل بنجاح', description: 'مرحباً بك! يرجى توثيق حسابك لتتمكن من استلام المهام' })
+        setUser(data, 'nurse')
+        setDetectedRole('nurse')
+        setShowRoleDetection(true)
+        setTimeout(() => {
+          setView('nurse-dashboard')
+          setShowRoleDetection(false)
+        }, 1500)
       } else {
         toast({ title: 'خطأ', description: data.error, variant: 'destructive' })
       }
@@ -341,8 +348,15 @@ export default function LandingPage() {
       })
       const data = await res.json()
       if (res.ok) {
-        setRegisterSuccess(true)
-        toast({ title: 'تم التسجيل بنجاح' })
+        // Auto-login after successful beneficiary registration
+        toast({ title: 'تم التسجيل بنجاح', description: 'مرحباً بك! يمكنك الآن الاستفادة من خدماتنا الصحية' })
+        setUser(data, 'beneficiary')
+        setDetectedRole('beneficiary')
+        setShowRoleDetection(true)
+        setTimeout(() => {
+          setView('beneficiary-dashboard')
+          setShowRoleDetection(false)
+        }, 1500)
       } else {
         toast({ title: 'خطأ', description: data.error, variant: 'destructive' })
       }

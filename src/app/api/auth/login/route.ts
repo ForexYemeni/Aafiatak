@@ -99,9 +99,7 @@ export async function POST(request: NextRequest) {
 
       if (nurse.status !== 'approved') {
         return NextResponse.json({
-          error: nurse.status === 'pending'
-            ? 'حسابك قيد المراجعة، يرجى الانتظار حتى يتم قبوله'
-            : 'تم رفض حسابك، يرجى التواصل مع الإدارة',
+          error: 'تم رفض حسابك، يرجى التواصل مع الإدارة',
         }, { status: 403 })
       }
 
@@ -117,6 +115,7 @@ export async function POST(request: NextRequest) {
         licenseNumber: nurse.licenseNumber,
         licenseExpiryDate: nurse.licenseExpiryDate,
         status: nurse.status,
+        isVerified: nurse.isVerified || false,
         userType: 'nurse',
       })
     }
