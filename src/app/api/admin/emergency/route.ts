@@ -14,7 +14,7 @@ export async function GET() {
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json()
-    const { id, status, nurseId } = body
+    const { id, status, nurseId, adminNotes } = body
 
     if (!id) {
       return NextResponse.json({ error: 'معرف الطلب مطلوب' }, { status: 400 })
@@ -35,7 +35,9 @@ export async function PUT(request: NextRequest) {
       })
 
       // Update emergency request status
-      await updateEmergencyRequest(id, { status: status || 'in_progress', nurseId, nurseName: `${nurse.firstName} ${nurse.lastName}` })
+      const updateData: Record<string, any> = { status: status || 'in_progress', nurseId, nurseName: `${nurse.firstName} ${nurse.lastName}` }
+      if (adminNotes) updateData.adminNotes = adminNotes
+      await updateEmergencyRequest(id, updateData)
 
       return NextResponse.json({ ...assignment, nurse: { id: nurse.id, firstName: nurse.firstName, lastName: nurse.lastName } })
     }
@@ -49,7 +51,9 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'حالة غير صالحة' }, { status: 400 })
     }
 
-    const updated = await updateEmergencyRequest(id, { status })
+    const updateData: Record<string, any> = { status }
+    if (adminNotes) updateData.adminNotes = adminNotes
+    const updated = await updateEmergencyRequest(id, updateData)
     return NextResponse.json(updated)
   } catch (error: any) {
     console.error('Update emergency request error:', error.message)

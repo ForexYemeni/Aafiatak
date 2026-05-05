@@ -491,7 +491,7 @@ export default function AdminDashboard() {
     } else {
       try {
         if ((selectedRequest as any)?.isEmergency) {
-          const res = await fetch('/api/admin/emergency', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: selectedRequest.id, status: 'in_progress' }) })
+          const res = await fetch('/api/admin/emergency', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: selectedRequest.id, status: 'in_progress', adminNotes: 'تم التنفيذ من قبل الإدارة' }) })
           if (res.ok) { toast({ title: 'تم بدء معالجة طلب الطوارئ' }); logActivity('emergency_direct_execute', 'تم بدء معالجة طلب طوارئ مباشرة', { requestId: selectedRequest.id }); setApproveDialog(false); fetchData() }
         } else {
           const res = await fetch(`/api/admin/requests/${selectedRequest.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'in_progress', adminNotes: 'تم التنفيذ من قبل الإدارة' }) })

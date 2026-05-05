@@ -1912,6 +1912,46 @@ export default function BeneficiaryDashboard() {
                                     </div>
                                   )}
 
+                                  {/* Admin Direct Execution Info */}
+                                  {!nurseAssigned && req.status === 'in_progress' && (req.adminNotes?.includes('الإدارة') || req.isEmergency) && (
+                                    <div className="mt-3 p-3 rounded-xl bg-gradient-to-l from-amber-50/80 to-orange-50/80 border border-amber-200/60">
+                                      <div className="flex items-center gap-2 mb-2">
+                                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-sm shrink-0">
+                                          <Shield className="w-4 h-4 text-white" />
+                                        </div>
+                                        <div>
+                                          <p className="text-xs font-bold text-amber-700">يتم التنفيذ بواسطة الإدارة</p>
+                                          <p className="text-[10px] text-amber-600">الممرض/ة في الطريق إليك</p>
+                                        </div>
+                                      </div>
+                                      {adminSettings && (
+                                        <div className="space-y-1.5 mt-2 pt-2 border-t border-amber-200/40">
+                                          {adminSettings.phone && (
+                                            <a href={`tel:${adminSettings.phone}`} className="flex items-center gap-1.5 text-xs text-amber-700 hover:text-amber-900 transition-colors">
+                                              <Phone className="w-3 h-3 shrink-0" />
+                                              <span>اتصل بالإدارة: {adminSettings.phone}</span>
+                                            </a>
+                                          )}
+                                          {adminSettings.emergencyPhone && (
+                                            <a href={`tel:${adminSettings.emergencyPhone}`} className="flex items-center gap-1.5 text-xs text-red-600 hover:text-red-800 transition-colors">
+                                              <Siren className="w-3 h-3 shrink-0" />
+                                              <span>طوارئ: {adminSettings.emergencyPhone}</span>
+                                            </a>
+                                          )}
+                                          {adminSettings.whatsappNumber && (
+                                            <a href={`https://wa.me/${adminSettings.whatsappNumber.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-xs text-green-600 hover:text-green-800 transition-colors">
+                                              <MessageCircle className="w-3 h-3 shrink-0" />
+                                              <span>واتساب: {adminSettings.whatsappNumber}</span>
+                                            </a>
+                                          )}
+                                        </div>
+                                      )}
+                                      {req.adminNotes && !req.adminNotes.includes('تم التنفيذ') && (
+                                        <p className="text-[10px] text-amber-600 mt-2 pt-1.5 border-t border-amber-200/30">ملاحظة الإدارة: {req.adminNotes}</p>
+                                      )}
+                                    </div>
+                                  )}
+
                                   {req.notes && (
                                     <div className="mt-2 text-sm text-muted-foreground">
                                       <span className="font-medium">ملاحظات:</span> {req.notes}
@@ -3634,12 +3674,11 @@ export default function BeneficiaryDashboard() {
                   <Loader2 className="w-4 h-4 animate-spin text-red-500" />
                   <span className="text-sm text-red-600">جاري تحميل طرق الدفع...</span>
                 </div>
-              ) : emergencyPaymentMethods.length > 0 ? (
-                <div className="space-y-2 max-h-48 overflow-y-auto">
-                  {(() => {
+              ) : (() => {
                     const walletMethods = emergencyPaymentMethods.filter((m: any) => m.type === 'wallet-deposit')
                     const exchangeMethods = emergencyPaymentMethods.filter((m: any) => m.type === 'exchange-transfer')
                     const bankMethods = emergencyPaymentMethods.filter((m: any) => m.type === 'bank-transfer')
+                    const cashMethods = emergencyPaymentMethods.filter((m: any) => m.type === 'cash')
                     const otherMethods = emergencyPaymentMethods.filter((m: any) => !['wallet-deposit', 'exchange-transfer', 'bank-transfer', 'cash'].includes(m.type))
 
                     type GroupInfo = { label: string; icon: any; color: string; methods: any[] }
@@ -3650,13 +3689,34 @@ export default function BeneficiaryDashboard() {
                       { label: 'أخرى', icon: CreditCard, color: 'from-purple-400 to-violet-500', methods: otherMethods },
                     ].filter(g => g.methods.length > 0)
 
+                    const hasElectronic = groups.length > 0
+                    const hasCash = cashMethods.length > 0
+
+                    if (!hasElectronic && !hasCash) {
+                      return (
+                        <div className="p-4 bg-amber-50 rounded-xl text-center">
+                          <CreditCard className="w-8 h-8 text-amber-400 mx-auto mb-2" />
+                          <p className="text-amber-700 text-sm font-medium">لا توجد طرق دفع إلكترونية متاحة حالياً</p>
+                          <p className="text-amber-600 text-xs mt-1">يمكنك الدفع نقداً عند الاستلام</p>
+                          <button
+                            type="button"
+                            onClick={() => setEmergencyForm(prev => ({ ...prev, paymentMethod: 'cash', paymentMethodId: 'cash-on-delivery' }))}
+                            className="mt-3 px-4 py-2 bg-amber-500 text-white rounded-xl text-sm hover:bg-amber-600 transition-colors"
+                          >
+                            الدفع نقداً عند الاستلام
+                          </button>
+                        </div>
+                      )
+                    }
+
                     return (
-                      <>
+                      <div className="space-y-2 max-h-56 overflow-y-auto">
                         {groups.map(group => (
                           <div key={group.label} className="space-y-1.5">
                             <div className="flex items-center gap-1.5 px-1">
                               <group.icon className="w-3.5 h-3.5 text-gray-400" />
                               <span className="text-xs font-bold text-gray-500">{group.label}</span>
+                              <span className="text-[10px] text-gray-400">({group.methods.length})</span>
                             </div>
                             {group.methods.map((pm: any) => {
                               const isSelected = emergencyForm.paymentMethodId === pm.id
@@ -3678,9 +3738,20 @@ export default function BeneficiaryDashboard() {
                                     </div>
                                     <div className="flex-1 min-w-0">
                                       <p className="font-bold text-sm truncate">{pm.name}</p>
-                                      {pm.accountNumber && (
-                                        <span className="text-[10px] text-gray-500 font-mono" dir="ltr">{pm.accountNumber}</span>
-                                      )}
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        {pm.accountNumber && (
+                                          <span className="text-[10px] text-gray-500 font-mono" dir="ltr">{pm.accountNumber}</span>
+                                        )}
+                                        {pm.accountName && (
+                                          <span className="text-[10px] text-gray-500">{pm.accountName}</span>
+                                        )}
+                                        {pm.bankName && (
+                                          <span className="text-[10px] text-gray-500">{pm.bankName}</span>
+                                        )}
+                                        {pm.exchangeName && (
+                                          <span className="text-[10px] text-gray-500">صراف: {pm.exchangeName}</span>
+                                        )}
+                                      </div>
                                     </div>
                                     {isSelected && <Check className="w-4 h-4 text-red-500 shrink-0" />}
                                   </div>
@@ -3689,45 +3760,62 @@ export default function BeneficiaryDashboard() {
                             })}
                           </div>
                         ))}
-                        {/* Cash option */}
-                        <button
-                          type="button"
-                          onClick={() => setEmergencyForm(prev => ({ ...prev, paymentMethod: 'cash', paymentMethodId: 'cash-on-delivery' }))}
-                          className={`w-full p-3 rounded-xl border-2 transition-all text-right ${
-                            emergencyForm.paymentMethod === 'cash'
-                              ? 'border-red-400 bg-red-50 shadow-md'
-                              : 'border-gray-200 hover:border-red-200 hover:bg-gray-50'
-                          }`}
-                        >
-                          <div className="flex items-center gap-2.5">
-                            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-gray-400 to-gray-500 flex items-center justify-center shadow-sm shrink-0">
-                              <DollarSign className="w-4 h-4 text-white" />
-                            </div>
-                            <div className="flex-1">
-                              <p className="font-bold text-sm">نقدي عند الاستلام</p>
-                              <p className="text-[10px] text-gray-500">سيتم الدفع نقداً عند وصول الممرض</p>
-                            </div>
-                            {emergencyForm.paymentMethod === 'cash' && <Check className="w-4 h-4 text-red-500 shrink-0" />}
+                        {/* Cash section */}
+                        <div className="space-y-1.5">
+                          <div className="flex items-center gap-1.5 px-1">
+                            <DollarSign className="w-3.5 h-3.5 text-gray-400" />
+                            <span className="text-xs font-bold text-gray-500">نقدي</span>
                           </div>
-                        </button>
-                      </>
+                          {cashMethods.map((pm: any) => {
+                            const isSelected = emergencyForm.paymentMethodId === pm.id
+                            return (
+                              <button
+                                key={pm.id}
+                                type="button"
+                                onClick={() => setEmergencyForm(prev => ({ ...prev, paymentMethod: 'cash', paymentMethodId: pm.id }))}
+                                className={`w-full p-3 rounded-xl border-2 transition-all text-right ${
+                                  isSelected
+                                    ? 'border-red-400 bg-red-50 shadow-md'
+                                    : 'border-gray-200 hover:border-red-200 hover:bg-gray-50'
+                                }`}
+                              >
+                                <div className="flex items-center gap-2.5">
+                                  <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-gray-400 to-gray-500 flex items-center justify-center shadow-sm shrink-0">
+                                    <DollarSign className="w-4 h-4 text-white" />
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="font-bold text-sm">{pm.name}</p>
+                                    {pm.instructions && <p className="text-[10px] text-gray-500 mt-0.5">{pm.instructions}</p>}
+                                  </div>
+                                  {isSelected && <Check className="w-4 h-4 text-red-500 shrink-0" />}
+                                </div>
+                              </button>
+                            )
+                          })}
+                          <button
+                            type="button"
+                            onClick={() => setEmergencyForm(prev => ({ ...prev, paymentMethod: 'cash', paymentMethodId: 'cash-on-delivery' }))}
+                            className={`w-full p-3 rounded-xl border-2 transition-all text-right ${
+                              emergencyForm.paymentMethod === 'cash' && emergencyForm.paymentMethodId === 'cash-on-delivery'
+                                ? 'border-red-400 bg-red-50 shadow-md'
+                                : 'border-gray-200 hover:border-red-200 hover:bg-gray-50'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-gray-400 to-gray-500 flex items-center justify-center shadow-sm shrink-0">
+                                <DollarSign className="w-4 h-4 text-white" />
+                              </div>
+                              <div className="flex-1">
+                                <p className="font-bold text-sm">نقدي عند الاستلام</p>
+                                <p className="text-[10px] text-gray-500">سيتم الدفع نقداً عند وصول الممرض</p>
+                              </div>
+                              {emergencyForm.paymentMethod === 'cash' && emergencyForm.paymentMethodId === 'cash-on-delivery' && <Check className="w-4 h-4 text-red-500 shrink-0" />}
+                            </div>
+                          </button>
+                        </div>
+                      </div>
                     )
                   })()}
-                </div>
-              ) : (
-                <div className="p-4 bg-amber-50 rounded-xl text-center">
-                  <CreditCard className="w-8 h-8 text-amber-400 mx-auto mb-2" />
-                  <p className="text-amber-700 text-sm font-medium">لا توجد طرق دفع إلكترونية متاحة حالياً</p>
-                  <p className="text-amber-600 text-xs mt-1">يمكنك الدفع نقداً عند الاستلام</p>
-                  <button
-                    type="button"
-                    onClick={() => setEmergencyForm(prev => ({ ...prev, paymentMethod: 'cash', paymentMethodId: 'cash-on-delivery' }))}
-                    className="mt-3 px-4 py-2 bg-amber-500 text-white rounded-xl text-sm hover:bg-amber-600 transition-colors"
-                  >
-                    الدفع نقداً عند الاستلام
-                  </button>
-                </div>
-              )}
             </div>
 
             {/* Notes Field */}
