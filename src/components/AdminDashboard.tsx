@@ -63,7 +63,7 @@ function formatDateTime(ts: any): string {
 }
 
 // ─── Types ─────────────────────────────────────────────────────
-type Tab = 'dashboard' | 'services' | 'nurses' | 'beneficiaries' | 'requests' | 'emergency' | 'payments' | 'coupons' | 'ratings' | 'complaints' | 'appointments' | 'activity' | 'sub-admins' | 'settings'
+type Tab = 'dashboard' | 'services' | 'nurses' | 'beneficiaries' | 'requests' | 'emergency' | 'payments' | 'coupons' | 'ratings' | 'complaints' | 'activity' | 'sub-admins' | 'settings'
 type FinanceSubTab = 'methods' | 'transactions' | 'settings' | 'pricing'
 
 interface DashboardStats {
@@ -204,11 +204,6 @@ export default function AdminDashboard() {
   const [complaintFilter, setComplaintFilter] = useState<string>('all')
   const [complaintNotes, setComplaintNotes] = useState('')
 
-  // Appointments
-  const [appointments, setAppointments] = useState<any[]>([])
-  const [appointmentsLoading, setAppointmentsLoading] = useState(false)
-  const [appointmentFilter, setAppointmentFilter] = useState<string>('all')
-
   // Settings
   const [settings, setSettings] = useState<any>(null)
   const [subAdmins, setSubAdmins] = useState<any[]>([])
@@ -306,14 +301,6 @@ export default function AdminDashboard() {
           else toast({ title: 'خطأ', description: 'فشل تحميل الشكاوى', variant: 'destructive' })
         } catch { toast({ title: 'خطأ', description: 'فشل تحميل الشكاوى', variant: 'destructive' }) }
         finally { setComplaintsLoading(false) }
-      } else if (activeTab === 'appointments') {
-        setAppointmentsLoading(true)
-        try {
-          const res = await fetch('/api/appointments')
-          if (res.ok) { const data = await res.json(); setAppointments(Array.isArray(data) ? data : []) }
-          else toast({ title: 'خطأ', description: 'فشل تحميل المواعيد', variant: 'destructive' })
-        } catch { toast({ title: 'خطأ', description: 'فشل تحميل المواعيد', variant: 'destructive' }) }
-        finally { setAppointmentsLoading(false) }
       } else if (activeTab === 'sub-admins') {
         // Use adminId for sub-admins (parent admin ID) or own ID for main admin
         const isSub = (user as any)?.role === 'sub-admin'
@@ -701,7 +688,7 @@ export default function AdminDashboard() {
         body: JSON.stringify({ adminId: (user as any)?.id, password: resetPassword }),
       })
       if (res.ok) {
-        toast({ title: 'تم حذف جميع البيانات بنجاح', description: 'تم الاحتفاظ بحساب المدير والشكاوى فقط' })
+        toast({ title: 'تم حذف جميع البيانات بنجاح', description: 'تم الاحتفاظ بحساب المدير فقط' })
         setResetDataDialog(false); setResetPassword(''); setResetConfirmText('')
         fetchData()
       } else {
@@ -896,7 +883,6 @@ export default function AdminDashboard() {
     { key: 'coupons', label: 'الكوبونات', icon: Tag, perm: 'coupons' },
     { key: 'ratings', label: 'التقييمات', icon: Star, perm: 'ratings' },
     { key: 'complaints', label: 'الشكاوى', icon: FileWarning, perm: 'reports' },
-    { key: 'appointments', label: 'المواعيد', icon: Calendar, perm: 'requests' },
     { key: 'activity', label: 'النشاط', icon: Activity, perm: 'reports' },
     { key: 'sub-admins', label: 'المدراء الفرعيين', icon: UserCog, perm: '__sub_admins__' },
     { key: 'settings', label: 'الإعدادات', icon: Settings },
@@ -2134,126 +2120,6 @@ export default function AdminDashboard() {
                 )}
 
                 {/* ═══════════════════════════════════════════════════
-                    TAB: المواعيد (Appointments)
-                ═══════════════════════════════════════════════════ */}
-                {activeTab === 'appointments' && (
-                  <div className="space-y-6">
-                    <div><h1 className="text-2xl font-bold bg-gradient-to-l from-amber-600 via-orange-600 to-rose-600 bg-clip-text text-transparent">إدارة المواعيد</h1><p className="text-gray-500 text-sm mt-1">عرض وإدارة جميع المواعيد المحجوزة</p></div>
-
-                    {/* Stats Cards */}
-                    <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                      {[
-                        { label: 'إجمالي المواعيد', value: appointments.length, gradient: 'from-amber-400 to-orange-500', icon: Calendar },
-                        { label: 'مجدولة', value: appointments.filter((a: any) => a.status === 'scheduled').length, gradient: 'from-blue-400 to-indigo-500', icon: Clock },
-                        { label: 'مؤكدة', value: appointments.filter((a: any) => a.status === 'confirmed').length, gradient: 'from-cyan-400 to-teal-500', icon: CheckCircle },
-                        { label: 'مكتملة', value: appointments.filter((a: any) => a.status === 'completed').length, gradient: 'from-emerald-400 to-green-500', icon: CheckCircle },
-                        { label: 'ملغاة', value: appointments.filter((a: any) => a.status === 'cancelled').length, gradient: 'from-red-400 to-rose-500', icon: XCircle },
-                      ].map((item, i) => (
-                        <motion.div key={i} variants={cardVariants} initial="hidden" animate="visible" transition={{ delay: i * 0.05, duration: 0.4 }}>
-                          <Card className="border-0 shadow-lg hover:-translate-y-1 hover:shadow-xl transition-all duration-300">
-                            <CardContent className="p-4">
-                              <div className="flex items-center gap-3 mb-3">
-                                <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${item.gradient} flex items-center justify-center shadow-md`}><item.icon className="w-5 h-5 text-white" /></div>
-                                <p className="text-xs text-gray-500 leading-tight">{item.label}</p>
-                              </div>
-                              <p className={`text-2xl font-bold bg-gradient-to-l ${item.gradient} bg-clip-text text-transparent`}>{item.value}</p>
-                            </CardContent>
-                          </Card>
-                        </motion.div>
-                      ))}
-                    </div>
-
-                    {/* Filter */}
-                    <div className="flex gap-2 flex-wrap">
-                      {[
-                        { key: 'all', label: 'الكل', count: appointments.length },
-                        { key: 'scheduled', label: 'مجدولة', count: appointments.filter((a: any) => a.status === 'scheduled').length },
-                        { key: 'confirmed', label: 'مؤكدة', count: appointments.filter((a: any) => a.status === 'confirmed').length },
-                        { key: 'completed', label: 'مكتملة', count: appointments.filter((a: any) => a.status === 'completed').length },
-                        { key: 'cancelled', label: 'ملغاة', count: appointments.filter((a: any) => a.status === 'cancelled').length },
-                      ].map(filter => (
-                        <button key={filter.key} onClick={() => setAppointmentFilter(filter.key)}
-                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all duration-300 ${
-                            appointmentFilter === filter.key
-                              ? 'bg-gradient-to-l from-amber-500 via-orange-500 to-rose-500 text-white shadow-lg shadow-amber-500/25'
-                              : 'bg-white/70 backdrop-blur-sm text-gray-500 hover:text-gray-700 hover:bg-white ring-1 ring-gray-200/50'
-                          }`}
-                        >
-                          {filter.label} {filter.count > 0 && <span className="opacity-75">({filter.count})</span>}
-                        </button>
-                      ))}
-                    </div>
-
-                    {/* Appointments List */}
-                    {appointmentsLoading ? (
-                      <div className="flex items-center justify-center py-20"><Loader2 className="w-10 h-10 animate-spin text-amber-500" /></div>
-                    ) : (
-                      <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
-                        {appointments.filter((a: any) => appointmentFilter === 'all' || a.status === appointmentFilter).length === 0 ? (
-                          <div className="text-center py-16">
-                            <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-amber-100 to-orange-100 flex items-center justify-center mx-auto mb-4">
-                              <Calendar className="w-10 h-10 text-amber-400" />
-                            </div>
-                            <p className="text-lg font-bold text-gray-600 mb-2">لا توجد مواعيد</p>
-                            <p className="text-sm text-gray-400">لا توجد مواعيد مطابقة للفلتر المحدد</p>
-                          </div>
-                        ) : (
-                          appointments.filter((a: any) => appointmentFilter === 'all' || a.status === appointmentFilter).map((a: any, index: number) => {
-                            const statusColors: Record<string, { gradient: string; label: string; badgeClass: string }> = {
-                              scheduled: { gradient: 'from-blue-400 to-indigo-500', label: 'مجدولة', badgeClass: 'bg-blue-100 text-blue-700 border-blue-200' },
-                              confirmed: { gradient: 'from-cyan-400 to-teal-500', label: 'مؤكدة', badgeClass: 'bg-cyan-100 text-cyan-700 border-cyan-200' },
-                              completed: { gradient: 'from-emerald-400 to-green-500', label: 'مكتملة', badgeClass: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
-                              cancelled: { gradient: 'from-red-400 to-rose-500', label: 'ملغاة', badgeClass: 'bg-red-100 text-red-700 border-red-200' },
-                              in_progress: { gradient: 'from-orange-400 to-amber-500', label: 'قيد التنفيذ', badgeClass: 'bg-orange-100 text-orange-700 border-orange-200' },
-                            }
-                            const cfg = statusColors[a.status] || statusColors.scheduled
-
-                            return (
-                              <motion.div key={a.id || index} variants={cardVariants} initial="hidden" animate="visible" transition={{ delay: index * 0.03 }}>
-                                <Card className="border-0 shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden">
-                                  <CardContent className="p-4">
-                                    <div className="flex items-start gap-3">
-                                      <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${cfg.gradient} flex items-center justify-center shadow-md shrink-0`}>
-                                        <Calendar className="w-6 h-6 text-white" />
-                                      </div>
-                                      <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-2 flex-wrap">
-                                          <h3 className="font-bold">{a.beneficiaryName || a.beneficiary?.name || 'مستفيد'}</h3>
-                                          <Badge className={`${cfg.badgeClass} border text-[10px] font-bold`}>{cfg.label}</Badge>
-                                        </div>
-                                        <div className="flex items-center gap-4 mt-1 text-sm text-gray-500 flex-wrap">
-                                          <span className="flex items-center gap-1"><Users className="w-3.5 h-3.5" />{a.nurseName || a.nurse?.name || 'ممرض'}</span>
-                                          <span className="flex items-center gap-1"><Wrench className="w-3.5 h-3.5" />{a.serviceName || a.service?.name || 'خدمة'}</span>
-                                        </div>
-                                        <div className="flex items-center gap-4 mt-1 text-sm text-gray-400 flex-wrap">
-                                          <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5" />{a.date || formatDate(a.scheduledAt || a.createdAt)}</span>
-                                          {a.time && <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" />{a.time}</span>}
-                                        </div>
-                                      </div>
-                                      <div className="flex gap-2 shrink-0">
-                                        {a.status !== 'cancelled' && a.status !== 'completed' && (
-                                          <Button size="sm" variant="outline" className="rounded-xl text-red-500 border-red-200 hover:bg-red-50" onClick={async () => {
-                                            try {
-                                              const res = await fetch(`/api/appointments/${a.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'cancel' }) })
-                                              if (res.ok) { toast({ title: 'تم إلغاء الموعد' }); logActivity('appointment_cancel', 'تم إلغاء موعد', { appointmentId: a.id }); fetchData() }
-                                              else { const data = await res.json(); toast({ title: 'خطأ', description: data.error, variant: 'destructive' }) }
-                                            } catch { toast({ title: 'خطأ', description: 'حدث خطأ', variant: 'destructive' }) }
-                                          }}><XCircle className="w-3.5 h-3.5 ml-1" />إلغاء</Button>
-                                        )}
-                                      </div>
-                                    </div>
-                                  </CardContent>
-                                </Card>
-                              </motion.div>
-                            )
-                          })
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* ═══════════════════════════════════════════════════
                     TAB 10: النشاط (Activity)
                 ═══════════════════════════════════════════════════ */}
                 {activeTab === 'activity' && (
@@ -2435,7 +2301,7 @@ export default function AdminDashboard() {
                       </CardHeader>
                       <CardContent className="space-y-4">
                         <div className="p-4 bg-red-50/80 rounded-xl border border-red-200/50">
-                          <p className="text-sm text-red-700 font-medium mb-3">تحذير: حذف جميع البيانات لا يمكن التراجع عنه. سيتم حذف جميع الممرضين، المستفيدين، الطلبات، الخدمات، المدفوعات، الكوبونات، التقييمات، سجل النشاط، طلبات الطوارئ، والمدراء الفرعيين. سيتم الاحتفاظ بحساب المدير والشكاوى فقط.</p>
+                          <p className="text-sm text-red-700 font-medium mb-3">تحذير: حذف جميع البيانات لا يمكن التراجع عنه. سيتم حذف جميع الممرضين، المستفيدين، الطلبات، الخدمات، المدفوعات، الكوبونات، التقييمات، سجل النشاط، طلبات الطوارئ، الشكاوى، والمدراء الفرعيين. سيتم الاحتفاظ بحساب المدير فقط.</p>
                           <Button className="bg-gradient-to-l from-red-500 to-red-600 text-white shadow-lg shadow-red-500/25 hover:shadow-red-500/40 hover:scale-[1.02] active:scale-[0.98] transition-all" onClick={() => showConfirmDialog('حذف جميع البيانات', 'هذا الإجراء لا يمكن التراجع عنه! سيتم حذف جميع البيانات نهائياً.', Trash2, 'text-red-500', () => { setResetPassword(''); setResetConfirmText(''); setResetDataDialog(true) })}><Trash2 className="w-4 h-4 ml-2" />حذف جميع البيانات</Button>
                         </div>
                       </CardContent>
