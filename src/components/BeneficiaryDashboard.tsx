@@ -615,16 +615,27 @@ export default function BeneficiaryDashboard() {
   }
 
   // Cancel request handler
-  const handleCancelRequest = async (id: string) => {
-    if (!confirm('هل أنت متأكد من إلغاء هذا الطلب؟')) return
+  // Cancel request dialog state
+  const [cancelDialog, setCancelDialog] = useState(false)
+  const [cancelRequestId, setCancelRequestId] = useState<string>('')
+  const [cancelling, setCancelling] = useState(false)
+
+  const openCancelDialog = (id: string) => {
+    setCancelRequestId(id)
+    setCancelDialog(true)
+  }
+
+  const handleCancelRequest = async () => {
+    if (!cancelRequestId) return
+    setCancelling(true)
     try {
-      const res = await fetch(`/api/beneficiary/requests/${id}`, {
+      const res = await fetch(`/api/beneficiary/requests/${cancelRequestId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'cancelled' }),
       })
       if (res.ok) {
-        toast({ title: 'تم إلغاء الطلب' })
+        toast({ title: 'تم إلغاء الطلب', description: 'تم إلغاء الطلب بنجاح' })
         fetchData()
       } else {
         const data = await res.json()
@@ -632,7 +643,27 @@ export default function BeneficiaryDashboard() {
       }
     } catch {
       toast({ title: 'خطأ', description: 'حدث خطأ أثناء إلغاء الطلب', variant: 'destructive' })
+    } finally {
+      setCancelling(false)
+      setCancelDialog(false)
+      setCancelRequestId('')
     }
+  }
+
+  // Helper: translate payment method type to Arabic
+  const getPaymentMethodLabel = (method: string) => {
+    if (!method) return ''
+    const labels: Record<string, string> = {
+      'wallet-deposit': 'إيداع محفظة',
+      'exchange-transfer': 'تحويل صراف',
+      'bank-transfer': 'تحويل بنكي',
+      'cash': 'نقدي عند الاستلام',
+      'card': 'بطاقة',
+      'wallet': 'محفظة إلكترونية',
+      'transfer': 'تحويل بنكي',
+      'الدفع عند الاستلام': 'نقدي عند الاستلام',
+    }
+    return labels[method] || method
   }
 
   // Reorder handler
@@ -1969,7 +2000,7 @@ export default function BeneficiaryDashboard() {
                                   {req.paymentMethod && (
                                     <div className="flex items-center gap-1.5 text-sm text-muted-foreground mb-2">
                                       <CreditCard className="w-3.5 h-3.5 shrink-0" />
-                                      <span>{req.paymentMethod}</span>
+                                      <span>{getPaymentMethodLabel(req.paymentMethod)}</span>
                                     </div>
                                   )}
 
@@ -2049,35 +2080,24 @@ export default function BeneficiaryDashboard() {
                                   {/* Action Buttons */}
                                   <div className="flex items-center gap-2 mt-4 flex-wrap">
                                     {req.status === 'pending_payment' && (
-                                      <>
-                                        <Button
-                                          size="sm"
-                                          className="bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl text-xs hover:shadow-md"
-                                          onClick={() => handlePayForRequest(req)}
-                                        >
-                                          <CreditCard className="w-3.5 h-3.5 ml-1" />
-                                          دفع الآن
-                                        </Button>
-                                        <Button
-                                          variant="outline"
-                                          size="sm"
-                                          className="text-red-600 border-red-200 hover:bg-red-50 rounded-xl text-xs"
-                                          onClick={() => handleCancelRequest(req.id)}
-                                        >
-                                          <XCircle className="w-3.5 h-3.5 ml-1" />
-                                          إلغاء
-                                        </Button>
-                                      </>
+                                      <Button
+                                        size="sm"
+                                        className="bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl text-xs hover:shadow-md"
+                                        onClick={() => handlePayForRequest(req)}
+                                      >
+                                        <CreditCard className="w-3.5 h-3.5 ml-1" />
+                                        دفع الآن
+                                      </Button>
                                     )}
                                     {(req.status === 'pending' || req.status === 'pending_confirmation' || req.status === 'pending_payment') && (
                                       <Button
                                         variant="outline"
                                         size="sm"
                                         className="text-red-600 border-red-200 hover:bg-red-50 rounded-xl text-xs"
-                                        onClick={() => handleCancelRequest(req.id)}
+                                        onClick={() => openCancelDialog(req.id)}
                                       >
                                         <XCircle className="w-3.5 h-3.5 ml-1" />
-                                        إلغاء
+                                        إلغاء الطلب
                                       </Button>
                                     )}
 
@@ -2266,7 +2286,7 @@ export default function BeneficiaryDashboard() {
                                     <p className="text-xs text-muted-foreground mt-1">{formatDate(req.completedAt || req.updatedAt || req.createdAt)}</p>
                                     {req.paymentMethod && (
                                       <p className="text-xs text-muted-foreground mt-0.5">
-                                        طريقة الدفع: {req.paymentMethod}
+                                        طريقة الدفع: {getPaymentMethodLabel(req.paymentMethod)}
                                       </p>
                                     )}
                                     {req.paymentMethod === 'الدفع عند الاستلام' && (
@@ -2310,7 +2330,7 @@ export default function BeneficiaryDashboard() {
                                         <h3 className="font-semibold text-base">{txn.serviceName || 'خدمة'}</h3>
                                         <p className="text-xs text-muted-foreground mt-1">{formatDate(txn.createdAt)}</p>
                                         <p className="text-xs text-muted-foreground mt-0.5">
-                                          طريقة الدفع: {txn.method === 'cash' ? 'نقدي' : txn.method === 'wallet-deposit' ? 'إيداع محفظة' : txn.method === 'exchange-transfer' ? 'تحويل صراف' : txn.method === 'bank-transfer' ? 'تحويل بنكي' : txn.method === 'card' ? 'بطاقة' : txn.method === 'wallet' ? 'محفظة إلكترونية' : txn.method === 'transfer' ? 'تحويل بنكي' : txn.method}
+                                          طريقة الدفع: {getPaymentMethodLabel(txn.method)}
                                         </p>
                                       </div>
                                       <div className="text-left">
@@ -4434,6 +4454,72 @@ export default function BeneficiaryDashboard() {
               )}
               إرسال الطلب
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ===== CANCEL REQUEST DIALOG ===== */}
+      <Dialog open={cancelDialog} onOpenChange={setCancelDialog}>
+        <DialogContent className="sm:max-w-sm border-0 shadow-2xl p-0" dir="rtl">
+          {/* Red Gradient Header */}
+          <div className="bg-gradient-to-l from-red-600 via-rose-600 to-red-700 p-5 text-white relative overflow-hidden">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.1)_0%,transparent_70%)]" />
+            <div className="relative flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
+                <XCircle className="w-5 h-5" />
+              </div>
+              <div>
+                <DialogTitle className="text-lg font-bold">إلغاء الطلب</DialogTitle>
+                <p className="text-red-100 text-xs mt-0.5">هل أنت متأكد من هذا الإجراء؟</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="p-6 space-y-4">
+            {/* Warning Card */}
+            <div className="p-4 bg-gradient-to-l from-amber-50 to-orange-50/50 rounded-xl border border-amber-200/60">
+              <div className="flex items-start gap-3">
+                <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-sm shrink-0 mt-0.5">
+                  <AlertTriangle className="w-4 h-4 text-white" />
+                </div>
+                <div>
+                  <p className="font-bold text-amber-800 text-sm">تنبيه مهم</p>
+                  <p className="text-amber-700 text-xs mt-1 leading-relaxed">
+                    لا يمكن التراجع عن هذا الإجراء بعد التأكيد. سيتم إلغاء الطلب نهائياً ويمكنك تقديم طلب جديد لاحقاً.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Info */}
+            <div className="p-3 bg-gray-50 rounded-xl text-center">
+              <p className="text-sm text-gray-600">رقم الطلب</p>
+              <p className="text-lg font-bold font-mono text-gray-800 mt-1">#{cancelRequestId ? cancelRequestId.slice(0, 8).toUpperCase() : ''}</p>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                className="flex-1 rounded-xl border-gray-300 hover:bg-gray-50 text-gray-700"
+                onClick={() => setCancelDialog(false)}
+                disabled={cancelling}
+              >
+                تراجع
+              </Button>
+              <Button
+                className="flex-1 bg-gradient-to-r from-red-500 to-rose-500 text-white hover:shadow-lg rounded-xl"
+                onClick={handleCancelRequest}
+                disabled={cancelling}
+              >
+                {cancelling ? (
+                  <Loader2 className="w-4 h-4 animate-spin ml-2" />
+                ) : (
+                  <XCircle className="w-4 h-4 ml-2" />
+                )}
+                تأكيد الإلغاء
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
