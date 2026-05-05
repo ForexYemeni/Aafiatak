@@ -166,7 +166,7 @@ export default function LandingPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [registerSuccess, setRegisterSuccess] = useState(false)
   const [detectedRole, setDetectedRole] = useState<Role | null>(null)
-  const [countdown, setCountdown] = useState(10)
+  const [countdown, setCountdown] = useState(5)
 
   // ─── Nurse Registration Step ───
   const [nurseStep, setNurseStep] = useState<NurseRegStep>(1)
@@ -193,8 +193,8 @@ export default function LandingPage() {
 
   // ─── Countdown effect when role detected ───
   useEffect(() => {
-    if (!detectedRole) { setCountdown(10); return }
-    setCountdown(10)
+    if (!detectedRole) { setCountdown(5); return }
+    setCountdown(5)
     const timer = setInterval(() => {
       setCountdown(prev => {
         if (prev <= 1) { clearInterval(timer); return 0 }
@@ -248,8 +248,8 @@ export default function LandingPage() {
         const { data, role } = successResult
         // Show detected role animation
         setDetectedRole(role)
-        // 10 seconds animation before navigating
-        await new Promise(res => setTimeout(res, 10000))
+        // 5 seconds animation before navigating
+        await new Promise(res => setTimeout(res, 5000))
 
         setUser(data, role)
         if (role === 'admin') {
@@ -332,7 +332,7 @@ export default function LandingPage() {
       if (res.ok) {
         // Auto-login after registration - show role detection animation then redirect
         setDetectedRole('nurse')
-        await new Promise(r => setTimeout(r, 10000))
+        await new Promise(r => setTimeout(r, 5000))
         setUser(data, 'nurse')
         setView('nurse-dashboard')
         toast({ title: `مرحباً ${data.firstName}`, description: 'تم إنشاء حسابك بنجاح! أكمل ملفك الشخصي لتحسين فرص التعيين' })
@@ -375,7 +375,7 @@ export default function LandingPage() {
       if (res.ok) {
         // Auto-login after registration - show role detection animation then redirect
         setDetectedRole('beneficiary')
-        await new Promise(r => setTimeout(r, 10000))
+        await new Promise(r => setTimeout(r, 5000))
         setUser(data, 'beneficiary')
         setView('beneficiary-dashboard')
         toast({ title: `مرحباً ${data.name}`, description: 'تم إنشاء حسابك بنجاح! يمكنك الآن طلب الخدمات الصحية' })
@@ -665,7 +665,7 @@ export default function LandingPage() {
                               <div className="relative w-12 h-12">
                                 <svg className="w-12 h-12 -rotate-90" viewBox="0 0 48 48">
                                   <circle cx="24" cy="24" r="20" fill="none" stroke="#e2e8f0" strokeWidth="3" />
-                                  <circle cx="24" cy="24" r="20" fill="none" stroke="url(#countdown-gradient)" strokeWidth="3" strokeLinecap="round" strokeDasharray={`${2 * Math.PI * 20}`} strokeDashoffset={`${2 * Math.PI * 20 * (1 - countdown / 10)}`} className="transition-all duration-1000 ease-linear" />
+                                  <circle cx="24" cy="24" r="20" fill="none" stroke="url(#countdown-gradient)" strokeWidth="3" strokeLinecap="round" strokeDasharray={`${2 * Math.PI * 20}`} strokeDashoffset={`${2 * Math.PI * 20 * (1 - countdown / 5)}`} className="transition-all duration-1000 ease-linear" />
                                   <defs>
                                     <linearGradient id="countdown-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
                                       <stop offset="0%" stopColor={detectedRole === 'admin' ? '#f59e0b' : detectedRole === 'nurse' ? '#3b82f6' : '#8b5cf6'} />
