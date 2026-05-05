@@ -1,8 +1,6 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
-import L from 'leaflet'
-import 'leaflet/dist/leaflet.css'
+import { useEffect, useRef, useState } from 'react'
 
 interface TrackingMapProps {
   nurseLocation: { lat: number; lng: number } | null
@@ -11,71 +9,91 @@ interface TrackingMapProps {
   distanceKm?: number | null
 }
 
-// Fix leaflet default icon issue in Next.js
-const nurseIcon = L.divIcon({
-  html: `<div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#8b5cf6,#d946ef);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(139,92,246,0.5);border:3px solid white;">
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
-    </svg>
-  </div>`,
-  className: '',
-  iconSize: [40, 40],
-  iconAnchor: [20, 20],
-})
-
-const beneficiaryIcon = L.divIcon({
-  html: `<div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#f59e0b,#ef4444);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(245,158,11,0.5);border:3px solid white;">
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/>
-      <circle cx="12" cy="10" r="3"/>
-    </svg>
-  </div>`,
-  className: '',
-  iconSize: [36, 36],
-  iconAnchor: [18, 18],
-})
-
 export default function TrackingMap({
   nurseLocation,
   beneficiaryLocation,
   nurseName = 'الممرض/ة',
   distanceKm,
 }: TrackingMapProps) {
-  const mapRef = useRef<L.Map | null>(null)
+  const [mapReady, setMapReady] = useState(false)
+  const mapRef = useRef<any>(null)
   const containerRef = useRef<HTMLDivElement>(null)
-  const nurseMarkerRef = useRef<L.Marker | null>(null)
-  const beneficiaryMarkerRef = useRef<L.Marker | null>(null)
-  const routeLineRef = useRef<L.Polyline | null>(null)
+  const nurseMarkerRef = useRef<any>(null)
+  const beneficiaryMarkerRef = useRef<any>(null)
+  const routeLineRef = useRef<any>(null)
+  const LRef = useRef<any>(null)
 
-  // Initialize map
+  // Initialize map (dynamic import to avoid SSR issues)
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return
 
-    const defaultCenter: [number, number] = [15.3694, 44.1910] // Yemen center (Sanaa)
+    let map: any = null
 
-    const map = L.map(containerRef.current, {
-      center: defaultCenter,
-      zoom: 13,
-      zoomControl: true,
-      attributionControl: false,
-    })
+    const initMap = async () => {
+      try {
+        const L = (await import('leaflet')).default
+        await import('leaflet/dist/leaflet.css')
+        LRef.current = L
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19,
-    }).addTo(map)
+        const defaultCenter: [number, number] = [15.3694, 44.1910] // Yemen (Sanaa)
 
-    mapRef.current = map
+        map = L.map(containerRef.current!, {
+          center: defaultCenter,
+          zoom: 13,
+          zoomControl: true,
+          attributionControl: false,
+        })
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          maxZoom: 19,
+        }).addTo(map)
+
+        mapRef.current = map
+        setMapReady(true)
+      } catch (err) {
+        console.error('Map init error:', err)
+      }
+    }
+
+    initMap()
 
     return () => {
-      map.remove()
-      mapRef.current = null
+      if (map) {
+        map.remove()
+        mapRef.current = null
+      }
     }
   }, [])
 
+  // Create custom icons
+  const getNurseIcon = (L: any) => L.divIcon({
+    html: `<div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#8b5cf6,#d946ef);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(139,92,246,0.5);border:3px solid white;">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+      </svg>
+    </div>`,
+    className: '',
+    iconSize: [40, 40],
+    iconAnchor: [20, 20],
+  })
+
+  const getBeneficiaryIcon = (L: any) => L.divIcon({
+    html: `<div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#f59e0b,#ef4444);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(245,158,11,0.5);border:3px solid white;">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/>
+        <circle cx="12" cy="10" r="3"/>
+      </svg>
+    </div>`,
+    className: '',
+    iconSize: [36, 36],
+    iconAnchor: [18, 18],
+  })
+
   // Update markers and route
   useEffect(() => {
-    if (!mapRef.current) return
+    if (!mapRef.current || !LRef.current) return
     const map = mapRef.current
+    const L = LRef.current
 
     // Clear existing markers and lines
     if (nurseMarkerRef.current) {
@@ -91,7 +109,9 @@ export default function TrackingMap({
       routeLineRef.current = null
     }
 
-    const bounds: L.LatLngBounds = L.latLngBounds([])
+    const bounds = L.latLngBounds([])
+    const nurseIcon = getNurseIcon(L)
+    const beneficiaryIcon = getBeneficiaryIcon(L)
 
     // Add beneficiary marker
     if (beneficiaryLocation) {
@@ -134,7 +154,7 @@ export default function TrackingMap({
     if (bounds.isValid()) {
       map.fitBounds(bounds.pad(0.3), { maxZoom: 15, animate: true })
     }
-  }, [nurseLocation, beneficiaryLocation, nurseName, distanceKm])
+  }, [nurseLocation, beneficiaryLocation, nurseName, distanceKm, mapReady])
 
   return (
     <div className="relative w-full h-full min-h-[350px] rounded-2xl overflow-hidden">

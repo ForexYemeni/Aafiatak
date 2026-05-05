@@ -25,7 +25,8 @@ import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/
 import { Progress } from '@/components/ui/progress'
 import { useToast } from '@/hooks/use-toast'
 import ChatSystem from '@/components/ChatSystem'
-import TrackingMap from '@/components/TrackingMap'
+import dynamic from 'next/dynamic'
+const TrackingMap = dynamic(() => import('@/components/TrackingMap'), { ssr: false })
 import Image from 'next/image'
 
 // ===== Date Formatting Helpers =====
