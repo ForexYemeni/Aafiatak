@@ -262,3 +262,28 @@ Stage Summary:
 - 6 ملفات تم تعديلها: AdminDashboard.tsx, NurseDashboard.tsx, firestore.ts, validation.ts, dynamic-pricing/route.ts, payments/process/route.ts
 - البناء ينجح بدون أي أخطاء
 - تم النشر على Vercel: https://aafiatak.vercel.app
+---
+Task ID: 1
+Agent: Main Agent
+Task: Sub-admin settings restrictions + Unified login page
+
+Work Log:
+- Analyzed AdminDashboard.tsx settings tab structure
+- Identified Emergency, Referral, Payment/Pricing settings sections
+- Wrapped Emergency Settings, Referral Settings, and Payment/Pricing shortcut with `{!isSubAdmin && (...)}` to hide from sub-admins
+- Added info banner for sub-admins explaining restricted settings
+- Hidden Finance sub-tabs (Settings & Pricing) from sub-admin in Payments section
+- Added useEffect to reset financeSubTab if sub-admin tries to access restricted tabs
+- Created separate Firestore settings document per sub-admin: `appSettings/sub-admin-{id}`
+- Updated firestore.ts: getAdminSettings() and updateAdminSettings() now accept optional subAdminId parameter
+- Updated settings API (route.ts) to support subAdminId query param for GET and body param for PUT
+- Sub-admins can only update limited fields (phone, email, whatsappNumber, whatsappNumbers)
+- Main admin can update all fields
+- Rewrote UnifiedLogin.tsx with single unified login form + auto role detection (no three tabs)
+- Built and deployed to GitHub + Vercel
+
+Stage Summary:
+- Sub-admins no longer see Emergency, Referral, Payment/Pricing settings
+- Each sub-admin has independent settings stored in their own Firestore document
+- UnifiedLogin.tsx rewritten with auto role detection (no tabs)
+- Successfully deployed to production
