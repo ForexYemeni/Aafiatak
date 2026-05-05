@@ -2870,7 +2870,7 @@ export default function AdminDashboard() {
 
       {/* Nurse Detail Dialog */}
       <Dialog open={!!nurseDetail} onOpenChange={() => setNurseDetail(null)}>
-        <DialogContent className="sm:max-w-xl p-0 overflow-hidden">
+        <DialogContent className="sm:max-w-xl p-0 max-h-[90vh] overflow-y-auto">
           {nurseDetail && (() => {
             const isExpired = nurseDetail.licenseExpiryDate && new Date(nurseDetail.licenseExpiryDate) < new Date()
             const statusConfig: Record<string, { gradient: string; label: string }> = {
@@ -2973,7 +2973,7 @@ export default function AdminDashboard() {
                             </div>
                             <div className="p-3">
                               <div
-                                className="w-full h-48 sm:h-56 rounded-xl overflow-hidden border-2 border-blue-200/50 bg-white cursor-pointer hover:shadow-lg transition-all duration-300 group relative"
+                                className="w-full h-36 rounded-xl overflow-hidden border-2 border-blue-200/50 bg-white cursor-pointer hover:shadow-lg transition-all duration-300 group relative"
                                 onClick={() => setViewingImage({url: nurseDetail.nationalIdPhotoUrl, title: 'صورة البطاقة الوطنية'})}
                               >
                                 <img src={nurseDetail.nationalIdPhotoUrl} alt="البطاقة الوطنية" className="w-full h-full object-contain" />
@@ -3006,7 +3006,7 @@ export default function AdminDashboard() {
                             </div>
                             <div className="p-3">
                               <div
-                                className="w-full h-48 sm:h-56 rounded-xl overflow-hidden border-2 border-amber-200/50 bg-white cursor-pointer hover:shadow-lg transition-all duration-300 group relative"
+                                className="w-full h-36 rounded-xl overflow-hidden border-2 border-amber-200/50 bg-white cursor-pointer hover:shadow-lg transition-all duration-300 group relative"
                                 onClick={() => setViewingImage({url: nurseDetail.licensePhotoUrl, title: 'صورة رخصة المزاولة'})}
                               >
                                 <img src={nurseDetail.licensePhotoUrl} alt="رخصة المزاولة" className="w-full h-full object-contain" />
