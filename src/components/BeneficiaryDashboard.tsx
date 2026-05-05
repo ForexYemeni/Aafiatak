@@ -206,6 +206,8 @@ export default function BeneficiaryDashboard() {
   const [submitting, setSubmitting] = useState(false)
   const [requestPaymentMethods, setRequestPaymentMethods] = useState<any[]>([])
   const [requestPaymentMethodsLoading, setRequestPaymentMethodsLoading] = useState(false)
+  const [locationConfirmed, setLocationConfirmed] = useState(false)
+  const [locationConfirmDialog, setLocationConfirmDialog] = useState(false)
 
   // Coupon validation state
   const [validCoupon, setValidCoupon] = useState<any>(null)
@@ -521,19 +523,31 @@ export default function BeneficiaryDashboard() {
     setNotifications([...mergedApiNotifs, ...notifs])
   }, [requests, apiNotifications])
 
-  // Load profile data
+  // Load profile data - Auto-detect GPS location when entering profile
   useEffect(() => {
     if (activeTab === 'profile' && beneficiaryUser && !profileLoaded) {
       setProfileLocation(beneficiaryUser.location || '')
       setProfileLoaded(true)
+      // Auto-detect GPS location if no location saved
+      if (!beneficiaryUser.location && !profileLocation) {
+        setGpsLoading(true)
+        getGPSLocation().then(result => {
+          setGpsLoading(false)
+          if (result) {
+            setProfileLocation(result.address)
+            toast({ title: 'تم تحديد موقعك تلقائياً', description: 'اضغط "تحديث الموقع" لحفظه' })
+          }
+        })
+      }
     }
   }, [activeTab, beneficiaryUser, profileLoaded])
 
   // Request service handler
   const handleRequestService = async () => {
     if (!selectedService && selectedServices.length === 0) return
-    if (!requestForm.address.trim()) {
-      toast({ title: 'خطأ', description: 'يرجى إدخال العنوان', variant: 'destructive' })
+    const savedLocation = beneficiaryUser?.location || profileLocation || ''
+    if (!savedLocation.trim()) {
+      toast({ title: 'خطأ', description: 'يرجى تحديد موقعك الجغرافي أولاً من الملف الشخصي', variant: 'destructive' })
       return
     }
     if (!requestForm.paymentMethod) {
@@ -554,7 +568,7 @@ export default function BeneficiaryDashboard() {
           paymentMethod: requestForm.paymentMethod || null,
           paymentMethodId: requestForm.paymentMethodId || null,
           notes: requestForm.notes || null,
-          address: requestForm.address || null,
+          address: beneficiaryUser?.location || profileLocation || null,
           couponCode: validCoupon?.id || null,
           requestFavoriteNurse: requestFavoriteNurse || null,
           dynamicPrice: dynamicPricing?.totalPrice || null,
@@ -711,10 +725,16 @@ export default function BeneficiaryDashboard() {
   const handleReorder = (req: any) => {
     const service = req.service || { id: req.serviceId, name: 'خدمة', price: 0 }
     setSelectedService(service)
-    setRequestForm({ paymentMethod: '', paymentMethodId: '', notes: '', address: req.address || beneficiaryUser?.location || '', couponCode: '' })
+    setRequestForm({ paymentMethod: '', paymentMethodId: '', notes: '', address: '', couponCode: '' })
     setValidCoupon(null)
     setCouponError('')
-    setRequestDialog(true)
+    const savedLocation = beneficiaryUser?.location || profileLocation || ''
+    if (!savedLocation.trim()) {
+      toast({ title: 'يجب تحديد الموقع أولاً', description: 'يرجى الذهاب للملف الشخصي وتحديد موقعك الجغرافي', variant: 'destructive' })
+      return
+    }
+    setLocationConfirmed(false)
+    setLocationConfirmDialog(true)
     fetchRequestPaymentMethods()
   }
 
@@ -769,8 +789,13 @@ export default function BeneficiaryDashboard() {
 
   // Emergency request handler
   const handleEmergencyRequest = async () => {
-    if (!emergencyForm.serviceType.trim() || !emergencyForm.address.trim()) {
-      toast({ title: 'خطأ', description: 'يرجى إدخال نوع الخدمة والعنوان', variant: 'destructive' })
+    const savedLocation = beneficiaryUser?.location || profileLocation || ''
+    if (!emergencyForm.serviceType.trim()) {
+      toast({ title: 'خطأ', description: 'يرجى إدخال نوع الخدمة', variant: 'destructive' })
+      return
+    }
+    if (!savedLocation.trim()) {
+      toast({ title: 'خطأ', description: 'يرجى تحديد موقعك الجغرافي أولاً من الملف الشخصي', variant: 'destructive' })
       return
     }
     if (!emergencyForm.paymentMethod) {
@@ -790,7 +815,7 @@ export default function BeneficiaryDashboard() {
         body: JSON.stringify({
           beneficiaryId: beneficiaryUser?.id,
           serviceType: emergencyForm.serviceType,
-          address: emergencyForm.address,
+          address: beneficiaryUser?.location || profileLocation || emergencyForm.address,
           notes: emergencyForm.notes || undefined,
           paymentMethod: emergencyForm.paymentMethod || null,
           paymentMethodId: emergencyForm.paymentMethodId || null,
@@ -1710,12 +1735,13 @@ export default function BeneficiaryDashboard() {
                                 </div>
                                 <Button
                                   onClick={() => {
-                                    setRequestForm(prev => ({ ...prev, address: prev.address || beneficiaryUser?.location || profileLocation || '' }))
-                                    fetchRequestPaymentMethods()
-                                    if (selectedServices.length > 0) {
-                                      fetchDynamicPricing(selectedServices.map((s: any) => s.id), beneficiaryUser?.location || profileLocation || '')
+                                    const savedLocation = beneficiaryUser?.location || profileLocation || ''
+                                    if (!savedLocation.trim()) {
+                                      toast({ title: 'يجب تحديد الموقع أولاً', description: 'يرجى الذهاب للملف الشخصي وتحديد موقعك الجغرافي', variant: 'destructive' })
+                                      return
                                     }
-                                    setRequestDialog(true)
+                                    setLocationConfirmed(false)
+                                    setLocationConfirmDialog(true)
                                   }}
                                   className="bg-white text-violet-700 hover:bg-violet-50 font-bold px-8 py-3 rounded-xl shadow-lg hover:shadow-xl hover:scale-[1.03] active:scale-[0.97] transition-all text-base"
                                 >
@@ -2644,10 +2670,16 @@ export default function BeneficiaryDashboard() {
                                   size="sm"
                                   className="bg-gradient-to-r from-fuchsia-500 to-violet-500 text-white rounded-xl text-xs flex-1"
                                   onClick={() => {
+                                    const savedLocation = beneficiaryUser?.location || profileLocation || ''
+                                    if (!savedLocation.trim()) {
+                                      toast({ title: 'يجب تحديد الموقع أولاً', description: 'يرجى الذهاب للملف الشخصي وتحديد موقعك الجغرافي', variant: 'destructive' })
+                                      return
+                                    }
                                     setSelectedService(null)
-                                    setRequestForm({ paymentMethod: '', paymentMethodId: '', notes: '', address: beneficiaryUser?.location || '', couponCode: '' })
+                                    setRequestForm({ paymentMethod: '', paymentMethodId: '', notes: '', address: '', couponCode: '' })
                                     setRequestFavoriteNurse(true)
-                                    setRequestDialog(true)
+                                    setLocationConfirmed(false)
+                                    setLocationConfirmDialog(true)
                                     fetchRequestPaymentMethods()
                                   }}
                                 >
@@ -3908,79 +3940,65 @@ export default function BeneficiaryDashboard() {
               })()}
             </div>
 
-            {/* Address Field */}
+            {/* Saved Location Card - Emergency */}
             <div className="space-y-2">
               <Label className="text-sm font-medium">
                 <MapPin className="w-3.5 h-3.5 inline ml-1" />
-                العنوان
+                موقعك الجغرافي
               </Label>
-              <div className="flex gap-2">
-                <div className="flex-1 relative">
-                  <Input
-                    value={emergencyForm.address}
-                    onChange={(e) => {
-                      setEmergencyForm(prev => ({ ...prev, address: e.target.value }))
-                      if (e.target.value.length >= 3) {
-                        searchLocation(e.target.value).then(results => setEmergencyLocationSearchResults(results))
-                      } else {
-                        setEmergencyLocationSearchResults([])
-                      }
-                    }}
-                    placeholder="ابحث عن موقع أو اضغط زر GPS..."
-                    className="rounded-xl w-full"
-                  />
-                  {emergencyLocationSearchResults.length > 0 && (
-                    <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-white rounded-xl shadow-xl border border-red-100 max-h-48 overflow-y-auto">
-                      {emergencyLocationSearchResults.map((result, idx) => (
+              {(() => {
+                const savedLocation = beneficiaryUser?.location || profileLocation || ''
+                return savedLocation ? (
+                  <div className="p-3 rounded-xl bg-gradient-to-l from-emerald-50/80 to-teal-50/80 border border-emerald-200/60">
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center shadow-sm shrink-0">
+                        <MapPin className="w-5 h-5 text-white" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <Check className="w-4 h-4 text-emerald-500" />
+                          <span className="text-xs font-bold text-emerald-700">تم تأكيد الموقع</span>
+                        </div>
                         <button
-                          key={idx}
-                          className="w-full text-right px-3 py-2.5 hover:bg-red-50 transition-colors text-sm border-b border-gray-50 last:border-0"
-                          onClick={() => {
-                            setEmergencyForm(prev => ({ ...prev, address: `${result.name} [${result.lat},${result.lng}]` }))
-                            setEmergencyLocationSearchResults([])
-                          }}
+                          onClick={() => openInMaps(savedLocation)}
+                          className="text-sm text-gray-700 hover:text-red-700 transition-colors mt-1 text-right leading-relaxed"
                         >
-                          <div className="flex items-center gap-2">
-                            <MapPin className="w-3.5 h-3.5 text-red-500 shrink-0" />
-                            <span className="truncate">{result.name}</span>
-                          </div>
+                          <span className="truncate">{getDisplayLocation(savedLocation)}</span>
                         </button>
-                      ))}
+                        <button
+                          onClick={() => openInMaps(savedLocation)}
+                          className="flex items-center gap-1.5 text-xs text-red-600 hover:text-red-800 mt-1.5 transition-colors"
+                        >
+                          <MapPin className="w-3 h-3" />
+                          <span>عرض في الخريطة</span>
+                        </button>
+                      </div>
                     </div>
-                  )}
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="shrink-0 rounded-xl"
-                  disabled={emergencyGpsLoading}
-                  onClick={async () => {
-                    setEmergencyGpsLoading(true)
-                    const result = await getGPSLocation()
-                    setEmergencyGpsLoading(false)
-                    if (result) {
-                      setEmergencyForm(prev => ({ ...prev, address: result.address }))
-                      setEmergencyLocationSearchResults([])
-                      toast({ title: 'تم تحديد الموقع بنجاح', description: getDisplayLocation(result.address).substring(0, 80) })
-                    } else {
-                      toast({ title: 'خطأ في تحديد الموقع', description: 'يرجى السماح بالوصول إلى الموقع أو إدخاله يدوياً', variant: 'destructive' })
-                    }
-                  }}
-                >
-                  {emergencyGpsLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Navigation className="w-4 h-4" />}
-                </Button>
-              </div>
-              {/* Clickable map link */}
-              {emergencyForm.address && (
-                <button
-                  onClick={() => openInMaps(emergencyForm.address)}
-                  className="flex items-center gap-1.5 text-sm text-red-600 hover:text-red-800 hover:underline transition-colors"
-                >
-                  <MapPin className="w-3.5 h-3.5" />
-                  <span className="truncate">{getDisplayLocation(emergencyForm.address)}</span>
-                  <span className="text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full">فتح في الخريطة</span>
-                </button>
-              )}
+                    <div className="mt-2 pt-2 border-t border-emerald-200/40">
+                      <button
+                        onClick={() => { setEmergencyDialog(false); setActiveTab('profile') }}
+                        className="flex items-center gap-1.5 text-xs text-violet-600 hover:text-violet-800 transition-colors"
+                      >
+                        <Navigation className="w-3 h-3" />
+                        <span>تحديث الموقع من الإعدادات</span>
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-center">
+                    <MapPin className="w-8 h-8 text-amber-400 mx-auto mb-2" />
+                    <p className="text-amber-700 text-sm font-medium">لم يتم تحديد الموقع الجغرافي</p>
+                    <p className="text-amber-600 text-xs mt-1">يرجى تحديد موقعك أولاً</p>
+                    <button
+                      onClick={() => { setEmergencyDialog(false); setActiveTab('profile') }}
+                      className="mt-3 px-4 py-2 bg-red-500 text-white rounded-xl text-sm hover:bg-red-600 transition-colors"
+                    >
+                      <Navigation className="w-4 h-4 inline ml-1" />
+                      الذهاب للإعدادات
+                    </button>
+                  </div>
+                )
+              })()}
             </div>
 
             {/* Payment Method - Emergency */}
@@ -4208,7 +4226,7 @@ export default function BeneficiaryDashboard() {
             {/* Submit Button */}
             <Button
               onClick={handleEmergencyRequest}
-              disabled={emergencySubmitting || !emergencyForm.serviceType || !emergencyForm.address || !emergencyForm.paymentMethod}
+              disabled={emergencySubmitting || !emergencyForm.serviceType || !(beneficiaryUser?.location || profileLocation || '').trim() || !emergencyForm.paymentMethod}
               className="w-full bg-gradient-to-r from-red-500 to-rose-500 text-white hover:shadow-lg rounded-xl text-base py-3"
             >
               {emergencySubmitting ? (
@@ -4288,85 +4306,65 @@ export default function BeneficiaryDashboard() {
               </div>
             )}
 
-            {/* Address Field */}
+            {/* Saved Location Card */}
             <div className="space-y-2">
               <Label className="text-sm font-medium">
                 <MapPin className="w-3.5 h-3.5 inline ml-1" />
-                العنوان
+                موقعك الجغرافي
               </Label>
-              <div className="flex gap-2">
-                <div className="flex-1 relative">
-                  <Input
-                    value={requestForm.address}
-                    onChange={(e) => {
-                      setRequestForm(prev => ({ ...prev, address: e.target.value }))
-                      if (e.target.value.length >= 3) {
-                        searchLocation(e.target.value).then(results => setRequestLocationSearchResults(results))
-                        // Fetch dynamic pricing when service and address are available
-                        if (selectedServices.length > 0) {
-                          fetchDynamicPricing(selectedServices.map((s: any) => s.id), e.target.value)
-                        } else if (selectedService?.id) {
-                          fetchDynamicPricing([selectedService.id], e.target.value)
-                        }
-                      } else {
-                        setRequestLocationSearchResults([])
-                      }
-                    }}
-                    placeholder="ابحث عن موقع أو اضغط زر GPS..."
-                    className="rounded-xl w-full"
-                  />
-                  {requestLocationSearchResults.length > 0 && (
-                    <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-white rounded-xl shadow-xl border border-violet-100 max-h-48 overflow-y-auto">
-                      {requestLocationSearchResults.map((result, idx) => (
+              {(() => {
+                const savedLocation = beneficiaryUser?.location || profileLocation || ''
+                return savedLocation ? (
+                  <div className="p-3 rounded-xl bg-gradient-to-l from-emerald-50/80 to-teal-50/80 border border-emerald-200/60">
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center shadow-sm shrink-0">
+                        <MapPin className="w-5 h-5 text-white" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <Check className="w-4 h-4 text-emerald-500" />
+                          <span className="text-xs font-bold text-emerald-700">تم تأكيد الموقع</span>
+                        </div>
                         <button
-                          key={idx}
-                          className="w-full text-right px-3 py-2.5 hover:bg-violet-50 transition-colors text-sm border-b border-gray-50 last:border-0"
-                          onClick={() => {
-                            setRequestForm(prev => ({ ...prev, address: `${result.name} [${result.lat},${result.lng}]` }))
-                            setRequestLocationSearchResults([])
-                          }}
+                          onClick={() => openInMaps(savedLocation)}
+                          className="text-sm text-gray-700 hover:text-violet-700 transition-colors mt-1 text-right leading-relaxed"
                         >
-                          <div className="flex items-center gap-2">
-                            <MapPin className="w-3.5 h-3.5 text-violet-500 shrink-0" />
-                            <span className="truncate">{result.name}</span>
-                          </div>
+                          <span className="truncate">{getDisplayLocation(savedLocation)}</span>
                         </button>
-                      ))}
+                        <button
+                          onClick={() => openInMaps(savedLocation)}
+                          className="flex items-center gap-1.5 text-xs text-violet-600 hover:text-violet-800 mt-1.5 transition-colors"
+                        >
+                          <MapPin className="w-3 h-3" />
+                          <span>عرض في الخريطة</span>
+                        </button>
+                      </div>
                     </div>
-                  )}
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="shrink-0 rounded-xl"
-                  disabled={requestGpsLoading}
-                  onClick={async () => {
-                    setRequestGpsLoading(true)
-                    const result = await getGPSLocation()
-                    setRequestGpsLoading(false)
-                    if (result) {
-                      setRequestForm(prev => ({ ...prev, address: result.address }))
-                      setRequestLocationSearchResults([])
-                      toast({ title: 'تم تحديد الموقع بنجاح', description: getDisplayLocation(result.address).substring(0, 80) })
-                    } else {
-                      toast({ title: 'خطأ في تحديد الموقع', description: 'يرجى السماح بالوصول إلى الموقع أو إدخاله يدوياً', variant: 'destructive' })
-                    }
-                  }}
-                >
-                  {requestGpsLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Navigation className="w-4 h-4" />}
-                </Button>
-              </div>
-              {/* Clickable map link */}
-              {requestForm.address && (
-                <button
-                  onClick={() => openInMaps(requestForm.address)}
-                  className="flex items-center gap-1.5 text-sm text-violet-600 hover:text-violet-800 hover:underline transition-colors"
-                >
-                  <MapPin className="w-3.5 h-3.5" />
-                  <span className="truncate">{getDisplayLocation(requestForm.address)}</span>
-                  <span className="text-[10px] bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded-full">فتح في الخريطة</span>
-                </button>
-              )}
+                    <div className="mt-2 pt-2 border-t border-emerald-200/40">
+                      <button
+                        onClick={() => { setRequestDialog(false); setActiveTab('profile') }}
+                        className="flex items-center gap-1.5 text-xs text-violet-600 hover:text-violet-800 transition-colors"
+                      >
+                        <Navigation className="w-3 h-3" />
+                        <span>تحديث الموقع من الإعدادات</span>
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-center">
+                    <MapPin className="w-8 h-8 text-amber-400 mx-auto mb-2" />
+                    <p className="text-amber-700 text-sm font-medium">لم يتم تحديد الموقع الجغرافي</p>
+                    <p className="text-amber-600 text-xs mt-1">يرجى تحديد موقعك أولاً</p>
+                    <button
+                      onClick={() => { setRequestDialog(false); setActiveTab('profile') }}
+                      className="mt-3 px-4 py-2 bg-violet-500 text-white rounded-xl text-sm hover:bg-violet-600 transition-colors"
+                    >
+                      <Navigation className="w-4 h-4 inline ml-1" />
+                      الذهاب للإعدادات
+                    </button>
+                  </div>
+                )
+              })()}
             </div>
 
             {/* Payment Method - Admin Defined */}
@@ -4652,7 +4650,7 @@ export default function BeneficiaryDashboard() {
             {/* Submit Button */}
             <Button
               onClick={handleRequestService}
-              disabled={submitting || !requestForm.address.trim() || !requestForm.paymentMethod}
+              disabled={submitting || !(beneficiaryUser?.location || profileLocation || '').trim() || !requestForm.paymentMethod}
               className="w-full bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white hover:shadow-lg hover:shadow-violet-500/25 rounded-xl"
             >
               {submitting ? (
@@ -4662,6 +4660,104 @@ export default function BeneficiaryDashboard() {
               )}
               إرسال الطلب
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ===== LOCATION CONFIRMATION DIALOG ===== */}
+      <Dialog open={locationConfirmDialog} onOpenChange={setLocationConfirmDialog}>
+        <DialogContent className="sm:max-w-md border-0 shadow-2xl p-0" dir="rtl">
+          {/* Gradient Header */}
+          <div className="bg-gradient-to-l from-emerald-600 via-teal-600 to-emerald-700 p-5 text-white relative overflow-hidden">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.1)_0%,transparent_70%)]" />
+            <div className="relative flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
+                <MapPin className="w-5 h-5" />
+              </div>
+              <div>
+                <DialogTitle className="text-lg font-bold">تأكيد الموقع الجغرافي</DialogTitle>
+                <p className="text-emerald-100 text-xs mt-0.5">تأكد من صحة موقعك قبل إتمام الطلب</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="p-6 space-y-4">
+            {/* Current Location Display */}
+            {(() => {
+              const savedLocation = beneficiaryUser?.location || profileLocation || ''
+              return savedLocation ? (
+                <div className="p-4 rounded-xl bg-gradient-to-l from-emerald-50/80 to-teal-50/80 border border-emerald-200/60">
+                  <div className="flex items-start gap-3">
+                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center shadow-md shrink-0">
+                      <MapPin className="w-6 h-6 text-white" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-bold text-emerald-700 mb-1">موقعك الجغرافي المسجل</p>
+                      <p className="text-sm text-gray-700 leading-relaxed">{getDisplayLocation(savedLocation)}</p>
+                      <button
+                        onClick={() => openInMaps(savedLocation)}
+                        className="flex items-center gap-1.5 text-xs text-emerald-600 hover:text-emerald-800 mt-2 transition-colors"
+                      >
+                        <MapPin className="w-3 h-3" />
+                        <span>عرض في الخريطة للتأكد</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-center">
+                  <MapPin className="w-8 h-8 text-amber-400 mx-auto mb-2" />
+                  <p className="text-amber-700 text-sm font-medium">لم يتم تحديد الموقع الجغرافي</p>
+                </div>
+              )
+            })()}
+
+            {/* Confirmation Question */}
+            <div className="p-4 rounded-xl bg-violet-50/80 border border-violet-100">
+              <div className="flex items-start gap-3">
+                <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-violet-400 to-fuchsia-500 flex items-center justify-center shadow-sm shrink-0">
+                  <Shield className="w-4 h-4 text-white" />
+                </div>
+                <div>
+                  <p className="font-bold text-violet-800 text-sm">هل هذا موقعك الصحيح؟</p>
+                  <p className="text-violet-600 text-xs mt-1 leading-relaxed">
+                    سيتم إرسال الممرض/ة إلى هذا العنوان. تأكد من دقة الموقع لتجنب التأخير.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                className="flex-1 rounded-xl border-violet-200 text-violet-600 hover:bg-violet-50"
+                onClick={() => {
+                  setLocationConfirmDialog(false)
+                  setActiveTab('profile')
+                }}
+              >
+                <Navigation className="w-4 h-4 ml-1" />
+                تحديث الموقع
+              </Button>
+              <Button
+                className="flex-1 bg-gradient-to-r from-emerald-500 to-teal-500 text-white hover:shadow-lg rounded-xl"
+                onClick={() => {
+                  setLocationConfirmed(true)
+                  setLocationConfirmDialog(false)
+                  // Pre-fill form and open request dialog
+                  setRequestForm(prev => ({ ...prev, address: '' }))
+                  fetchRequestPaymentMethods()
+                  if (selectedServices.length > 0) {
+                    fetchDynamicPricing(selectedServices.map((s: any) => s.id), beneficiaryUser?.location || profileLocation || '')
+                  }
+                  setRequestDialog(true)
+                }}
+              >
+                <Check className="w-4 h-4 ml-1" />
+                نعم، الموقع صحيح
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
