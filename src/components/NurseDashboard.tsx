@@ -25,6 +25,7 @@ import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/
 import { useToast } from '@/hooks/use-toast'
 import ChatSystem from '@/components/ChatSystem'
 import Image from 'next/image'
+import { notifyBeneficiary } from '@/lib/notifications'
 
 // ==================== Date Helpers ====================
 
@@ -527,6 +528,8 @@ export default function NurseDashboard() {
           title: 'تم قبول المهمة',
           description: 'يمكنك الآن بدء تنفيذ المهمة',
         })
+        const assignment = assignments.find(a => a.id === assignmentId)
+        notifyBeneficiary.nurseAssigned(assignment?.request?.beneficiary?.id || '', nurseName, assignment?.requestId || '').catch(() => {})
         fetchAssignments()
       } else {
         const data = await res.json().catch(() => ({})).catch(() => ({}))

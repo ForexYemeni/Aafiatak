@@ -29,6 +29,7 @@ import { Switch } from '@/components/ui/switch'
 import { Separator } from '@/components/ui/separator'
 import { useToast } from '@/hooks/use-toast'
 import Image from 'next/image'
+import { notifyBeneficiary, notifyNurse } from '@/lib/notifications'
 
 // ─── Date Helpers ──────────────────────────────────────────────
 function parseTimestamp(ts: any): Date | null {
@@ -512,6 +513,7 @@ export default function AdminDashboard() {
           setPaymentConfirmed(true)
           setPaymentConfirmStep(false)
           toast({ title: 'تم تأكيد الدفع وقبول الطلب', description: 'الآن يمكنك تعيين ممرض أو التنفيذ المباشر' })
+          notifyBeneficiary.paymentConfirmed(selectedRequest.beneficiary?.id || '', selectedRequest.id).catch(() => {})
           fetchData()
         } else {
           const data = await res.json()
@@ -534,7 +536,14 @@ export default function AdminDashboard() {
           else { const data = await res.json(); toast({ title: 'خطأ', description: data.error, variant: 'destructive' }) }
         } else {
           const res = await fetch('/api/admin/assign-nurse', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ requestId: selectedRequest.id, nurseId: selectedNurseId }) })
-          if (res.ok) { toast({ title: 'تم تعيين الممرض بنجاح' }); logActivity('nurse_assign', 'تم تعيين ممرض لطلب', { requestId: selectedRequest.id, nurseId: selectedNurseId }); setApproveDialog(false); fetchData() }
+          if (res.ok) {
+            toast({ title: 'تم تعيين الممرض بنجاح' })
+            logActivity('nurse_assign', 'تم تعيين ممرض لطلب', { requestId: selectedRequest.id, nurseId: selectedNurseId })
+            const nurse = nurses.find((n: any) => n.id === selectedNurseId)
+            notifyBeneficiary.nurseAssigned(selectedRequest.beneficiary?.id || '', `${nurse?.firstName || ''} ${nurse?.lastName || ''}`, selectedRequest.id).catch(() => {})
+            notifyNurse.newAssignment(selectedNurseId, selectedRequest.service?.name || (selectedRequest.isMultiService ? 'خدمة متعددة' : 'خدمة'), selectedRequest.id).catch(() => {})
+            setApproveDialog(false); fetchData()
+          }
           else { const data = await res.json(); toast({ title: 'خطأ', description: data.error, variant: 'destructive' }) }
         }
       } catch { toast({ title: 'خطأ', description: 'حدث خطأ', variant: 'destructive' }) }

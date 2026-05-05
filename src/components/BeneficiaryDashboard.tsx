@@ -28,6 +28,7 @@ import ChatSystem from '@/components/ChatSystem'
 import dynamic from 'next/dynamic'
 const TrackingMap = dynamic(() => import('@/components/TrackingMap'), { ssr: false })
 import Image from 'next/image'
+import { notifyAdmin } from '@/lib/notifications'
 
 // ===== Date Formatting Helpers =====
 function formatDate(timestamp: any): string {
@@ -578,6 +579,9 @@ export default function BeneficiaryDashboard() {
       })
       const data = await res.json()
       if (res.ok) {
+        // Notify admin about new order
+        const serviceName = selectedService?.name || (selectedServices.length > 1 ? 'خدمة متعددة' : selectedServices[0]?.name || 'خدمة')
+        notifyAdmin.newOrder('', beneficiaryUser?.name || '', serviceName, data.id || data.requestId || '').catch(() => {})
         // Add loyalty points
         try {
           await fetch('/api/loyalty', {
@@ -831,6 +835,8 @@ export default function BeneficiaryDashboard() {
       })
       const data = await res.json()
       if (res.ok) {
+        // Notify admin about emergency request
+        notifyAdmin.emergencyRequest('', beneficiaryUser?.name || '', data.id || data.requestId || '').catch(() => {})
         // Add loyalty points
         try {
           await fetch('/api/loyalty', {
