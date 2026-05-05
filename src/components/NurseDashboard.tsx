@@ -26,6 +26,7 @@ import { useToast } from '@/hooks/use-toast'
 import ChatSystem from '@/components/ChatSystem'
 import Image from 'next/image'
 import { notifyBeneficiary } from '@/lib/notifications'
+import NotificationBell from '@/components/NotificationBell'
 
 // ==================== Date Helpers ====================
 
@@ -1087,6 +1088,9 @@ export default function NurseDashboard() {
             <p className="font-semibold text-sm truncate text-gray-800">{nurseName}</p>
             <p className="text-blue-600 text-xs font-medium">ممرض</p>
           </div>
+        </div>
+        <div className="flex items-center justify-center mb-2">
+          <NotificationBell gradientFrom="from-cyan-500" gradientTo="to-indigo-500" userType="nurse" />
         </div>
         <Button
           variant="ghost"
@@ -2962,9 +2966,7 @@ export default function NurseDashboard() {
             <Image src="/logo.png" alt="عافيتك" width={32} height={32} className="rounded-lg" />
             <h1 className="text-lg font-bold bg-gradient-to-l from-cyan-700 via-blue-700 to-indigo-700 bg-clip-text text-transparent">عافيتك</h1>
           </div>
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-blue-500/20">
-            <Stethoscope className="w-5 h-5 text-white" />
-          </div>
+          <NotificationBell gradientFrom="from-cyan-500" gradientTo="to-indigo-500" userType="nurse" />
         </div>
       </div>
 

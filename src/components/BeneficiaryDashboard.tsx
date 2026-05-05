@@ -29,6 +29,7 @@ import dynamic from 'next/dynamic'
 const TrackingMap = dynamic(() => import('@/components/TrackingMap'), { ssr: false })
 import Image from 'next/image'
 import { notifyAdmin } from '@/lib/notifications'
+import NotificationBell from '@/components/NotificationBell'
 
 // ===== Date Formatting Helpers =====
 function formatDate(timestamp: any): string {
@@ -1542,6 +1543,9 @@ export default function BeneficiaryDashboard() {
               <p className="text-muted-foreground text-xs">مستفيد</p>
             </div>
           </div>
+          <div className="flex items-center justify-center mb-2">
+            <NotificationBell gradientFrom="from-violet-600" gradientTo="to-fuchsia-600" userType="beneficiary" />
+          </div>
           <Button
             variant="ghost"
             className="w-full justify-start text-red-600 hover:text-red-700 hover:bg-red-50 rounded-xl"
@@ -1622,14 +1626,7 @@ export default function BeneficiaryDashboard() {
           <span className="font-bold bg-gradient-to-l from-violet-600 to-fuchsia-600 bg-clip-text text-transparent">عافيتك</span>
         </div>
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="icon" className="relative h-9 w-9" onClick={() => handleTabChange('notifications')}>
-            <Bell className="w-4 h-4" />
-            {unreadNotifications > 0 && (
-              <span className="absolute -top-0.5 -left-0.5 bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white text-[10px] min-w-[16px] h-4 px-1 rounded-full flex items-center justify-center">
-                {unreadNotifications}
-              </span>
-            )}
-          </Button>
+          <NotificationBell gradientFrom="from-violet-600" gradientTo="to-fuchsia-600" userType="beneficiary" />
           <Button variant="ghost" size="icon" className="h-9 w-9" onClick={handleLogout}>
             <LogOut className="w-4 h-4 text-red-500" />
           </Button>

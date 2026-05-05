@@ -33,7 +33,16 @@ export default function RootLayout({
             __html: `
               if ('serviceWorker' in navigator) {
                 window.addEventListener('load', function() {
-                  navigator.serviceWorker.register('/sw.js').catch(function() {});
+                  // Register the unified service worker (FCM + caching)
+                  navigator.serviceWorker.register('/firebase-messaging-sw.js', {
+                    scope: '/'
+                  }).then(function(registration) {
+                    console.log('✅ Service Worker registered:', registration.scope);
+                  }).catch(function(error) {
+                    console.warn('⚠️ Service Worker registration failed:', error);
+                    // Fallback to basic service worker
+                    navigator.serviceWorker.register('/sw.js').catch(function() {});
+                  });
                 });
               }
             `,

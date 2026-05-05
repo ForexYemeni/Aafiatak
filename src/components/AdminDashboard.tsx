@@ -30,6 +30,7 @@ import { Separator } from '@/components/ui/separator'
 import { useToast } from '@/hooks/use-toast'
 import Image from 'next/image'
 import { notifyBeneficiary, notifyNurse } from '@/lib/notifications'
+import NotificationBell from '@/components/NotificationBell'
 
 // ─── Date Helpers ──────────────────────────────────────────────
 function parseTimestamp(ts: any): Date | null {
@@ -1049,6 +1050,10 @@ export default function AdminDashboard() {
             <div className="flex-1 min-w-0"><p className="font-medium text-sm truncate">{(user as any)?.name || 'المدير'}</p><p className="text-gray-400 text-xs">{isSubAdmin ? 'مدير فرعي' : 'مدير النظام'}</p></div>
             <Pencil className="w-3.5 h-3.5 text-gray-400" />
           </div>
+          <div className="flex items-center gap-2 mb-2">
+            <div className="flex-1" />
+            <NotificationBell gradientFrom="from-amber-500" gradientTo="to-rose-500" userType="admin" />
+          </div>
           <Button variant="ghost" className="w-full justify-start text-red-500 hover:text-red-600 hover:bg-red-50 rounded-xl" onClick={handleLogout}><LogOut className="w-4 h-4 ml-2" />تسجيل الخروج</Button>
         </div>
       </aside>
@@ -1086,6 +1091,7 @@ export default function AdminDashboard() {
           <span className="font-bold bg-gradient-to-l from-amber-600 via-orange-600 to-rose-600 bg-clip-text text-transparent">عافيتك</span>
         </div>
         <div className="flex items-center gap-2">
+          <NotificationBell gradientFrom="from-amber-500" gradientTo="to-rose-500" userType="admin" />
           {emergencyRequests.filter((e: any) => e.status === 'pending').length > 0 && (
             <Button variant="ghost" size="sm" className="relative" onClick={() => setActiveTab('emergency')}><AlertTriangle className="w-4 h-4 text-red-500" /><span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center">{emergencyRequests.filter((e: any) => e.status === 'pending').length}</span></Button>
           )}
