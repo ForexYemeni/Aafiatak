@@ -182,10 +182,26 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'رقم الهاتف أو كلمة المرور غير صحيحة' }, { status: 401 })
 
   } catch (error: any) {
-    console.error('Unified login error:', error.message)
+    console.error('Unified login error:', error.message, error.code || '')
     const msg = error.message || 'حدث خطأ في الخادم'
+    const code = error.code || error.codePrefix || ''
 
-    // Check for common Firebase/Firestore errors
+    // Check for Firestore quota exceeded (Spark free plan limit)
+    if (
+      msg.includes('RESOURCE_EXHAUSTED') ||
+      msg.includes('Quota exceeded') ||
+      msg.includes('quota') ||
+      code === '8' ||
+      code === 'RESOURCE_EXHAUSTED'
+    ) {
+      return NextResponse.json({
+        error: 'تم تجاوز الحصة المجانية لقاعدة البيانات. يرجى الترقية إلى خطة Blaze في Firebase Console أو الانتظار حتى يتم تجديد الحصة.',
+        details: msg,
+        isQuotaExceeded: true,
+      }, { status: 503 })
+    }
+
+    // Check for Firestore not created / permission denied
     if (msg.includes('PERMISSION_DENIED') || msg.includes('has not been used') || msg.includes('Cloud Firestore')) {
       return NextResponse.json({
         error: 'يجب تفعيل Firestore Database أولاً من Firebase Console مع اختيار Test Mode',
@@ -194,12 +210,22 @@ export async function POST(request: NextRequest) {
       }, { status: 500 })
     }
 
+    // Check for Firebase initialization errors
     if (msg.includes('Firebase') || msg.includes('غير مهيأ') || msg.includes('credentials') || msg.includes('initialize')) {
       return NextResponse.json({
         error: 'قاعدة البيانات غير متصلة. تأكد من إعداد متغيرات Firebase البيئية بشكل صحيح.',
         details: msg,
         isFirebaseError: true,
       }, { status: 500 })
+    }
+
+    // Check for network/connection errors
+    if (msg.includes('ENOTFOUND') || msg.includes('ECONNREFUSED') || msg.includes('ETIMEDOUT') || msg.includes('network')) {
+      return NextResponse.json({
+        error: 'فشل الاتصال بقاعدة البيانات. تحقق من اتصال الإنترنت وحاول مرة أخرى.',
+        details: msg,
+        isNetworkError: true,
+      }, { status: 503 })
     }
 
     return NextResponse.json({

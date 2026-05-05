@@ -121,10 +121,25 @@ export default function UnifiedLogin() {
           setShowRoleDetection(false)
         }, 1500)
       } else {
-        toast({ title: 'خطأ', description: data.error || 'رقم الهاتف أو كلمة المرور غير صحيحة', variant: 'destructive' })
+        // Show specific error message from server
+        const errorMessage = data.error || 'رقم الهاتف أو كلمة المرور غير صحيحة'
+        
+        // Check for quota exceeded — show a special persistent warning
+        if (data.isQuotaExceeded) {
+          setFirebaseStatus('disconnected')
+          setFirebaseError(errorMessage)
+          toast({ 
+            title: '⚠️ تجاوز الحصة المجانية', 
+            description: errorMessage, 
+            variant: 'destructive',
+            duration: 10000,
+          })
+        } else {
+          toast({ title: 'خطأ', description: errorMessage, variant: 'destructive' })
+        }
       }
     } catch {
-      toast({ title: 'خطأ', description: 'حدث خطأ في الاتصال', variant: 'destructive' })
+      toast({ title: 'خطأ', description: 'حدث خطأ في الاتصال بالخادم. تحقق من اتصال الإنترنت وحاول مرة أخرى.', variant: 'destructive' })
     } finally {
       setLoading(false)
     }
