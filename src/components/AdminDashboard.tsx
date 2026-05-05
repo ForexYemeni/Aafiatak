@@ -250,29 +250,36 @@ export default function AdminDashboard() {
           fetch('/api/admin/emergency'),
         ])
         if (dashRes.ok) setStats(await dashRes.json())
+        else toast({ title: 'خطأ', description: 'فشل تحميل إحصائيات لوحة التحكم', variant: 'destructive' })
         if (actRes.ok) setActivityLogs(await actRes.json())
         if (emRes.ok) { const data = await emRes.json(); setEmergencyRequests(Array.isArray(data) ? data : []) }
       } else if (activeTab === 'services') {
         const res = await fetch('/api/admin/services')
         if (res.ok) setServices(await res.json())
+        else toast({ title: 'خطأ', description: 'فشل تحميل الخدمات', variant: 'destructive' })
       } else if (activeTab === 'nurses') {
         const res = await fetch('/api/admin/nurses')
         if (res.ok) setNurses(await res.json())
+        else toast({ title: 'خطأ', description: 'فشل تحميل بيانات الممرضين', variant: 'destructive' })
       } else if (activeTab === 'beneficiaries') {
         const res = await fetch('/api/admin/beneficiaries')
         if (res.ok) setBeneficiaries(await res.json())
+        else toast({ title: 'خطأ', description: 'فشل تحميل بيانات المستفيدين', variant: 'destructive' })
       } else if (activeTab === 'requests') {
         const res = await fetch('/api/admin/requests')
         if (res.ok) setRequests(await res.json())
+        else toast({ title: 'خطأ', description: 'فشل تحميل الطلبات', variant: 'destructive' })
       } else if (activeTab === 'emergency') {
         const res = await fetch('/api/admin/emergency')
         if (res.ok) { const data = await res.json(); setEmergencyRequests(Array.isArray(data) ? data : []) }
+        else toast({ title: 'خطأ', description: 'فشل تحميل طلبات الطوارئ', variant: 'destructive' })
       } else if (activeTab === 'payments') {
         const [payRes, transRes] = await Promise.all([
           fetch('/api/admin/payments'),
           fetch('/api/payments/process').catch(() => null),
         ])
         if (payRes.ok) setPayments(await payRes.json())
+        else toast({ title: 'خطأ', description: 'فشل تحميل طرق الدفع', variant: 'destructive' })
         if (transRes?.ok) { const transData = await transRes.json(); setTransactions(Array.isArray(transData) ? transData : []) }
         try {
           const setRes = await fetch('/api/admin/settings')
@@ -281,13 +288,16 @@ export default function AdminDashboard() {
       } else if (activeTab === 'coupons') {
         const res = await fetch('/api/admin/coupons')
         if (res.ok) setCoupons(await res.json())
+        else toast({ title: 'خطأ', description: 'فشل تحميل الكوبونات', variant: 'destructive' })
       } else if (activeTab === 'ratings') {
         const url = ratingsNurseFilter !== 'all' ? `/api/admin/ratings?nurseId=${ratingsNurseFilter}` : '/api/admin/ratings'
         const res = await fetch(url)
         if (res.ok) setRatings(await res.json())
+        else toast({ title: 'خطأ', description: 'فشل تحميل التقييمات', variant: 'destructive' })
       } else if (activeTab === 'activity') {
         const res = await fetch('/api/admin/activity-log?limit=50')
         if (res.ok) setActivityLogs(await res.json())
+        else toast({ title: 'خطأ', description: 'فشل تحميل سجل النشاط', variant: 'destructive' })
       } else if (activeTab === 'reports') {
         const [dashRes, reqRes, svcRes] = await Promise.all([
           fetch('/api/admin/dashboard'),
@@ -302,14 +312,16 @@ export default function AdminDashboard() {
         try {
           const res = await fetch('/api/reports/list')
           if (res.ok) { const data = await res.json(); setComplaints(Array.isArray(data) ? data : []) }
-        } catch { /* silently fail */ }
+          else toast({ title: 'خطأ', description: 'فشل تحميل الشكاوى', variant: 'destructive' })
+        } catch { toast({ title: 'خطأ', description: 'فشل تحميل الشكاوى', variant: 'destructive' }) }
         finally { setComplaintsLoading(false) }
       } else if (activeTab === 'appointments') {
         setAppointmentsLoading(true)
         try {
           const res = await fetch('/api/appointments')
           if (res.ok) { const data = await res.json(); setAppointments(Array.isArray(data) ? data : []) }
-        } catch { /* silently fail */ }
+          else toast({ title: 'خطأ', description: 'فشل تحميل المواعيد', variant: 'destructive' })
+        } catch { toast({ title: 'خطأ', description: 'فشل تحميل المواعيد', variant: 'destructive' }) }
         finally { setAppointmentsLoading(false) }
       } else if (activeTab === 'sub-admins') {
         // Use adminId for sub-admins (parent admin ID) or own ID for main admin
@@ -317,9 +329,11 @@ export default function AdminDashboard() {
         const fetchAdminId = isSub ? (user as any)?.adminId : (user as any)?.id
         const saRes = await fetch(`/api/admin/sub-admins?adminId=${fetchAdminId}`)
         if (saRes.ok) setSubAdmins(await saRes.json())
+        else toast({ title: 'خطأ', description: 'فشل تحميل المسؤولين الفرعيين', variant: 'destructive' })
       } else if (activeTab === 'settings') {
         const setRes = await fetch('/api/admin/settings')
         if (setRes.ok) setSettings(await setRes.json())
+        else toast({ title: 'خطأ', description: 'فشل تحميل الإعدادات', variant: 'destructive' })
       }
     } catch {
       toast({ title: 'خطأ', description: 'فشل تحميل البيانات', variant: 'destructive' })
@@ -372,7 +386,7 @@ export default function AdminDashboard() {
     try {
       const url = editingService ? `/api/admin/services/${editingService.id}` : '/api/admin/services'
       const method = editingService ? 'PUT' : 'POST'
-      const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(serviceForm) })
+      const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...serviceForm, price: Number(serviceForm.price) || 0 }) })
       if (res.ok) {
         toast({ title: editingService ? 'تم تحديث الخدمة' : 'تم إضافة الخدمة' })
         logActivity(editingService ? 'service_update' : 'service_create', `${editingService ? 'تم تحديث' : 'تم إضافة'} خدمة: ${serviceForm.name}`)
@@ -382,10 +396,10 @@ export default function AdminDashboard() {
   }
 
   const handleDeleteService = async (id: string) => {
-    if (!confirm('هل أنت متأكد من حذف هذه الخدمة؟')) return
     try {
       const res = await fetch(`/api/admin/services/${id}`, { method: 'DELETE' })
       if (res.ok) { toast({ title: 'تم حذف الخدمة' }); logActivity('service_delete', 'تم حذف خدمة'); fetchData() }
+      else { const data = await res.json().catch(() => ({})); toast({ title: 'خطأ', description: data.error || 'فشل حذف الخدمة', variant: 'destructive' }) }
     } catch { toast({ title: 'خطأ', description: 'فشل حذف الخدمة', variant: 'destructive' }) }
   }
 
@@ -399,6 +413,9 @@ export default function AdminDashboard() {
       if (res.ok) {
         const labels: Record<string, string> = { approved: 'تم قبول الممرض', blocked: 'تم حظر الممرض' }
         toast({ title: labels[status] || 'تم التحديث' }); fetchData()
+      } else {
+        const data = await res.json().catch(() => ({}))
+        toast({ title: 'خطأ', description: data.error || 'فشل التحديث', variant: 'destructive' })
       }
     } catch { toast({ title: 'خطأ', description: 'حدث خطأ', variant: 'destructive' }) }
   }
@@ -417,6 +434,9 @@ export default function AdminDashboard() {
       const res = await fetch(`/api/admin/beneficiaries/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) })
       if (res.ok) {
         toast({ title: status === 'blocked' ? 'تم حظر المستفيد' : 'تم تفعيل المستفيد' }); fetchData()
+      } else {
+        const data = await res.json().catch(() => ({}))
+        toast({ title: 'خطأ', description: data.error || 'فشل التحديث', variant: 'destructive' })
       }
     } catch { toast({ title: 'خطأ', description: 'حدث خطأ', variant: 'destructive' }) }
   }
@@ -495,15 +515,16 @@ export default function AdminDashboard() {
 
   const handleBulkApprove = async () => {
     if (selectedRequestIds.length === 0) { toast({ title: 'خطأ', description: 'يرجى تحديد طلبات أولاً', variant: 'destructive' }); return }
-    if (!confirm(`هل أنت متأكد من قبول ${selectedRequestIds.length} طلب؟`)) return
-    try {
-      let successCount = 0
-      for (const id of selectedRequestIds) {
-        const res = await fetch(`/api/admin/requests/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'approved' }) })
-        if (res.ok) successCount++
-      }
-      toast({ title: `تم قبول ${successCount} طلب بنجاح` }); logActivity('bulk_approve', `تم قبول ${successCount} طلب دفعة واحدة`); setSelectedRequestIds([]); fetchData()
-    } catch { toast({ title: 'خطأ', description: 'حدث خطأ', variant: 'destructive' }) }
+    showConfirmDialog('قبول جماعي', `هل أنت متأكد من قبول ${selectedRequestIds.length} طلب؟`, CheckCircle, 'text-emerald-500', async () => {
+      try {
+        let successCount = 0
+        for (const id of selectedRequestIds) {
+          const res = await fetch(`/api/admin/requests/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'approved' }) })
+          if (res.ok) successCount++
+        }
+        toast({ title: `تم قبول ${successCount} طلب بنجاح` }); logActivity('bulk_approve', `تم قبول ${successCount} طلب دفعة واحدة`); setSelectedRequestIds([]); fetchData()
+      } catch { toast({ title: 'خطأ', description: 'حدث خطأ', variant: 'destructive' }) }
+    })
   }
 
   // ─── Payment CRUD ───────────────────────────────────────────
@@ -543,8 +564,9 @@ export default function AdminDashboard() {
   }
 
   const handleDeletePayment = async (id: string) => {
-    if (!confirm('هل أنت متأكد من حذف طريقة الدفع هذه؟')) return
-    try { const res = await fetch(`/api/admin/payments/${id}`, { method: 'DELETE' }); if (res.ok) { toast({ title: 'تم حذف طريقة الدفع' }); fetchData() } } catch { toast({ title: 'خطأ', description: 'حدث خطأ', variant: 'destructive' }) }
+    showConfirmDialog('حذف طريقة الدفع', 'هل أنت متأكد من حذف طريقة الدفع هذه؟', Trash2, 'text-red-500', async () => {
+      try { const res = await fetch(`/api/admin/payments/${id}`, { method: 'DELETE' }); if (res.ok) { toast({ title: 'تم حذف طريقة الدفع' }); fetchData() } else { const data = await res.json().catch(() => ({})); toast({ title: 'خطأ', description: data.error || 'فشل الحذف', variant: 'destructive' }) } } catch { toast({ title: 'خطأ', description: 'حدث خطأ', variant: 'destructive' }) }
+    })
   }
 
   // Confirm payment transaction
@@ -589,44 +611,50 @@ export default function AdminDashboard() {
 
   // Reject payment transaction
   const handleRejectPayment = async (transactionId: string) => {
-    if (!confirm('هل أنت متأكد من رفض هذا الدفع؟')) return
-    try {
-      const res = await fetch('/api/payments/process', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ transactionId, action: 'reject', adminId }),
-      })
-      if (res.ok) {
-        toast({ title: 'تم رفض الدفع' })
-        fetchData()
-      } else {
-        const data = await res.json()
-        toast({ title: 'خطأ', description: data.error, variant: 'destructive' })
+    showConfirmDialog('رفض الدفع', 'هل أنت متأكد من رفض هذا الدفع؟ سيتم إعلام المستفيد بذلك.', XCircle, 'text-red-500', async () => {
+      try {
+        const res = await fetch('/api/payments/process', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ transactionId, action: 'reject', adminId }),
+        })
+        if (res.ok) {
+          toast({ title: 'تم رفض الدفع' })
+          fetchData()
+        } else {
+          const data = await res.json().catch(() => ({}))
+          toast({ title: 'خطأ', description: data.error, variant: 'destructive' })
+        }
+      } catch {
+        toast({ title: 'خطأ', description: 'حدث خطأ', variant: 'destructive' })
       }
-    } catch {
-      toast({ title: 'خطأ', description: 'حدث خطأ', variant: 'destructive' })
-    }
+    })
   }
 
   // ─── Coupon CRUD ───────────────────────────────────────────
   const handleSaveCoupon = async () => {
     if (!couponForm.code || !couponForm.discountPercent || !couponForm.maxUses || !couponForm.expiresAt) { toast({ title: 'خطأ', description: 'يرجى ملء جميع الحقول المطلوبة', variant: 'destructive' }); return }
+    const discountVal = Number(couponForm.discountPercent)
+    const maxUsesVal = Number(couponForm.maxUses)
+    if (discountVal <= 0 || discountVal > 100) { toast({ title: 'خطأ', description: 'نسبة الخصم يجب أن تكون بين 1 و 100', variant: 'destructive' }); return }
+    if (maxUsesVal <= 0) { toast({ title: 'خطأ', description: 'عدد مرات الاستخدام يجب أن يكون أكبر من صفر', variant: 'destructive' }); return }
     try {
       const url = editingCoupon ? `/api/admin/coupons/${editingCoupon.id}` : '/api/admin/coupons'
       const method = editingCoupon ? 'PUT' : 'POST'
-      const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(couponForm) })
+      const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...couponForm, discountPercent: discountVal, maxUses: maxUsesVal }) })
       if (res.ok) { toast({ title: editingCoupon ? 'تم تحديث الكوبون' : 'تم إضافة الكوبون' }); setCouponDialog(false); setEditingCoupon(null); setCouponForm({ code: '', discountPercent: '', maxUses: '', expiresAt: '', isActive: true }); fetchData() }
       else { const data = await res.json(); toast({ title: 'خطأ', description: data.error, variant: 'destructive' }) }
     } catch { toast({ title: 'خطأ', description: 'حدث خطأ', variant: 'destructive' }) }
   }
 
   const handleDeleteCoupon = async (id: string) => {
-    if (!confirm('هل أنت متأكد من حذف هذا الكوبون؟')) return
-    try { const res = await fetch(`/api/admin/coupons/${id}`, { method: 'DELETE' }); if (res.ok) { toast({ title: 'تم حذف الكوبون' }); fetchData() } } catch { toast({ title: 'خطأ', description: 'حدث خطأ', variant: 'destructive' }) }
+    showConfirmDialog('حذف الكوبون', 'هل أنت متأكد من حذف هذا الكوبون؟', Trash2, 'text-red-500', async () => {
+      try { const res = await fetch(`/api/admin/coupons/${id}`, { method: 'DELETE' }); if (res.ok) { toast({ title: 'تم حذف الكوبون' }); fetchData() } else { const data = await res.json().catch(() => ({})); toast({ title: 'خطأ', description: data.error || 'فشل الحذف', variant: 'destructive' }) } } catch { toast({ title: 'خطأ', description: 'حدث خطأ', variant: 'destructive' }) }
+    })
   }
 
   const handleToggleCouponStatus = async (coupon: any) => {
-    try { const res = await fetch(`/api/admin/coupons/${coupon.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ isActive: !coupon.isActive }) }); if (res.ok) { toast({ title: coupon.isActive ? 'تم تعطيل الكوبون' : 'تم تفعيل الكوبون' }); fetchData() } } catch { toast({ title: 'خطأ', description: 'حدث خطأ', variant: 'destructive' }) }
+    try { const res = await fetch(`/api/admin/coupons/${coupon.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ isActive: !coupon.isActive }) }); if (res.ok) { toast({ title: coupon.isActive ? 'تم تعطيل الكوبون' : 'تم تفعيل الكوبون' }); fetchData() } else { const data = await res.json().catch(() => ({})); toast({ title: 'خطأ', description: data.error || 'فشل التحديث', variant: 'destructive' }) } } catch { toast({ title: 'خطأ', description: 'حدث خطأ', variant: 'destructive' }) }
   }
 
   // ─── Settings save ──────────────────────────────────────────
@@ -657,8 +685,9 @@ export default function AdminDashboard() {
   }
 
   const handleDeleteSubAdmin = async (id: string) => {
-    if (!confirm('هل أنت متأكد من حذف هذا المسؤول الفرعي؟')) return
-    try { const res = await fetch(`/api/admin/sub-admins/${id}`, { method: 'DELETE' }); if (res.ok) { toast({ title: 'تم حذف المسؤول الفرعي' }); fetchData() } } catch { toast({ title: 'خطأ', description: 'حدث خطأ', variant: 'destructive' }) }
+    showConfirmDialog('حذف المسؤول الفرعي', 'هل أنت متأكد من حذف هذا المسؤول الفرعي؟', Trash2, 'text-red-500', async () => {
+      try { const res = await fetch(`/api/admin/sub-admins/${id}`, { method: 'DELETE' }); if (res.ok) { toast({ title: 'تم حذف المسؤول الفرعي' }); fetchData() } else { const data = await res.json().catch(() => ({})); toast({ title: 'خطأ', description: data.error || 'فشل الحذف', variant: 'destructive' }) } } catch { toast({ title: 'خطأ', description: 'حدث خطأ', variant: 'destructive' }) }
+    })
   }
 
   const handleBlockUnblockSubAdmin = async (id: string, currentStatus: string) => {
@@ -795,13 +824,45 @@ export default function AdminDashboard() {
     return matchSearch && matchStatus && matchService
   }), [requests, requestSearch, requestStatusFilter, requestServiceFilter])
 
-  // Charts data
+  // Charts data - use real data from requests, not random
   const revenueChartData = useMemo(() => {
-    if (!stats) return []
-    const months = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر']
-    const base = stats.totalRevenue / 6
-    return months.slice(0, 6).map((name, i) => ({ name, revenue: Math.round(base * (0.4 + Math.random() * 1.2) * (i + 1) / 3) }))
-  }, [stats])
+    if (!stats || requests.length === 0) {
+      // Fallback: estimate distribution based on total revenue
+      if (!stats) return []
+      const months = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو']
+      const base = stats.totalRevenue / 6
+      return months.map((name, i) => ({ name, revenue: Math.round(base) }))
+    }
+    // Calculate actual monthly revenue from completed requests
+    const monthMap: Record<string, number> = {}
+    const monthNames = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر']
+    const now = new Date()
+    // Initialize last 6 months
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+      const key = `${d.getFullYear()}-${d.getMonth()}`
+      const monthIdx = d.getMonth()
+      monthMap[key] = 0
+    }
+    // Sum revenue per month from completed requests
+    for (const r of requests) {
+      if (r.status !== 'completed' && r.status !== 'paid') continue
+      const d = parseTimestamp(r.createdAt || r.updatedAt)
+      if (!d) continue
+      const key = `${d.getFullYear()}-${d.getMonth()}`
+      if (key in monthMap) {
+        monthMap[key] += r.dynamicPrice || r.price || r.service?.price || 0
+      }
+    }
+    // Build chart data for last 6 months
+    const result: Array<{ name: string; revenue: number }> = []
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+      const key = `${d.getFullYear()}-${d.getMonth()}`
+      result.push({ name: monthNames[d.getMonth()], revenue: Math.round(monthMap[key] || 0) })
+    }
+    return result
+  }, [stats, requests])
 
   const requestsByStatusData = useMemo(() => {
     if (!stats) return []
@@ -1407,7 +1468,7 @@ export default function AdminDashboard() {
                                     <Button size="sm" className="bg-gradient-to-l from-emerald-500 to-teal-600 text-white shadow-lg shadow-emerald-500/25" onClick={() => showConfirmDialog('تأكيد الدفع', `هل أنت متأكد من تأكيد استلام الدفع لهذا الطلب بمبلغ ${formatPrice(r.dynamicPrice || r.service?.price || r.totalPrice || 0)}؟ سيتم تحويل حالة الطلب إلى "بانتظار القبول" ويمكن بعدها قبول الطلب وتعيين ممرض.`, CheckCircle, 'text-emerald-500', () => handleConfirmRequestPayment(r.id))}><CheckCircle className="w-3.5 h-3.5 ml-1" />تأكيد الدفع</Button>
                                   </>)}
                                   {r.status === 'approved' && <Button size="sm" className="bg-blue-500 hover:bg-blue-600 text-white" onClick={() => handleOpenApproveDialog(r)}><UserPlus className="w-3.5 h-3.5 ml-1" />تعيين ممرض</Button>}
-                                  {r.status === 'in_progress' && <Button size="sm" className="bg-emerald-500 hover:bg-emerald-600 text-white" onClick={async () => { await fetch(`/api/admin/requests/${r.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'completed' }) }); toast({ title: 'تم إكمال الطلب' }); fetchData() }}><CheckCircle className="w-3.5 h-3.5 ml-1" />إكمال</Button>}
+                                  {r.status === 'in_progress' && <Button size="sm" className="bg-emerald-500 hover:bg-emerald-600 text-white" onClick={async () => { try { const res = await fetch(`/api/admin/requests/${r.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'completed' }) }); if (res.ok) { toast({ title: 'تم إكمال الطلب' }); fetchData() } else { toast({ title: 'خطأ', description: 'فشل إكمال الطلب', variant: 'destructive' }) } } catch { toast({ title: 'خطأ', description: 'حدث خطأ', variant: 'destructive' }) } }}><CheckCircle className="w-3.5 h-3.5 ml-1" />إكمال</Button>}
                                 </div>
                               </div>
                             </CardContent>
@@ -1508,22 +1569,16 @@ export default function AdminDashboard() {
                                       <>
                                         <Button size="sm" className="bg-gradient-to-l from-purple-500 to-indigo-500 text-white shadow-lg shadow-purple-500/25" onClick={() => handleOpenApproveDialog({ ...req, isEmergency: true })}><UserPlus className="w-3.5 h-3.5 ml-1" />تعيين ممرض</Button>
                                         <Button size="sm" className="bg-gradient-to-l from-blue-500 to-indigo-500 text-white shadow-lg shadow-blue-500/25" onClick={async () => {
-                                          await fetch('/api/admin/emergency', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: req.id, status: 'in_progress' }) })
-                                          toast({ title: 'تم بدء المعالجة' })
-                                          fetchData()
+                                          try { const res = await fetch('/api/admin/emergency', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: req.id, status: 'in_progress' }) }); if (res.ok) { toast({ title: 'تم بدء المعالجة' }); fetchData() } else { toast({ title: 'خطأ', description: 'فشل بدء المعالجة', variant: 'destructive' }) } } catch { toast({ title: 'خطأ', description: 'حدث خطأ', variant: 'destructive' }) }
                                         }}><Activity className="w-3.5 h-3.5 ml-1" />بدء المعالجة</Button>
                                         <Button size="sm" variant="outline" className="text-red-500 hover:bg-red-50" onClick={async () => {
-                                          await fetch('/api/admin/emergency', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: req.id, status: 'rejected' }) })
-                                          toast({ title: 'تم رفض الطلب' })
-                                          fetchData()
+                                          try { const res = await fetch('/api/admin/emergency', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: req.id, status: 'rejected' }) }); if (res.ok) { toast({ title: 'تم رفض الطلب' }); fetchData() } else { toast({ title: 'خطأ', description: 'فشل رفض الطلب', variant: 'destructive' }) } } catch { toast({ title: 'خطأ', description: 'حدث خطأ', variant: 'destructive' }) }
                                         }}><XCircle className="w-3.5 h-3.5 ml-1" />رفض</Button>
                                       </>
                                     )}
                                     {req.status === 'in_progress' && (
                                       <Button size="sm" className="bg-gradient-to-l from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-500/25" onClick={async () => {
-                                        await fetch('/api/admin/emergency', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: req.id, status: 'completed' }) })
-                                        toast({ title: 'تم إكمال المعالجة' })
-                                        fetchData()
+                                        try { const res = await fetch('/api/admin/emergency', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: req.id, status: 'completed' }) }); if (res.ok) { toast({ title: 'تم إكمال المعالجة' }); fetchData() } else { toast({ title: 'خطأ', description: 'فشل إكمال المعالجة', variant: 'destructive' }) } } catch { toast({ title: 'خطأ', description: 'حدث خطأ', variant: 'destructive' }) }
                                       }}><CheckCircle className="w-3.5 h-3.5 ml-1" />تم المعالجة</Button>
                                     )}
                                   </div>
@@ -3121,13 +3176,31 @@ export default function AdminDashboard() {
 
             const handleComplaintAction = async (newStatus: string) => {
               try {
-                // Update complaint status locally with visual feedback
+                // Update complaint status via API
+                const res = await fetch('/api/reports', {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ reportId: complaintDetail.id, status: newStatus, adminNotes: complaintNotes }),
+                })
+                if (res.ok) {
+                  setComplaints(prev => prev.map((c: any) => c.id === complaintDetail.id ? { ...c, status: newStatus, adminNotes: complaintNotes } : c))
+                  setComplaintDetail({ ...complaintDetail, status: newStatus, adminNotes: complaintNotes })
+                  const statusLabels: Record<string, string> = { reviewed: 'تمت المراجعة', resolved: 'تم الحل', rejected: 'تم الرفض' }
+                  toast({ title: statusLabels[newStatus] || 'تم التحديث' })
+                  logActivity('complaint_update', `تم تحديث حالة شكوى إلى: ${statusLabels[newStatus] || newStatus}`, { complaintId: complaintDetail.id, newStatus })
+                } else {
+                  // If API doesn't exist yet, update locally but warn
+                  setComplaints(prev => prev.map((c: any) => c.id === complaintDetail.id ? { ...c, status: newStatus, adminNotes: complaintNotes } : c))
+                  setComplaintDetail({ ...complaintDetail, status: newStatus, adminNotes: complaintNotes })
+                  const statusLabels: Record<string, string> = { reviewed: 'تمت المراجعة', resolved: 'تم الحل', rejected: 'تم الرفض' }
+                  toast({ title: statusLabels[newStatus] || 'تم التحديث', description: 'تم التحديث محلياً - قد لا يتم حفظه في الخادم' })
+                }
+              } catch {
+                // Fallback: update locally
                 setComplaints(prev => prev.map((c: any) => c.id === complaintDetail.id ? { ...c, status: newStatus, adminNotes: complaintNotes } : c))
                 setComplaintDetail({ ...complaintDetail, status: newStatus, adminNotes: complaintNotes })
-                const statusLabels: Record<string, string> = { reviewed: 'تمت المراجعة', resolved: 'تم الحل', rejected: 'تم الرفض' }
-                toast({ title: statusLabels[newStatus] || 'تم التحديث' })
-                logActivity('complaint_update', `تم تحديث حالة شكوى إلى: ${statusLabels[newStatus] || newStatus}`, { complaintId: complaintDetail.id, newStatus })
-              } catch { toast({ title: 'خطأ', description: 'حدث خطأ', variant: 'destructive' }) }
+                toast({ title: 'تم التحديث محلياً', description: 'لم يتم حفظ التغيير في الخادم', variant: 'destructive' })
+              }
             }
 
             return (

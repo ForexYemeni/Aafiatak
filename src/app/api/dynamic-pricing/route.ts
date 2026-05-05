@@ -98,11 +98,11 @@ export async function GET(request: NextRequest) {
     if (pricingSettings.distanceFeesEnabled && distanceKm > pricingSettings.distanceFreeKm) {
       const billableKm = distanceKm - pricingSettings.distanceFreeKm
       if (distanceKm <= 15) {
-        distanceSurcharge = billableKm * pricingSettings.distanceFeePerKm5to15
+        distanceSurcharge = Math.max(0, billableKm * pricingSettings.distanceFeePerKm5to15)
       } else if (distanceKm <= 30) {
-        distanceSurcharge = (15 - pricingSettings.distanceFreeKm) * pricingSettings.distanceFeePerKm5to15 + (distanceKm - 15) * pricingSettings.distanceFeePerKm15to30
+        distanceSurcharge = Math.max(0, (Math.max(0, 15 - pricingSettings.distanceFreeKm)) * pricingSettings.distanceFeePerKm5to15 + (distanceKm - 15) * pricingSettings.distanceFeePerKm15to30)
       } else {
-        distanceSurcharge = (15 - pricingSettings.distanceFreeKm) * pricingSettings.distanceFeePerKm5to15 + 15 * pricingSettings.distanceFeePerKm15to30 + (distanceKm - 30) * pricingSettings.distanceFeePerKmOver30
+        distanceSurcharge = Math.max(0, (Math.max(0, 15 - pricingSettings.distanceFreeKm)) * pricingSettings.distanceFeePerKm5to15 + 15 * pricingSettings.distanceFeePerKm15to30 + (distanceKm - 30) * pricingSettings.distanceFeePerKmOver30)
       }
       distanceLabel = `رسوم مسافة (${distanceKm.toFixed(1)} كم)`
     }

@@ -82,6 +82,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'الطلب غير موجود' }, { status: 404 })
     }
 
+    // Prevent duplicate transactions for the same request
+    const existingTxSnapshot = await firestore.collection('transactions')
+      .where('requestId', '==', requestId)
+      .where('status', 'in', ['pending', 'pending_confirmation', 'paid'])
+      .limit(1)
+      .get()
+    if (!existingTxSnapshot.empty) {
+      return NextResponse.json({ error: 'يوجد معاملة دفع سابقة لهذا الطلب', existingTransactionId: existingTxSnapshot.docs[0].id }, { status: 409 })
+    }
+
     // For wallet/exchange/bank: require transaction reference (proof of payment)
     // Payment is 'pending' until admin confirms
     const isCashOnDelivery = paymentMethod === 'cash'
@@ -150,6 +160,24 @@ export async function PUT(request: NextRequest) {
 
     if (!transactionId || !action || !adminId) {
       return NextResponse.json({ error: 'معرف المعاملة والإجراء ومعرف المدير مطلوبون' }, { status: 400 })
+    }
+
+    // Verify admin exists and has proper role
+    const adminDoc = await firestore.collection('admins').doc(adminId).get()
+    if (!adminDoc.exists) {
+      const subAdminDoc = await firestore.collection('subAdmins').doc(adminId).get()
+      if (!subAdminDoc.exists) {
+        return NextResponse.json({ error: 'المدير غير موجود أو غير مصرح له' }, { status: 403 })
+      }
+      const subAdminData = subAdminDoc.data()!
+      if (subAdminData.status === 'blocked') {
+        return NextResponse.json({ error: 'حساب المدير معطل' }, { status: 403 })
+      }
+    } else {
+      const adminData = adminDoc.data()!
+      if (adminData.status === 'blocked') {
+        return NextResponse.json({ error: 'حساب المدير معطل' }, { status: 403 })
+      }
     }
 
     const transDoc = await firestore.collection('transactions').doc(transactionId).get()

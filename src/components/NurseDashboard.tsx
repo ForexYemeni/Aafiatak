@@ -375,7 +375,7 @@ export default function NurseDashboard() {
     try {
       const res = await fetch(`/api/nurse/assignments?nurseId=${nurseId}`)
       if (res.ok) {
-        const data = await res.json()
+        const data = await res.json().catch(() => ({}))
         setAssignments(Array.isArray(data) ? data : [])
       } else {
         setAssignments([])
@@ -394,7 +394,7 @@ export default function NurseDashboard() {
     try {
       const res = await fetch(`/api/nurse/profile?nurseId=${nurseId}`)
       if (res.ok) {
-        const data = await res.json()
+        const data = await res.json().catch(() => ({}))
         setProfile(data)
         setLocationValue(data.location || '')
       } else {
@@ -415,7 +415,7 @@ export default function NurseDashboard() {
     try {
       const res = await fetch(`/api/nurse/ratings?nurseId=${nurseId}`)
       if (res.ok) {
-        const data = await res.json()
+        const data = await res.json().catch(() => ({}))
         setRatings(Array.isArray(data) ? data : [])
       } else {
         setRatings([])
@@ -432,7 +432,7 @@ export default function NurseDashboard() {
     try {
       const res = await fetch('/api/admin/settings')
       if (res.ok) {
-        const data = await res.json()
+        const data = await res.json().catch(() => ({}))
         setAdminSettings(data)
       }
     } catch {
@@ -448,7 +448,7 @@ export default function NurseDashboard() {
     try {
       const res = await fetch(`/api/nurse/portfolio?nurseId=${nurseId}`)
       if (res.ok) {
-        const data = await res.json()
+        const data = await res.json().catch(() => ({}))
         // API returns { nurseId, portfolio: { bio, experience, specializations, ... } }
         setPortfolio(data.portfolio || data || {})
       } else {
@@ -473,7 +473,7 @@ export default function NurseDashboard() {
       if (res.ok) {
         toast({ title: 'تم الحفظ', description: 'تم حفظ الملف الاحترافي بنجاح' })
       } else {
-        const data = await res.json()
+        const data = await res.json().catch(() => ({}))
         toast({ title: 'خطأ', description: data.error || 'فشل حفظ الملف الاحترافي', variant: 'destructive' })
       }
     } catch {
@@ -489,7 +489,7 @@ export default function NurseDashboard() {
     try {
       const res = await fetch(`/api/appointments?nurseId=${nurseId}`)
       if (res.ok) {
-        const data = await res.json()
+        const data = await res.json().catch(() => ({}))
         setAppointments(Array.isArray(data) ? data : [])
       } else {
         setAppointments([])
@@ -520,7 +520,7 @@ export default function NurseDashboard() {
         })
         fetchAssignments()
       } else {
-        const data = await res.json()
+        const data = await res.json().catch(() => ({})).catch(() => ({}))
         toast({ title: 'خطأ', description: data.error || 'حدث خطأ', variant: 'destructive' })
       }
     } catch {
@@ -546,7 +546,7 @@ export default function NurseDashboard() {
         toast({ title: labels[action] || 'تم التحديث' })
         fetchAppointments()
       } else {
-        const data = await res.json()
+        const data = await res.json().catch(() => ({}))
         toast({ title: 'خطأ', description: data.error || 'حدث خطأ', variant: 'destructive' })
       }
     } catch {
@@ -570,7 +570,7 @@ export default function NurseDashboard() {
         setReplyRatingId('')
         setReplyText('')
       } else {
-        const data = await res.json()
+        const data = await res.json().catch(() => ({}))
         toast({ title: 'خطأ', description: data.error || 'فشل إرسال الرد', variant: 'destructive' })
       }
     } catch {
@@ -752,7 +752,7 @@ export default function NurseDashboard() {
         })
         fetchAssignments()
       } else {
-        const data = await res.json()
+        const data = await res.json().catch(() => ({}))
         toast({ title: 'خطأ', description: data.error || 'حدث خطأ', variant: 'destructive' })
       }
     } catch {
@@ -782,7 +782,7 @@ export default function NurseDashboard() {
         setCompletionNotes('')
         setSelectedAssignment(null)
       } else {
-        const data = await res.json()
+        const data = await res.json().catch(() => ({}))
         toast({ title: 'خطأ', description: data.error || 'حدث خطأ', variant: 'destructive' })
       }
     } catch {
@@ -804,7 +804,7 @@ export default function NurseDashboard() {
         toast({ title: 'تم التحديث', description: 'تم تحديث الموقع بنجاح' })
         fetchProfile()
       } else {
-        const data = await res.json()
+        const data = await res.json().catch(() => ({}))
         toast({ title: 'خطأ', description: data.error || 'فشل التحديث', variant: 'destructive' })
       }
     } catch {

@@ -902,42 +902,45 @@ export async function addLoyaltyPoints(beneficiaryId: string, points: number, re
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
   })
 
-  // Update beneficiary total points
-  const benefDoc = await firestore.collection('beneficiaries').doc(beneficiaryId).get()
-  if (benefDoc.exists) {
-    const currentPoints = benefDoc.data()!.loyaltyPoints || 0
-    await firestore.collection('beneficiaries').doc(beneficiaryId).update({
-      loyaltyPoints: currentPoints + points,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    })
-  }
+  // Update beneficiary total points atomically using FieldValue.increment
+  await firestore.collection('beneficiaries').doc(beneficiaryId).update({
+    loyaltyPoints: admin.firestore.FieldValue.increment(points),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  })
 
   return { id: docRef.id, beneficiaryId, points, reason, type: 'earn' as const }
 }
 
 export async function redeemLoyaltyPoints(beneficiaryId: string, points: number) {
   checkFirebase()
-  // Check current balance
-  const benefDoc = await firestore.collection('beneficiaries').doc(beneficiaryId).get()
-  if (!benefDoc.exists) throw new Error('المستفيد غير موجود')
+  // Use Firestore transaction for atomic read-check-write
+  const result = await firestore.runTransaction(async (transaction) => {
+    const benefDoc = await transaction.get(firestore.collection('beneficiaries').doc(beneficiaryId))
+    if (!benefDoc.exists) throw new Error('المستفيد غير موجود')
 
-  const currentPoints = benefDoc.data()!.loyaltyPoints || 0
-  if (currentPoints < points) throw new Error('رصيد النقاط غير كافٍ')
+    const currentPoints = benefDoc.data()!.loyaltyPoints || 0
+    if (currentPoints < points) throw new Error('رصيد النقاط غير كافٍ')
 
-  const docRef = await firestore.collection('loyaltyPoints').add({
-    beneficiaryId,
-    points: -points,
-    reason: `استبدال ${points} نقطة`,
-    type: 'redeem',
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    // Add redemption record
+    const docRef = firestore.collection('loyaltyPoints').doc()
+    transaction.set(docRef, {
+      beneficiaryId,
+      points: -points,
+      reason: `استبدال ${points} نقطة`,
+      type: 'redeem',
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    })
+
+    // Update beneficiary points atomically
+    transaction.update(firestore.collection('beneficiaries').doc(beneficiaryId), {
+      loyaltyPoints: currentPoints - points,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    })
+
+    return { id: docRef.id, beneficiaryId, points: -points, reason: `استبدال ${points} نقطة`, type: 'redeem' as const }
   })
 
-  await firestore.collection('beneficiaries').doc(beneficiaryId).update({
-    loyaltyPoints: currentPoints - points,
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  })
-
-  return { id: docRef.id, beneficiaryId, points: -points, reason: `استبدال ${points} نقطة`, type: 'redeem' as const }
+  return result
 }
 
 export async function getLoyaltyBalance(beneficiaryId: string) {
