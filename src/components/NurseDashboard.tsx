@@ -1236,7 +1236,7 @@ export default function NurseDashboard() {
                               <div className="flex items-center gap-1.5">
                                 <Phone className="w-3.5 h-3.5 text-cyan-500 shrink-0" />
                                 <span className="font-medium text-gray-700">الهاتف:</span>
-                                <span className="text-gray-500" dir="ltr">{assignment.request.beneficiary.phone}</span>
+                                <a href={`tel:${assignment.request.beneficiary.phone}`} className="text-blue-600 hover:text-blue-800 hover:underline transition-colors" dir="ltr">{assignment.request.beneficiary.phone}</a>
                               </div>
                             )}
                             {assignment.request?.beneficiary?.location && (
@@ -1355,15 +1355,29 @@ export default function NurseDashboard() {
                             </Badge>
                           )}
                           {(assignment.status === 'assigned' || assignment.status === 'accepted' || assignment.status === 'in_progress') && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="text-blue-600 hover:text-white hover:bg-gradient-to-l hover:from-cyan-500 hover:to-blue-600 border-blue-200 hover:border-transparent hover:shadow-lg hover:shadow-blue-500/25 hover:scale-[1.02] active:scale-[0.98] transition-all duration-300"
-                              onClick={() => handleOpenChat(assignment.requestId, assignment.request?.beneficiary?.name)}
-                            >
-                              <MessageSquare className="w-4 h-4 ml-1" />
-                              محادثة
-                            </Button>
+                            <div className="flex items-center gap-1.5">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="flex-1 text-blue-600 hover:text-white hover:bg-gradient-to-l hover:from-cyan-500 hover:to-blue-600 border-blue-200 hover:border-transparent hover:shadow-lg hover:shadow-blue-500/25 hover:scale-[1.02] active:scale-[0.98] transition-all duration-300"
+                                onClick={() => handleOpenChat(assignment.requestId, assignment.request?.beneficiary?.name)}
+                              >
+                                <MessageSquare className="w-4 h-4 ml-1" />
+                                محادثة
+                              </Button>
+                              {assignment.request?.beneficiary?.phone && (
+                                <a href={`tel:${assignment.request.beneficiary.phone}`} className="shrink-0">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="text-emerald-600 hover:text-white hover:bg-gradient-to-l hover:from-emerald-500 hover:to-teal-600 border-emerald-200 hover:border-transparent hover:shadow-lg hover:shadow-emerald-500/25 hover:scale-[1.02] active:scale-[0.98] transition-all duration-300"
+                                  >
+                                    <Phone className="w-4 h-4 ml-1" />
+                                    اتصال
+                                  </Button>
+                                </a>
+                              )}
+                            </div>
                           )}
                         </div>
                       </div>

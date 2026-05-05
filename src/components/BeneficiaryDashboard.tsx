@@ -97,6 +97,7 @@ const statusFilters = [
   { key: 'pending_confirmation', label: 'بانتظار تأكيد الدفع' },
   { key: 'pending_payment', label: 'بانتظار الدفع' },
   { key: 'approved', label: 'مقبول' },
+  { key: 'assigned', label: 'تم التعيين' },
   { key: 'in_progress', label: 'قيد التنفيذ' },
   { key: 'completed', label: 'مكتمل' },
   { key: 'cancelled', label: 'ملغي' },
@@ -162,10 +163,11 @@ const statusGradientBadge: Record<string, string> = {
   pending_confirmation: 'bg-gradient-to-r from-yellow-500 to-amber-500 text-white',
   pending_payment: 'bg-gradient-to-r from-orange-500 to-red-500 text-white',
   approved: 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white',
+  assigned: 'bg-gradient-to-r from-purple-500 to-fuchsia-500 text-white',
+  accepted: 'bg-gradient-to-r from-blue-500 to-indigo-500 text-white',
   in_progress: 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white',
   completed: 'bg-gradient-to-r from-violet-500 to-purple-500 text-white',
   cancelled: 'bg-gradient-to-r from-gray-400 to-gray-500 text-white',
-  assigned: 'bg-gradient-to-r from-purple-500 to-fuchsia-500 text-white',
   rejected: 'bg-gradient-to-r from-red-500 to-rose-500 text-white',
 }
 
@@ -2042,15 +2044,65 @@ export default function BeneficiaryDashboard() {
                                   )}
 
                                   {nurseAssigned && (
-                                    <div className="mt-3 p-3 rounded-xl bg-gradient-to-l from-violet-50/50 to-fuchsia-50/50 border border-violet-100/50">
-                                      <p className="text-xs font-medium text-violet-600 mb-1">الممرض/ة المعين/ة</p>
-                                      <p className="text-sm font-semibold">{nurseAssigned.firstName} {nurseAssigned.lastName}</p>
-                                      {nurseAssigned.phone && (
-                                        <a href={`tel:${nurseAssigned.phone}`} className="flex items-center gap-1.5 text-xs text-violet-600 hover:text-violet-800 mt-1 transition-colors">
-                                          <Phone className="w-3 h-3 shrink-0" />
-                                          <span>{nurseAssigned.phone}</span>
-                                        </a>
-                                      )}
+                                    <div className="mt-3 rounded-2xl overflow-hidden border border-violet-100/60 shadow-sm">
+                                      {/* Header */}
+                                      <div className="bg-gradient-to-l from-violet-500 to-fuchsia-600 px-4 py-3">
+                                        <div className="flex items-center gap-3">
+                                          <div className="w-11 h-11 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center shrink-0">
+                                            <Stethoscope className="w-5 h-5 text-white" />
+                                          </div>
+                                          <div className="flex-1 min-w-0">
+                                            <p className="text-white font-bold text-sm truncate">{nurseAssigned.firstName} {nurseAssigned.lastName}</p>
+                                            <div className="flex items-center gap-1.5 mt-0.5">
+                                              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
+                                              <p className="text-violet-100 text-xs">
+                                                {req.status === 'assigned' ? 'تم تعيين الممرض/ة • بانتظار القبول' :
+                                                 req.status === 'accepted' ? 'تم قبول الطلب • الممرض/ة في الطريق' :
+                                                 req.status === 'in_progress' ? 'الممرض/ة في طريقه/ا إليك' : 'الممرض/ة المعين/ة'}
+                                              </p>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      </div>
+                                      {/* Body */}
+                                      <div className="bg-white px-4 py-3">
+                                        {nurseAssigned.phone && (
+                                          <a href={`tel:${nurseAssigned.phone}`} className="flex items-center gap-2 text-sm text-gray-700 hover:text-violet-700 transition-colors mb-3">
+                                            <div className="w-8 h-8 rounded-lg bg-violet-50 flex items-center justify-center shrink-0">
+                                              <Phone className="w-4 h-4 text-violet-500" />
+                                            </div>
+                                            <span className="dir-ltr" dir="ltr">{nurseAssigned.phone}</span>
+                                          </a>
+                                        )}
+                                        {/* Action Buttons */}
+                                        <div className="flex items-center gap-2">
+                                          {(req.status === 'assigned' || req.status === 'accepted' || req.status === 'in_progress' || req.status === 'approved') && (
+                                            <Button
+                                              size="sm"
+                                              className="flex-1 bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white rounded-xl text-xs hover:shadow-md h-9"
+                                              onClick={() => {
+                                                setActiveChatRequestId(req.id)
+                                                setActiveChatNurseName(`${nurseAssigned.firstName} ${nurseAssigned.lastName}`)
+                                              }}
+                                            >
+                                              <MessageCircle className="w-4 h-4 ml-1.5" />
+                                              محادثة
+                                            </Button>
+                                          )}
+                                          {nurseAssigned.phone && (req.status === 'assigned' || req.status === 'accepted' || req.status === 'in_progress' || req.status === 'approved') && (
+                                            <a href={`tel:${nurseAssigned.phone}`} className="flex-1">
+                                              <Button
+                                                size="sm"
+                                                variant="outline"
+                                                className="w-full rounded-xl text-xs h-9 border-emerald-300 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800"
+                                              >
+                                                <Phone className="w-4 h-4 ml-1.5" />
+                                                اتصال
+                                              </Button>
+                                            </a>
+                                          )}
+                                        </div>
+                                      </div>
                                     </div>
                                   )}
 
@@ -2147,20 +2199,6 @@ export default function BeneficiaryDashboard() {
                                       >
                                         <RefreshCw className="w-3.5 h-3.5 ml-1" />
                                         إعادة الطلب
-                                      </Button>
-                                    )}
-
-                                    {nurseAssigned && (req.status === 'in_progress' || req.status === 'approved' || req.status === 'assigned') && (
-                                      <Button
-                                        size="sm"
-                                        className="bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white rounded-xl text-xs hover:shadow-md"
-                                        onClick={() => {
-                                          setActiveChatRequestId(req.id)
-                                          setActiveChatNurseName(`${nurseAssigned.firstName} ${nurseAssigned.lastName}`)
-                                        }}
-                                      >
-                                        <MessageCircle className="w-3.5 h-3.5 ml-1" />
-                                        محادثة
                                       </Button>
                                     )}
 

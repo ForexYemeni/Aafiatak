@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
     // If accepted, also update the service request status
     if (action === 'accept' && assignmentData.requestId) {
       await firestore.collection('serviceRequests').doc(assignmentData.requestId).update({
-        status: 'in-progress',
+        status: 'in_progress',
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       })
     }
