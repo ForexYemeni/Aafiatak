@@ -63,7 +63,7 @@ function formatDateTime(ts: any): string {
 }
 
 // ─── Types ─────────────────────────────────────────────────────
-type Tab = 'dashboard' | 'services' | 'nurses' | 'beneficiaries' | 'requests' | 'emergency' | 'payments' | 'coupons' | 'ratings' | 'reports' | 'complaints' | 'appointments' | 'activity' | 'sub-admins' | 'settings'
+type Tab = 'dashboard' | 'services' | 'nurses' | 'beneficiaries' | 'requests' | 'emergency' | 'payments' | 'coupons' | 'ratings' | 'complaints' | 'appointments' | 'activity' | 'sub-admins' | 'settings'
 type FinanceSubTab = 'methods' | 'transactions' | 'settings' | 'pricing'
 
 interface DashboardStats {
@@ -298,15 +298,6 @@ export default function AdminDashboard() {
         const res = await fetch('/api/admin/activity-log?limit=50')
         if (res.ok) setActivityLogs(await res.json())
         else toast({ title: 'خطأ', description: 'فشل تحميل سجل النشاط', variant: 'destructive' })
-      } else if (activeTab === 'reports') {
-        const [dashRes, reqRes, svcRes] = await Promise.all([
-          fetch('/api/admin/dashboard'),
-          fetch('/api/admin/requests'),
-          fetch('/api/admin/services'),
-        ])
-        if (dashRes.ok) setStats(await dashRes.json())
-        if (reqRes.ok) setRequests(await reqRes.json())
-        if (svcRes.ok) setServices(await svcRes.json())
       } else if (activeTab === 'complaints') {
         setComplaintsLoading(true)
         try {
@@ -710,7 +701,7 @@ export default function AdminDashboard() {
         body: JSON.stringify({ adminId: (user as any)?.id, password: resetPassword }),
       })
       if (res.ok) {
-        toast({ title: 'تم حذف جميع البيانات بنجاح', description: 'تم الاحتفاظ بحساب المدير فقط' })
+        toast({ title: 'تم حذف جميع البيانات بنجاح', description: 'تم الاحتفاظ بحساب المدير والشكاوى فقط' })
         setResetDataDialog(false); setResetPassword(''); setResetConfirmText('')
         fetchData()
       } else {
@@ -874,18 +865,6 @@ export default function AdminDashboard() {
     ].filter(d => d.value > 0)
   }, [stats])
 
-  const servicePopularity = useMemo(() => {
-    const counts: Record<string, { name: string; count: number; revenue: number }> = {}
-    requests.forEach((r: any) => { const key = r.serviceId; if (!key) return; if (!counts[key]) counts[key] = { name: r.service?.name || 'غير معروف', count: 0, revenue: 0 }; counts[key].count++; counts[key].revenue += r.service?.price || 0 })
-    return Object.values(counts).sort((a, b) => b.count - a.count)
-  }, [requests])
-
-  const nursePerformance = useMemo(() => {
-    const perf: Record<string, { name: string; assignments: number; completed: number }> = {}
-    requests.forEach((r: any) => { if (!r.assignment?.nurseId) return; const nid = r.assignment.nurseId; if (!perf[nid]) { const n = r.assignment.nurse; perf[nid] = { name: `${n?.firstName || ''} ${n?.lastName || ''}`.trim() || 'غير معروف', assignments: 0, completed: 0 } }; perf[nid].assignments++; if (r.status === 'completed') perf[nid].completed++ })
-    return Object.values(perf).sort((a, b) => b.assignments - a.assignments)
-  }, [requests])
-
   // Ratings computed
   const generalAverage = useMemo(() => {
     if (ratings.length === 0) return 0
@@ -916,7 +895,6 @@ export default function AdminDashboard() {
     { key: 'payments', label: 'المدفوعات', icon: CreditCard, perm: 'payments' },
     { key: 'coupons', label: 'الكوبونات', icon: Tag, perm: 'coupons' },
     { key: 'ratings', label: 'التقييمات', icon: Star, perm: 'ratings' },
-    { key: 'reports', label: 'التقارير', icon: BarChart3, perm: 'reports' },
     { key: 'complaints', label: 'الشكاوى', icon: FileWarning, perm: 'reports' },
     { key: 'appointments', label: 'المواعيد', icon: Calendar, perm: 'requests' },
     { key: 'activity', label: 'النشاط', icon: Activity, perm: 'reports' },
@@ -2045,77 +2023,6 @@ export default function AdminDashboard() {
                 )}
 
                 {/* ═══════════════════════════════════════════════════
-                    TAB 9: التقارير (Reports)
-                ═══════════════════════════════════════════════════ */}
-                {activeTab === 'reports' && stats && (
-                  <div className="space-y-6">
-                    <div><h1 className="text-2xl font-bold bg-gradient-to-l from-amber-600 via-orange-600 to-rose-600 bg-clip-text text-transparent">التقارير والإحصائيات</h1><p className="text-gray-500 text-sm mt-1">تحليلات مفصلة عن أداء النظام</p></div>
-
-                    {/* Service Popularity Chart */}
-                    {servicePopularity.length > 0 && (
-                      <Card className="border-0 shadow-lg shadow-amber-500/10">
-                        <CardHeader className="pb-2"><CardTitle className="text-lg">شعبية الخدمات</CardTitle></CardHeader>
-                        <CardContent>
-                          <div className="h-72">
-                            <ResponsiveContainer width="100%" height="100%">
-                              <BarChart data={servicePopularity} layout="vertical">
-                                <CartesianGrid strokeDasharray="3 3" stroke="#f3f0eb" />
-                                <XAxis type="number" fontSize={12} />
-                                <YAxis type="category" dataKey="name" fontSize={12} width={100} />
-                                <RTooltip />
-                                <defs><linearGradient id="svcGrad" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stopColor="#f59e0b" /><stop offset="100%" stopColor="#f43f5e" /></linearGradient></defs>
-                                <Bar dataKey="count" fill="url(#svcGrad)" radius={[0, 8, 8, 0]} name="عدد الطلبات" />
-                              </BarChart>
-                            </ResponsiveContainer>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    )}
-
-                    {/* Nurse Performance Chart */}
-                    {nursePerformance.length > 0 && (
-                      <Card className="border-0 shadow-lg shadow-amber-500/10">
-                        <CardHeader className="pb-2"><CardTitle className="text-lg">أداء الممرضين</CardTitle></CardHeader>
-                        <CardContent>
-                          <div className="h-72">
-                            <ResponsiveContainer width="100%" height="100%">
-                              <BarChart data={nursePerformance}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#f3f0eb" />
-                                <XAxis dataKey="name" fontSize={11} />
-                                <YAxis fontSize={12} />
-                                <RTooltip />
-                                <defs><linearGradient id="assignGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#f59e0b" /><stop offset="100%" stopColor="#d97706" /></linearGradient></defs>
-                                <defs><linearGradient id="compGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#10b981" /><stop offset="100%" stopColor="#059669" /></linearGradient></defs>
-                                <Bar dataKey="assignments" fill="url(#assignGrad)" radius={[8, 8, 0, 0]} name="التعيينات" />
-                                <Bar dataKey="completed" fill="url(#compGrad)" radius={[8, 8, 0, 0]} name="المكتملة" />
-                              </BarChart>
-                            </ResponsiveContainer>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    )}
-
-                    {/* Revenue Overview */}
-                    <Card className="border-0 shadow-lg shadow-amber-500/10">
-                      <CardHeader className="pb-2"><CardTitle className="text-lg">نظرة عامة على الإيرادات</CardTitle></CardHeader>
-                      <CardContent>
-                        <div className="h-64">
-                          <ResponsiveContainer width="100%" height="100%">
-                            <LineChart data={revenueChartData}>
-                              <CartesianGrid strokeDasharray="3 3" stroke="#f3f0eb" />
-                              <XAxis dataKey="name" fontSize={12} />
-                              <YAxis fontSize={12} />
-                              <RTooltip formatter={(value: number) => formatPrice(value)} />
-                              <Line type="monotone" dataKey="revenue" stroke="#f59e0b" strokeWidth={3} dot={{ fill: '#f59e0b', strokeWidth: 2, r: 5 }} />
-                            </LineChart>
-                          </ResponsiveContainer>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </div>
-                )}
-
-                {/* ═══════════════════════════════════════════════════
                     TAB: الشكاوى (Complaints)
                 ═══════════════════════════════════════════════════ */}
                 {activeTab === 'complaints' && (
@@ -2528,7 +2435,7 @@ export default function AdminDashboard() {
                       </CardHeader>
                       <CardContent className="space-y-4">
                         <div className="p-4 bg-red-50/80 rounded-xl border border-red-200/50">
-                          <p className="text-sm text-red-700 font-medium mb-3">تحذير: حذف جميع البيانات لا يمكن التراجع عنه. سيتم حذف جميع الممرضين، المستفيدين، الطلبات، الخدمات، المدفوعات، الكوبونات، التقييمات، سجل النشاط، طلبات الطوارئ، والمدراء الفرعيين. سيتم الاحتفاظ بحساب المدير فقط.</p>
+                          <p className="text-sm text-red-700 font-medium mb-3">تحذير: حذف جميع البيانات لا يمكن التراجع عنه. سيتم حذف جميع الممرضين، المستفيدين، الطلبات، الخدمات، المدفوعات، الكوبونات، التقييمات، سجل النشاط، طلبات الطوارئ، والمدراء الفرعيين. سيتم الاحتفاظ بحساب المدير والشكاوى فقط.</p>
                           <Button className="bg-gradient-to-l from-red-500 to-red-600 text-white shadow-lg shadow-red-500/25 hover:shadow-red-500/40 hover:scale-[1.02] active:scale-[0.98] transition-all" onClick={() => showConfirmDialog('حذف جميع البيانات', 'هذا الإجراء لا يمكن التراجع عنه! سيتم حذف جميع البيانات نهائياً.', Trash2, 'text-red-500', () => { setResetPassword(''); setResetConfirmText(''); setResetDataDialog(true) })}><Trash2 className="w-4 h-4 ml-2" />حذف جميع البيانات</Button>
                         </div>
                       </CardContent>

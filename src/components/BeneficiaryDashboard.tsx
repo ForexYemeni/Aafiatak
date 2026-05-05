@@ -64,7 +64,7 @@ function formatDateTime(timestamp: any): string {
   }
 }
 
-type Tab = 'services' | 'requests' | 'payments' | 'profile' | 'notifications' | 'loyalty' | 'referral' | 'help' | 'appointments' | 'tracking' | 'reports'
+type Tab = 'services' | 'requests' | 'payments' | 'profile' | 'notifications' | 'loyalty' | 'referral' | 'help' | 'tracking' | 'reports'
 
 interface Notification {
   id: string
@@ -258,15 +258,6 @@ export default function BeneficiaryDashboard() {
   // Admin settings
   const [adminSettings, setAdminSettings] = useState<AdminSettings>({})
 
-  // Appointments state
-  const [appointments, setAppointments] = useState<any[]>([])
-  const [appointmentDialog, setAppointmentDialog] = useState(false)
-  const [appointmentForm, setAppointmentForm] = useState({ serviceId: '', date: '', time: '', notes: '' })
-  const [appointmentSubmitting, setAppointmentSubmitting] = useState(false)
-  const [rescheduleDialog, setRescheduleDialog] = useState(false)
-  const [rescheduleId, setRescheduleId] = useState('')
-  const [rescheduleForm, setRescheduleForm] = useState({ date: '', time: '' })
-
   // Tracking state
   const [trackingData, setTrackingData] = useState<any>(null)
   const [trackingLoading, setTrackingLoading] = useState(false)
@@ -402,9 +393,6 @@ export default function BeneficiaryDashboard() {
             setFavoriteNurse(fnData.nurse || null)
           }
         } catch {}
-      } else if (activeTab === 'appointments') {
-        const res = await fetch(`/api/appointments?beneficiaryId=${beneficiaryUser?.id}`)
-        if (res.ok) setAppointments(await res.json())
       } else if (activeTab === 'tracking') {
         // tracking is fetched on-demand when user selects a request
       } else if (activeTab === 'reports') {
@@ -816,86 +804,6 @@ export default function BeneficiaryDashboard() {
     setRatingDialog(true)
   }
 
-  // ===== APPOINTMENT HANDLERS =====
-  const handleCreateAppointment = async () => {
-    if (!appointmentForm.serviceId || !appointmentForm.date || !appointmentForm.time) {
-      toast({ title: 'خطأ', description: 'يرجى ملء جميع الحقول المطلوبة', variant: 'destructive' })
-      return
-    }
-    setAppointmentSubmitting(true)
-    try {
-      const res = await fetch('/api/appointments', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          beneficiaryId: beneficiaryUser?.id,
-          serviceId: appointmentForm.serviceId,
-          date: appointmentForm.date,
-          time: appointmentForm.time,
-          notes: appointmentForm.notes || undefined,
-        }),
-      })
-      if (res.ok) {
-        toast({ title: 'تم حجز الموعد بنجاح' })
-        setAppointmentDialog(false)
-        setAppointmentForm({ serviceId: '', date: '', time: '', notes: '' })
-        fetchData()
-      } else {
-        const data = await res.json()
-        toast({ title: 'خطأ', description: data.error, variant: 'destructive' })
-      }
-    } catch {
-      toast({ title: 'خطأ', description: 'حدث خطأ أثناء حجز الموعد', variant: 'destructive' })
-    } finally {
-      setAppointmentSubmitting(false)
-    }
-  }
-
-  const handleRescheduleAppointment = async () => {
-    if (!rescheduleForm.date || !rescheduleForm.time) {
-      toast({ title: 'خطأ', description: 'يرجى اختيار التاريخ والوقت الجديد', variant: 'destructive' })
-      return
-    }
-    try {
-      const res = await fetch(`/api/appointments/${rescheduleId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ date: rescheduleForm.date, time: rescheduleForm.time, action: 'reschedule' }),
-      })
-      if (res.ok) {
-        toast({ title: 'تم إعادة جدولة الموعد' })
-        setRescheduleDialog(false)
-        setRescheduleForm({ date: '', time: '' })
-        fetchData()
-      } else {
-        const data = await res.json()
-        toast({ title: 'خطأ', description: data.error, variant: 'destructive' })
-      }
-    } catch {
-      toast({ title: 'خطأ', description: 'حدث خطأ', variant: 'destructive' })
-    }
-  }
-
-  const handleCancelAppointment = async (id: string) => {
-    if (!confirm('هل أنت متأكد من إلغاء هذا الموعد؟')) return
-    try {
-      const res = await fetch(`/api/appointments/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'cancel' }),
-      })
-      if (res.ok) {
-        toast({ title: 'تم إلغاء الموعد' })
-        fetchData()
-      } else {
-        const data = await res.json()
-        toast({ title: 'خطأ', description: data.error, variant: 'destructive' })
-      }
-    } catch {
-      toast({ title: 'خطأ', description: 'حدث خطأ', variant: 'destructive' })
-    }
-  }
-
   // ===== TRACKING HANDLER =====
   const fetchTrackingData = useCallback(async (assignmentId: string) => {
     if (!assignmentId) return
@@ -1279,7 +1187,6 @@ export default function BeneficiaryDashboard() {
   const tabs: { key: Tab; label: string; icon: any; badge?: number }[] = [
     { key: 'services', label: 'الخدمات', icon: ShoppingBag },
     { key: 'requests', label: 'طلباتي', icon: ClipboardList, badge: pendingRequests },
-    { key: 'appointments', label: 'المواعيد', icon: Calendar },
     { key: 'tracking', label: 'تتبع الممرض', icon: MapPin },
     { key: 'payments', label: 'المدفوعات', icon: CreditCard },
     { key: 'reports', label: 'البلاغات', icon: Flag },
@@ -2657,107 +2564,6 @@ export default function BeneficiaryDashboard() {
                         </div>
                       </CardContent>
                     </Card>
-                  </div>
-                )}
-
-                {/* ===== APPOINTMENTS TAB ===== */}
-                {activeTab === 'appointments' && (
-                  <div className="space-y-6">
-                    <div className="flex items-center justify-between flex-wrap gap-3">
-                      <div>
-                        <h1 className="text-2xl font-bold bg-gradient-to-l from-violet-700 to-fuchsia-600 bg-clip-text text-transparent">المواعيد</h1>
-                        <p className="text-muted-foreground text-sm mt-1">احجز المواعيد وأدرها بسهولة</p>
-                      </div>
-                      <Button
-                        className="bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white rounded-xl hover:shadow-md"
-                        onClick={() => setAppointmentDialog(true)}
-                      >
-                        <Plus className="w-4 h-4 ml-1" />
-                        حجز موعد جديد
-                      </Button>
-                    </div>
-
-                    {appointments.length > 0 ? (
-                      <motion.div className="space-y-3" variants={containerVariants} initial="hidden" animate="visible">
-                        {appointments.map((apt: any) => (
-                          <motion.div key={apt.id} variants={itemVariants}>
-                            <Card className={`border-0 bg-white/80 backdrop-blur-sm shadow-lg hover:shadow-xl transition-all duration-300 ${
-                              apt.status === 'scheduled' ? 'border-r-4 border-r-emerald-400' :
-                              apt.status === 'completed' ? 'border-r-4 border-r-violet-400' :
-                              apt.status === 'cancelled' ? 'border-r-4 border-r-gray-400' :
-                              'border-r-4 border-r-amber-400'
-                            }`}>
-                              <CardContent className="p-5">
-                                <div className="flex items-start justify-between gap-3 mb-3">
-                                  <div className="flex-1 min-w-0">
-                                    <h3 className="font-semibold text-base">{apt.service?.name || 'خدمة'}</h3>
-                                    <div className="flex items-center gap-2 mt-1">
-                                      <Calendar className="w-3.5 h-3.5 text-muted-foreground" />
-                                      <span className="text-sm text-muted-foreground">{apt.date}</span>
-                                      <Clock className="w-3.5 h-3.5 text-muted-foreground mr-2" />
-                                      <span className="text-sm text-muted-foreground">{apt.time}</span>
-                                    </div>
-                                  </div>
-                                  <Badge className={`text-xs shrink-0 border-0 ${
-                                    apt.status === 'scheduled' ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white' :
-                                    apt.status === 'completed' ? 'bg-gradient-to-r from-violet-500 to-purple-500 text-white' :
-                                    apt.status === 'cancelled' ? 'bg-gradient-to-r from-gray-400 to-gray-500 text-white' :
-                                    'bg-gradient-to-r from-amber-500 to-orange-500 text-white'
-                                  }`}>
-                                    {apt.status === 'scheduled' ? 'مجدول' :
-                                     apt.status === 'completed' ? 'مكتمل' :
-                                     apt.status === 'cancelled' ? 'ملغي' : apt.status}
-                                  </Badge>
-                                </div>
-                                {apt.notes && (
-                                  <p className="text-sm text-muted-foreground mb-3">
-                                    <span className="font-medium">ملاحظات:</span> {apt.notes}
-                                  </p>
-                                )}
-                                {apt.status === 'scheduled' && (
-                                  <div className="flex items-center gap-2 mt-3">
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      className="rounded-xl text-xs border-violet-200 hover:bg-violet-50 text-violet-600"
-                                      onClick={() => {
-                                        setRescheduleId(apt.id)
-                                        setRescheduleForm({ date: '', time: '' })
-                                        setRescheduleDialog(true)
-                                      }}
-                                    >
-                                      <RefreshCw className="w-3.5 h-3.5 ml-1" />
-                                      إعادة جدولة
-                                    </Button>
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      className="rounded-xl text-xs border-red-200 hover:bg-red-50 text-red-600"
-                                      onClick={() => handleCancelAppointment(apt.id)}
-                                    >
-                                      <XCircle className="w-3.5 h-3.5 ml-1" />
-                                      إلغاء الموعد
-                                    </Button>
-                                  </div>
-                                )}
-                              </CardContent>
-                            </Card>
-                          </motion.div>
-                        ))}
-                      </motion.div>
-                    ) : (
-                      <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="text-center py-20"
-                      >
-                        <div className="w-20 h-20 bg-violet-50 rounded-full flex items-center justify-center mx-auto mb-4">
-                          <Calendar className="w-10 h-10 text-violet-300" />
-                        </div>
-                        <p className="text-muted-foreground text-lg font-medium">لا توجد مواعيد</p>
-                        <p className="text-muted-foreground text-sm mt-1">احجز موعدك الأول من زر "حجز موعد جديد"</p>
-                      </motion.div>
-                    )}
                   </div>
                 )}
 
@@ -4258,131 +4064,6 @@ export default function BeneficiaryDashboard() {
         </DialogContent>
       </Dialog>
 
-      {/* ===== APPOINTMENT DIALOG ===== */}
-      <Dialog open={appointmentDialog} onOpenChange={setAppointmentDialog}>
-        <DialogContent className="sm:max-w-md border-0 shadow-2xl p-0 max-h-[90vh] overflow-y-auto" dir="rtl">
-          <div className="bg-gradient-to-l from-violet-600 via-purple-600 to-fuchsia-600 p-5 text-white relative overflow-hidden">
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.1)_0%,transparent_70%)]" />
-            <div className="relative flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
-                <Calendar className="w-5 h-5" />
-              </div>
-              <div>
-                <DialogTitle className="text-lg font-bold">حجز موعد جديد</DialogTitle>
-                <p className="text-violet-100 text-xs mt-0.5">اختر الخدمة والوقت المناسب</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="p-6 space-y-4">
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">الخدمة</Label>
-              <Select value={appointmentForm.serviceId} onValueChange={v => setAppointmentForm(prev => ({ ...prev, serviceId: v }))}>
-                <SelectTrigger className="rounded-xl">
-                  <SelectValue placeholder="اختر الخدمة" />
-                </SelectTrigger>
-                <SelectContent>
-                  {services.map(s => (
-                    <SelectItem key={s.id} value={s.id}>{s.name} - {formatPrice(s.price)}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">التاريخ</Label>
-                <Input
-                  type="date"
-                  value={appointmentForm.date}
-                  onChange={e => setAppointmentForm(prev => ({ ...prev, date: e.target.value }))}
-                  className="rounded-xl"
-                  min={new Date().toISOString().split('T')[0]}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">الوقت</Label>
-                <Input
-                  type="time"
-                  value={appointmentForm.time}
-                  onChange={e => setAppointmentForm(prev => ({ ...prev, time: e.target.value }))}
-                  className="rounded-xl"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">ملاحظات (اختياري)</Label>
-              <Textarea
-                value={appointmentForm.notes}
-                onChange={e => setAppointmentForm(prev => ({ ...prev, notes: e.target.value }))}
-                placeholder="أي ملاحظات إضافية..."
-                className="rounded-xl resize-none"
-                rows={2}
-              />
-            </div>
-
-            <Button
-              onClick={handleCreateAppointment}
-              disabled={appointmentSubmitting}
-              className="w-full bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white hover:shadow-lg rounded-xl"
-            >
-              {appointmentSubmitting ? <Loader2 className="w-5 h-5 animate-spin ml-2" /> : <Calendar className="w-5 h-5 ml-2" />}
-              حجز الموعد
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* ===== RESCHEDULE DIALOG ===== */}
-      <Dialog open={rescheduleDialog} onOpenChange={setRescheduleDialog}>
-        <DialogContent className="sm:max-w-sm border-0 shadow-2xl p-0 max-h-[90vh] overflow-y-auto" dir="rtl">
-          <div className="bg-gradient-to-l from-violet-600 via-purple-600 to-fuchsia-600 p-5 text-white relative overflow-hidden">
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.1)_0%,transparent_70%)]" />
-            <div className="relative flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
-                <RefreshCw className="w-5 h-5" />
-              </div>
-              <div>
-                <DialogTitle className="text-lg font-bold">إعادة جدولة الموعد</DialogTitle>
-                <p className="text-violet-100 text-xs mt-0.5">اختر التاريخ والوقت الجديد</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="p-6 space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">التاريخ الجديد</Label>
-                <Input
-                  type="date"
-                  value={rescheduleForm.date}
-                  onChange={e => setRescheduleForm(prev => ({ ...prev, date: e.target.value }))}
-                  className="rounded-xl"
-                  min={new Date().toISOString().split('T')[0]}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">الوقت الجديد</Label>
-                <Input
-                  type="time"
-                  value={rescheduleForm.time}
-                  onChange={e => setRescheduleForm(prev => ({ ...prev, time: e.target.value }))}
-                  className="rounded-xl"
-                />
-              </div>
-            </div>
-
-            <Button
-              onClick={handleRescheduleAppointment}
-              className="w-full bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white hover:shadow-lg rounded-xl"
-            >
-              <RefreshCw className="w-5 h-5 ml-2" />
-              تأكيد إعادة الجدولة
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
 
       {/* ===== REPORT DIALOG ===== */}
       <Dialog open={reportDialog} onOpenChange={setReportDialog}>

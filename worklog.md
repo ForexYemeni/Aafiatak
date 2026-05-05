@@ -234,3 +234,31 @@ Added seven major features to the Aafiatak (عافيتك) nurse dashboard compon
 - All UI text in Arabic
 - Nurse theme color (blue/cyan) maintained throughout
 - TypeScript compilation verified with zero NurseDashboard-specific errors
+
+---
+Task ID: important-fixes-12
+Agent: Main Agent
+Task: إصلاح الأخطاء المهمة الـ 12 بشكل احترافي
+
+Work Log:
+- مراجعة شاملة لـ AdminDashboard.tsx, BeneficiaryDashboard.tsx, NurseDashboard.tsx, store.ts, firestore.ts, validation.ts, dynamic-pricing/route.ts, payments/process/route.ts
+- إصلاح 1: استبدال 6 مواقع window.confirm() بـ showConfirmDialog الاحترافي في AdminDashboard
+- إصلاح 2: إضافة استدعاء API في handleComplaintAction مع fallback للتحديث المحلي
+- إصلاح 3: إضافة معالجة أخطاء لـ 4 معالجات طوارئ + زر إكمال الطلب المدمج
+- إصلاح 4: استبدال Math.random() في مخطط الإيرادات بحساب الإيرادات الشهرية الحقيقية من الطلبات المكتملة
+- إصلاح 5: إضافة رسائل خطأ لجميع فشل تحميل البيانات في fetchData (13+ موقع)
+- إصلاح 6: تحويل serviceForm.price و couponForm.discountPercent/maxUses إلى أرقام مع التحقق
+- إصلاح 7: إصلاح حالة سباق addLoyaltyPoints بـ FieldValue.increment() و redeemLoyaltyPoints بـ Firestore transaction
+- إصلاح 8: إضافة فحص تكرار المعاملة في payments/process لمنع الدفع المزدوج
+- إصلاح 9: إضافة تحقق من صلاحية المسؤول في تأكيد/رفض الدفع (منع المستخدمين غير المصرح لهم)
+- إصلاح 10: إصلاح sanitizeObject لمعالجة مصفوفات السلاسل (حماية XSS)
+- إصلاح 11: إضافة .catch(() => ({})) لجميع استدعاءات res.json() في NurseDashboard (12+ موقع)
+- إصلاح 12: حماية صيغة رسوم المسافة من القيم السالبة في dynamic-pricing باستخدام Math.max(0, ...)
+- اختبار البناء محلياً بنجاح
+- رفع إلى GitHub و Vercel بنجاح
+
+Stage Summary:
+- تم إصلاح 12 خطأ مهم بنسبة نجاح 100%
+- 6 ملفات تم تعديلها: AdminDashboard.tsx, NurseDashboard.tsx, firestore.ts, validation.ts, dynamic-pricing/route.ts, payments/process/route.ts
+- البناء ينجح بدون أي أخطاء
+- تم النشر على Vercel: https://aafiatak.vercel.app

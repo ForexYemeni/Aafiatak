@@ -114,7 +114,7 @@ function getDateKey(timestamp: any): string {
 
 // ==================== Types ====================
 
-type Tab = 'assignments' | 'schedule' | 'ratings' | 'profile' | 'notifications' | 'help' | 'portfolio' | 'appointments' | 'earnings'
+type Tab = 'assignments' | 'schedule' | 'ratings' | 'profile' | 'notifications' | 'help' | 'portfolio' | 'earnings'
 
 interface Assignment {
   id: string
@@ -201,25 +201,11 @@ interface PortfolioData {
   completedCases?: number
 }
 
-interface Appointment {
-  id: string
-  nurseId: string
-  beneficiaryId?: string
-  beneficiaryName?: string
-  serviceName?: string
-  date: any
-  time?: string
-  status: string
-  notes?: string
-  createdAt?: any
-}
-
 // ==================== Tab Configuration ====================
 
 const tabs: { key: Tab; label: string; icon: any }[] = [
   { key: 'assignments', label: 'المهام', icon: ClipboardList },
   { key: 'schedule', label: 'الجدول', icon: Calendar },
-  { key: 'appointments', label: 'المواعيد', icon: Calendar },
   { key: 'portfolio', label: 'ملفي الاحترافي', icon: Briefcase },
   { key: 'earnings', label: 'الأرباح', icon: Wallet },
   { key: 'ratings', label: 'التقييمات', icon: Star },
@@ -347,10 +333,6 @@ export default function NurseDashboard() {
   const [portfolioSaving, setPortfolioSaving] = useState(false)
   const [newSpecialization, setNewSpecialization] = useState('')
   const [newCertification, setNewCertification] = useState('')
-
-  // Appointments state
-  const [appointments, setAppointments] = useState<Appointment[]>([])
-  const [appointmentsLoading, setAppointmentsLoading] = useState(false)
 
   // Location sharing state
   const [locationSharing, setLocationSharing] = useState(false)
@@ -483,24 +465,6 @@ export default function NurseDashboard() {
     }
   }, [nurseId, portfolio, toast])
 
-  const fetchAppointments = useCallback(async () => {
-    if (!nurseId) return
-    setAppointmentsLoading(true)
-    try {
-      const res = await fetch(`/api/appointments?nurseId=${nurseId}`)
-      if (res.ok) {
-        const data = await res.json().catch(() => ({}))
-        setAppointments(Array.isArray(data) ? data : [])
-      } else {
-        setAppointments([])
-      }
-    } catch {
-      setAppointments([])
-    } finally {
-      setAppointmentsLoading(false)
-    }
-  }, [nurseId])
-
   const handleAcceptRejectAssignment = useCallback(async (assignmentId: string, action: 'accept' | 'reject') => {
     if (!nurseId) {
       toast({ title: 'خطأ', description: 'معرف الممرض غير متوفر', variant: 'destructive' })
@@ -529,30 +493,6 @@ export default function NurseDashboard() {
       setActionLoading(false)
     }
   }, [fetchAssignments, toast])
-
-  const handleAppointmentAction = useCallback(async (appointmentId: string, action: string) => {
-    try {
-      const res = await fetch(`/api/appointments/${appointmentId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action }),
-      })
-      if (res.ok) {
-        const labels: Record<string, string> = {
-          confirm: 'تم تأكيد الموعد',
-          start: 'تم بدء الموعد',
-          complete: 'تم إكمال الموعد',
-        }
-        toast({ title: labels[action] || 'تم التحديث' })
-        fetchAppointments()
-      } else {
-        const data = await res.json().catch(() => ({}))
-        toast({ title: 'خطأ', description: data.error || 'حدث خطأ', variant: 'destructive' })
-      }
-    } catch {
-      toast({ title: 'خطأ', description: 'حدث خطأ في الاتصال', variant: 'destructive' })
-    }
-  }, [fetchAppointments, toast])
 
   const handleRatingReply = useCallback(async () => {
     if (!replyRatingId || !replyText.trim()) return
@@ -657,12 +597,10 @@ export default function NurseDashboard() {
       fetchAdminSettings()
     } else if (activeTab === 'portfolio') {
       fetchPortfolio()
-    } else if (activeTab === 'appointments') {
-      fetchAppointments()
     } else if (activeTab === 'earnings') {
       fetchAssignments()
     }
-  }, [activeTab, fetchAssignments, fetchProfile, fetchRatings, fetchAdminSettings, fetchPortfolio, fetchAppointments])
+  }, [activeTab, fetchAssignments, fetchProfile, fetchRatings, fetchAdminSettings, fetchPortfolio])
 
   // Location sharing effect
   useEffect(() => {
@@ -2258,161 +2196,6 @@ export default function NurseDashboard() {
     )
   }
 
-  // ==================== Appointments Tab ====================
-
-  const AppointmentsTab = () => {
-    const getStatusBadge = (status: string) => {
-      const styles: Record<string, string> = {
-        pending: 'bg-gradient-to-l from-amber-100 to-yellow-100 text-amber-700 border-amber-200',
-        confirmed: 'bg-gradient-to-l from-blue-100 to-cyan-100 text-blue-700 border-blue-200',
-        started: 'bg-gradient-to-l from-orange-100 to-amber-100 text-orange-700 border-orange-200',
-        completed: 'bg-gradient-to-l from-emerald-100 to-teal-100 text-emerald-700 border-emerald-200',
-        cancelled: 'bg-gradient-to-l from-red-100 to-rose-100 text-red-700 border-red-200',
-      }
-      const labels: Record<string, string> = {
-        pending: 'قيد الانتظار',
-        confirmed: 'مؤكد',
-        started: 'جاري التنفيذ',
-        completed: 'مكتمل',
-        cancelled: 'ملغى',
-      }
-      return (
-        <Badge className={`${styles[status] || styles.pending} text-xs border font-bold`}>
-          {labels[status] || status}
-        </Badge>
-      )
-    }
-
-    if (appointmentsLoading) {
-      return (
-        <div className="space-y-6">
-          <Skeleton className="h-8 w-48 mb-2" />
-          <CardSkeleton />
-          <CardSkeleton />
-        </div>
-      )
-    }
-
-    return (
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold bg-gradient-to-l from-cyan-700 via-blue-700 to-indigo-700 bg-clip-text text-transparent">إدارة المواعيد</h1>
-          <p className="text-gray-500 text-sm mt-1">مواعيدك مع المستفيدين</p>
-        </div>
-
-        {appointments.length === 0 ? (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="text-center py-16"
-          >
-            <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center mx-auto mb-4">
-              <Calendar className="w-10 h-10 text-blue-400" />
-            </div>
-            <p className="text-lg font-bold text-gray-600 mb-2">لا توجد مواعيد حالياً</p>
-            <p className="text-sm text-gray-400">ستظهر المواعيد هنا عند حجزها</p>
-          </motion.div>
-        ) : (
-          <div className="space-y-3">
-            <AnimatePresence>
-              {appointments.map((appointment, index) => (
-                <motion.div
-                  key={appointment.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20 }}
-                  transition={{ delay: index * 0.05 }}
-                >
-                  <Card className="border-0 shadow-lg shadow-blue-500/5 hover:shadow-xl hover:shadow-blue-500/10 transition-all duration-300 bg-white/80 backdrop-blur-sm border-r-4 border-r-blue-400">
-                    <CardContent className="p-5">
-                      <div className="flex items-start justify-between flex-wrap gap-4">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-3">
-                            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shrink-0 shadow-lg shadow-blue-500/20">
-                              <Calendar className="w-5 h-5 text-white" />
-                            </div>
-                            <div className="min-w-0">
-                              <h3 className="font-bold truncate text-gray-800">{appointment.serviceName || 'موعد'}</h3>
-                              {getStatusBadge(appointment.status)}
-                            </div>
-                          </div>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
-                            {appointment.beneficiaryName && (
-                              <div className="flex items-center gap-1.5">
-                                <User className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-                                <span className="font-medium text-gray-700">المستفيد:</span>
-                                <span className="text-gray-500">{appointment.beneficiaryName}</span>
-                              </div>
-                            )}
-                            {appointment.date && (
-                              <div className="flex items-center gap-1.5">
-                                <Clock className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                                <span className="font-medium text-gray-700">التاريخ:</span>
-                                <span className="text-gray-500">{formatDate(appointment.date)}</span>
-                              </div>
-                            )}
-                            {appointment.time && (
-                              <div className="flex items-center gap-1.5">
-                                <Clock className="w-3.5 h-3.5 text-cyan-500 shrink-0" />
-                                <span className="font-medium text-gray-700">الوقت:</span>
-                                <span className="text-gray-500">{appointment.time}</span>
-                              </div>
-                            )}
-                            {appointment.notes && (
-                              <div className="flex items-center gap-1.5">
-                                <MessageSquare className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                                <span className="font-medium text-gray-700">ملاحظات:</span>
-                                <span className="text-gray-500 truncate">{appointment.notes}</span>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Appointment Actions */}
-                        <div className="flex flex-col gap-2 shrink-0">
-                          {appointment.status === 'pending' && (
-                            <Button
-                              size="sm"
-                              className="bg-gradient-to-l from-cyan-500 to-blue-600 text-white hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-blue-500/25 transition-all duration-300"
-                              onClick={() => handleAppointmentAction(appointment.id, 'confirm')}
-                            >
-                              <Check className="w-4 h-4 ml-1" />
-                              تأكيد الموعد
-                            </Button>
-                          )}
-                          {appointment.status === 'confirmed' && (
-                            <Button
-                              size="sm"
-                              className="bg-gradient-to-l from-orange-500 to-amber-600 text-white hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-orange-500/25 transition-all duration-300"
-                              onClick={() => handleAppointmentAction(appointment.id, 'start')}
-                            >
-                              <Play className="w-4 h-4 ml-1" />
-                              بدء الموعد
-                            </Button>
-                          )}
-                          {appointment.status === 'started' && (
-                            <Button
-                              size="sm"
-                              className="bg-gradient-to-l from-emerald-500 to-teal-600 text-white hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-emerald-500/25 transition-all duration-300"
-                              onClick={() => handleAppointmentAction(appointment.id, 'complete')}
-                            >
-                              <CheckCircle className="w-4 h-4 ml-1" />
-                              إكمال الموعد
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-              ))}
-            </AnimatePresence>
-          </div>
-        )}
-      </div>
-    )
-  }
-
   // ==================== Earnings Tab ====================
 
   const EarningsTab = () => {
@@ -2665,7 +2448,6 @@ export default function NurseDashboard() {
       case 'notifications': return NotificationsTab()
       case 'help': return HelpTab()
       case 'portfolio': return PortfolioTab()
-      case 'appointments': return AppointmentsTab()
       case 'earnings': return EarningsTab()
       default: return AssignmentsTab()
     }
