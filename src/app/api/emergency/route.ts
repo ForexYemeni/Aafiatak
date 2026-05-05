@@ -4,16 +4,20 @@ import { createEmergencyRequest, getAdminSettings } from '@/lib/firestore'
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { beneficiaryId, serviceType, address, notes, price } = body
+    const { beneficiaryId, serviceType, address, notes, price, paymentMethod, paymentMethodId, dynamicPrice: clientDynamicPrice, pricingBreakdown: clientPricingBreakdown } = body
 
     if (!beneficiaryId || !serviceType || !address) {
       return NextResponse.json({ error: 'يرجى ملء جميع الحقول المطلوبة' }, { status: 400 })
     }
 
+    if (!paymentMethod) {
+      return NextResponse.json({ error: 'يرجى اختيار طريقة الدفع' }, { status: 400 })
+    }
+
     // Get price from admin settings if not provided
     let basePrice = price || 0
     let dynamicPrice = 0
-    let pricingBreakdown: Record<string, any> = {}
+    let pricingBreakdown: Record<string, any> = clientPricingBreakdown || {}
     let commission: Record<string, any> = {}
 
     try {
@@ -24,8 +28,11 @@ export async function POST(request: NextRequest) {
           basePrice = settings.emergencyServicePrices[serviceType] || settings.emergencyServicePrices['أخرى'] || 0
         }
 
-        // Apply dynamic pricing
-        if (basePrice > 0) {
+        // Apply dynamic pricing (use client-provided if available, otherwise calculate server-side)
+        if (clientDynamicPrice && clientPricingBreakdown) {
+          dynamicPrice = clientDynamicPrice
+          pricingBreakdown = clientPricingBreakdown
+        } else if (basePrice > 0) {
           const now = new Date()
           const hour = now.getHours()
           const day = now.getDay() // 0=Sunday, 5=Friday
@@ -51,8 +58,10 @@ export async function POST(request: NextRequest) {
           pricingBreakdown.basePrice = basePrice
           pricingBreakdown.totalSurcharge = surchargeTotal
           pricingBreakdown.dynamicPrice = dynamicPrice
+        }
 
-          // Commission
+        // Commission
+        if (dynamicPrice > 0) {
           const commissionPercent = settings.commissionPercent || 15
           const commissionAmount = Math.round(dynamicPrice * commissionPercent / 100)
           commission = {
@@ -64,8 +73,13 @@ export async function POST(request: NextRequest) {
       }
     } catch {
       // Settings not available, use base price without dynamic pricing
-      dynamicPrice = basePrice
+      dynamicPrice = basePrice || clientDynamicPrice || 0
     }
+
+    // Determine initial status based on payment method
+    const isCashPayment = paymentMethod === 'cash'
+    const initialStatus = isCashPayment ? 'pending_confirmation' : 'pending_payment'
+    const initialPaymentStatus = isCashPayment ? 'cash_on_delivery' : 'unpaid'
 
     const emergencyRequest = await createEmergencyRequest({
       beneficiaryId,
@@ -76,6 +90,10 @@ export async function POST(request: NextRequest) {
       dynamicPrice: dynamicPrice || basePrice,
       pricingBreakdown: Object.keys(pricingBreakdown).length > 0 ? pricingBreakdown : undefined,
       commission: Object.keys(commission).length > 0 ? commission : undefined,
+      paymentMethod: paymentMethod || null,
+      paymentMethodId: paymentMethodId || null,
+      paymentStatus: initialPaymentStatus,
+      status: initialStatus,
     })
 
     // Get admin settings for emergency phone

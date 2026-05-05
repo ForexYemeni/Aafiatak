@@ -961,20 +961,28 @@ export async function createEmergencyRequest(data: {
   dynamicPrice?: number
   pricingBreakdown?: Record<string, any>
   commission?: Record<string, any>
+  paymentMethod?: string | null
+  paymentMethodId?: string | null
+  paymentStatus?: string
+  status?: string
 }) {
   checkFirebase()
   const benefDoc = await firestore.collection('beneficiaries').doc(data.beneficiaryId).get()
   const beneficiaryName = benefDoc.exists ? benefDoc.data()!.name : 'غير معروف'
 
+  const { status: providedStatus, paymentStatus, ...restData } = data
+  const finalStatus = providedStatus || 'pending'
+
   const docRef = await firestore.collection('emergencyRequests').add({
-    ...data,
+    ...restData,
     beneficiaryName,
-    status: 'pending',
+    status: finalStatus,
+    paymentStatus: paymentStatus || 'unpaid',
     isEmergency: true,
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   })
-  return { id: docRef.id, ...data, beneficiaryName, status: 'pending', isEmergency: true }
+  return { id: docRef.id, ...restData, beneficiaryName, status: finalStatus, paymentStatus: paymentStatus || 'unpaid', isEmergency: true }
 }
 
 export async function getEmergencyRequestsByBeneficiary(beneficiaryId: string) {

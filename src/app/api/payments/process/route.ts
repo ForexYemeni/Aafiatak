@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
   try {
     checkFirebase()
     const body = await request.json()
-    const { requestId, beneficiaryId, amount, paymentMethod, transactionRef, senderName, senderPhone, exchangeName } = body
+    const { requestId, beneficiaryId, amount, paymentMethod, transactionRef, senderName, senderPhone, exchangeName, isEmergency } = body
 
     if (!requestId || !beneficiaryId || !amount || !paymentMethod) {
       return NextResponse.json({ error: 'معرف الطلب والمستفيد والمبلغ وطريقة الدفع مطلوبون' }, { status: 400 })
@@ -76,8 +76,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'المستفيد غير موجود' }, { status: 404 })
     }
 
-    // Verify service request exists
-    const requestDoc = await firestore.collection('serviceRequests').doc(requestId).get()
+    // Determine the request collection based on isEmergency flag
+    const requestCollection = isEmergency ? 'emergencyRequests' : 'serviceRequests'
+
+    // Verify request exists
+    const requestDoc = await firestore.collection(requestCollection).doc(requestId).get()
     if (!requestDoc.exists) {
       return NextResponse.json({ error: 'الطلب غير موجود' }, { status: 404 })
     }
@@ -107,6 +110,7 @@ export async function POST(request: NextRequest) {
       senderName: senderName || null,
       senderPhone: senderPhone || null,
       exchangeName: exchangeName || null,
+      isEmergency: isEmergency || false,
       status: paymentStatus,
       confirmedBy: null,
       confirmedAt: null,
@@ -116,8 +120,8 @@ export async function POST(request: NextRequest) {
 
     const docRef = await firestore.collection('transactions').add(transactionData)
 
-    // Update the service request with payment info
-    await firestore.collection('serviceRequests').doc(requestId).update({
+    // Update the request with payment info
+    await firestore.collection(requestCollection).doc(requestId).update({
       paymentStatus: paymentStatus,
       paymentMethod,
       transactionId: docRef.id,
@@ -196,10 +200,12 @@ export async function PUT(request: NextRequest) {
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       })
 
-      // Update service request payment status to 'paid'
+      // Update request payment status to 'paid' (support both service and emergency requests)
       if (transData.requestId) {
-        await firestore.collection('serviceRequests').doc(transData.requestId).update({
+        const requestCollection = transData.isEmergency ? 'emergencyRequests' : 'serviceRequests'
+        await firestore.collection(requestCollection).doc(transData.requestId).update({
           paymentStatus: 'paid',
+          status: 'pending_confirmation',
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         })
       }
@@ -213,9 +219,10 @@ export async function PUT(request: NextRequest) {
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       })
 
-      // Update service request payment status to 'rejected'
+      // Update request payment status to 'rejected' (support both service and emergency requests)
       if (transData.requestId) {
-        await firestore.collection('serviceRequests').doc(transData.requestId).update({
+        const requestCollection = transData.isEmergency ? 'emergencyRequests' : 'serviceRequests'
+        await firestore.collection(requestCollection).doc(transData.requestId).update({
           paymentStatus: 'rejected',
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         })

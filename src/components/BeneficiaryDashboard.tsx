@@ -84,6 +84,10 @@ interface AdminSettings {
   referralBonusPoints?: number
   referralBonusPointsReceiver?: number
   referralEnabled?: boolean
+  nightSurchargePercent?: number
+  fridaySurchargePercent?: number
+  commissionPercent?: number
+  emergencyServicePrices?: Record<string, number>
 }
 
 const statusFilters = [
@@ -217,8 +221,11 @@ export default function BeneficiaryDashboard() {
 
   // Emergency state
   const [emergencyDialog, setEmergencyDialog] = useState(false)
-  const [emergencyForm, setEmergencyForm] = useState({ serviceType: '', address: '', notes: '' })
+  const [emergencyForm, setEmergencyForm] = useState({ serviceType: '', address: '', notes: '', paymentMethod: '', paymentMethodId: '' })
   const [emergencySubmitting, setEmergencySubmitting] = useState(false)
+  const [emergencyPaymentMethods, setEmergencyPaymentMethods] = useState<any[]>([])
+  const [emergencyPaymentMethodsLoading, setEmergencyPaymentMethodsLoading] = useState(false)
+  const [isEmergencyPaymentFlow, setIsEmergencyPaymentFlow] = useState(false)
 
   // Referral state
   const [referralCode, setReferralCode] = useState<string>('')
@@ -323,6 +330,24 @@ export default function BeneficiaryDashboard() {
       setRequestPaymentMethods([])
     } finally {
       setRequestPaymentMethodsLoading(false)
+    }
+  }, [])
+
+  // Fetch emergency payment methods
+  const fetchEmergencyPaymentMethods = useCallback(async () => {
+    setEmergencyPaymentMethodsLoading(true)
+    try {
+      const res = await fetch('/api/payments/methods')
+      if (res.ok) {
+        const data = await res.json()
+        setEmergencyPaymentMethods(Array.isArray(data) ? data : [])
+      } else {
+        setEmergencyPaymentMethods([])
+      }
+    } catch {
+      setEmergencyPaymentMethods([])
+    } finally {
+      setEmergencyPaymentMethodsLoading(false)
     }
   }, [])
 
@@ -496,6 +521,10 @@ export default function BeneficiaryDashboard() {
       toast({ title: 'خطأ', description: 'يرجى إدخال العنوان', variant: 'destructive' })
       return
     }
+    if (!requestForm.paymentMethod) {
+      toast({ title: 'خطأ', description: 'يرجى اختيار طريقة الدفع', variant: 'destructive' })
+      return
+    }
     setSubmitting(true)
     try {
       const res = await fetch('/api/beneficiary/requests', {
@@ -520,6 +549,7 @@ export default function BeneficiaryDashboard() {
       })
       const data = await res.json()
       if (res.ok) {
+        // Add loyalty points
         try {
           await fetch('/api/loyalty', {
             method: 'POST',
@@ -531,14 +561,25 @@ export default function BeneficiaryDashboard() {
             }),
           })
         } catch {}
-        toast({ title: 'تم إرسال الطلب بنجاح', description: requestForm.paymentMethod === 'cash' ? 'سيتم مراجعة طلبك من قبل الإدارة والدفع عند الاستلام' : 'سيتم مراجعة طلبك من قبل الإدارة' })
-        // If payment method is card or wallet, open payment dialog
-        if (requestForm.paymentMethod && requestForm.paymentMethod !== 'cash') {
+
+        if (requestForm.paymentMethod === 'cash') {
+          // Cash: show success and close dialog immediately
+          toast({ title: 'تم إرسال الطلب بنجاح', description: 'سيتم مراجعة طلبك من قبل الإدارة والدفع عند الاستلام' })
+          setRequestDialog(false)
+          setSelectedService(null)
+          setSelectedServices([])
+          setRequestForm({ paymentMethod: '', paymentMethodId: '', notes: '', address: '', couponCode: '' })
+          setValidCoupon(null)
+          setCouponError('')
+          setRequestFavoriteNurse(false)
+          setDynamicPricing(null)
+          setActiveTab('requests')
+        } else {
+          // Electronic: open payment dialog first - don't show success toast until payment is confirmed
+          setIsEmergencyPaymentFlow(false)
           setLastCreatedRequestId(data.id || data.requestId || '')
-          // Save payment amount before clearing dynamic pricing and selected service
           setPaymentAmount(dynamicPricing?.totalPrice || selectedService?.price || 0)
           setPaymentForm(prev => ({ ...prev, method: requestForm.paymentMethod, paymentMethodId: requestForm.paymentMethodId }))
-          setRequestDialog(false)
           // Use already-fetched payment methods or fetch them
           if (requestPaymentMethods.length > 0) {
             setAvailablePaymentMethods(requestPaymentMethods)
@@ -559,19 +600,10 @@ export default function BeneficiaryDashboard() {
               }
             } catch {}
           }
-          setPaymentDialog(true)
-        } else {
           setRequestDialog(false)
+          setPaymentDialog(true)
+          // Don't reset form yet - will be reset after payment confirmation
         }
-        // Note: paymentAmount is already set above before opening dialog
-        setSelectedService(null)
-        setSelectedServices([])
-        setRequestForm({ paymentMethod: '', paymentMethodId: '', notes: '', address: '', couponCode: '' })
-        setValidCoupon(null)
-        setCouponError('')
-        setRequestFavoriteNurse(false)
-        setDynamicPricing(null)
-        setActiveTab('requests')
       } else {
         toast({ title: 'خطأ', description: data.error, variant: 'destructive' })
       }
@@ -642,14 +674,44 @@ export default function BeneficiaryDashboard() {
     }
   }
 
+  // Calculate emergency dynamic price client-side
+  const getEmergencyDynamicPrice = () => {
+    const basePrice = adminSettings.emergencyServicePrices?.[emergencyForm.serviceType] || adminSettings.emergencyServicePrices?.['أخرى'] || 0
+    if (basePrice === 0) return { basePrice: 0, dynamicPrice: 0, nightFee: 0, fridayFee: 0 }
+    const now = new Date()
+    const hour = now.getHours()
+    const day = now.getDay()
+    let nightFee = 0
+    let fridayFee = 0
+    const nightPercent = adminSettings.nightSurchargePercent || 50
+    if (hour >= 22 || hour < 6) {
+      nightFee = Math.round(basePrice * nightPercent / 100)
+    }
+    const fridayPercent = adminSettings.fridaySurchargePercent || 25
+    if (day === 5) {
+      fridayFee = Math.round(basePrice * fridayPercent / 100)
+    }
+    const dynamicPrice = basePrice + nightFee + fridayFee
+    return { basePrice, dynamicPrice, nightFee, fridayFee, nightPercent, fridayPercent }
+  }
+
   // Emergency request handler
   const handleEmergencyRequest = async () => {
     if (!emergencyForm.serviceType.trim() || !emergencyForm.address.trim()) {
       toast({ title: 'خطأ', description: 'يرجى إدخال نوع الخدمة والعنوان', variant: 'destructive' })
       return
     }
+    if (!emergencyForm.paymentMethod) {
+      toast({ title: 'خطأ', description: 'يرجى اختيار طريقة الدفع', variant: 'destructive' })
+      return
+    }
+
+    // Calculate dynamic price
+    const priceInfo = getEmergencyDynamicPrice()
+
     setEmergencySubmitting(true)
     try {
+      const isCash = emergencyForm.paymentMethod === 'cash'
       const res = await fetch('/api/emergency', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -658,12 +720,60 @@ export default function BeneficiaryDashboard() {
           serviceType: emergencyForm.serviceType,
           address: emergencyForm.address,
           notes: emergencyForm.notes || undefined,
+          paymentMethod: emergencyForm.paymentMethod || null,
+          paymentMethodId: emergencyForm.paymentMethodId || null,
+          dynamicPrice: priceInfo.dynamicPrice || priceInfo.basePrice,
+          pricingBreakdown: priceInfo.basePrice > 0 ? {
+            basePrice: priceInfo.basePrice,
+            nightSurcharge: priceInfo.nightFee > 0 ? { percent: priceInfo.nightPercent, amount: priceInfo.nightFee } : undefined,
+            fridaySurcharge: priceInfo.fridayFee > 0 ? { percent: priceInfo.fridayPercent, amount: priceInfo.fridayFee } : undefined,
+            totalSurcharge: priceInfo.nightFee + priceInfo.fridayFee,
+            dynamicPrice: priceInfo.dynamicPrice,
+          } : undefined,
         }),
       })
+      const data = await res.json()
       if (res.ok) {
-        toast({ title: 'تم إرسال طلب الطوارئ', description: 'سيتم التواصل معك في أقرب وقت' })
-        setEmergencyDialog(false)
-        setEmergencyForm({ serviceType: '', address: '', notes: '' })
+        // Add loyalty points
+        try {
+          await fetch('/api/loyalty', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ beneficiaryId: beneficiaryUser?.id, points: 10, reason: 'طلب طوارئ جديد' }),
+          })
+        } catch {}
+
+        if (isCash) {
+          // Cash: request is sent and confirmed
+          toast({ title: 'تم إرسال طلب الطوارئ', description: 'سيتم الدفع نقداً عند الوصول' })
+          setEmergencyDialog(false)
+          setEmergencyForm({ serviceType: '', address: '', notes: '', paymentMethod: '', paymentMethodId: '' })
+        } else {
+          // Electronic: open payment dialog first, don't show success yet
+          setLastCreatedRequestId(data.id || data.requestId || '')
+          setPaymentAmount(priceInfo.dynamicPrice || priceInfo.basePrice)
+          setIsEmergencyPaymentFlow(true)
+          setSelectedService({ id: '', name: emergencyForm.serviceType, price: priceInfo.dynamicPrice || priceInfo.basePrice })
+          setPaymentForm(prev => ({ ...prev, method: emergencyForm.paymentMethod, paymentMethodId: emergencyForm.paymentMethodId }))
+          // Set available payment methods for emergency
+          if (emergencyPaymentMethods.length > 0) {
+            setAvailablePaymentMethods(emergencyPaymentMethods)
+            const matching = emergencyPaymentMethods.find((m: any) => m.id === emergencyForm.paymentMethodId || m.type === emergencyForm.paymentMethod)
+            if (matching) {
+              setPaymentForm(prev => ({ ...prev, method: matching.type, paymentMethodId: matching.id }))
+            }
+          } else {
+            try {
+              const pmRes = await fetch('/api/payments/methods')
+              if (pmRes.ok) {
+                const pmData = await pmRes.json()
+                setAvailablePaymentMethods(Array.isArray(pmData) ? pmData : [])
+              }
+            } catch {}
+          }
+          setEmergencyDialog(false)
+          setPaymentDialog(true)
+        }
       } else {
         const data = await res.json()
         toast({ title: 'خطأ', description: data.error, variant: 'destructive' })
@@ -998,13 +1108,29 @@ export default function BeneficiaryDashboard() {
           senderName: paymentForm.senderName || undefined,
           senderPhone: paymentForm.senderPhone || undefined,
           exchangeName: paymentForm.exchangeName || undefined,
+          isEmergency: isEmergencyPaymentFlow,
         }),
       })
       if (res.ok) {
-        toast({ title: 'تم الدفع بنجاح', description: 'تمت معالجة الدفع بنجاح' })
+        // Show appropriate success message based on flow type
+        if (isEmergencyPaymentFlow) {
+          toast({ title: 'تم إرسال طلب الطوارئ بنجاح', description: 'تم إثبات الدفع وسيتم مراجعة طلبك في أقرب وقت' })
+        } else {
+          toast({ title: 'تم إرسال الطلب بنجاح', description: 'تم إثبات الدفع وسيتم مراجعة طلبك من قبل الإدارة' })
+        }
         setPaymentDialog(false)
+        setIsEmergencyPaymentFlow(false)
         setPaymentForm({ method: '', paymentMethodId: '', transactionRef: '', senderName: '', senderPhone: '', exchangeName: '', walletType: '' })
         setLastCreatedRequestId('')
+        setSelectedService(null)
+        setSelectedServices([])
+        setRequestForm({ paymentMethod: '', paymentMethodId: '', notes: '', address: '', couponCode: '' })
+        setValidCoupon(null)
+        setCouponError('')
+        setRequestFavoriteNurse(false)
+        setDynamicPricing(null)
+        setEmergencyForm({ serviceType: '', address: '', notes: '', paymentMethod: '', paymentMethodId: '' })
+        setActiveTab('requests')
         fetchData()
       } else {
         const data = await res.json()
@@ -1020,7 +1146,8 @@ export default function BeneficiaryDashboard() {
   // ===== HANDLE PAY FOR EXISTING REQUEST =====
   const handlePayForRequest = async (req: any) => {
     setLastCreatedRequestId(req.id)
-    setSelectedService(req.service || { id: req.serviceId, name: req.service?.name || 'خدمة', price: req.price || req.service?.price || 0 })
+    setIsEmergencyPaymentFlow(!!req.isEmergency)
+    setSelectedService(req.isEmergency ? { id: '', name: req.serviceType || 'خدمة طوارئ', price: req.dynamicPrice || req.price || 0 } : (req.service || { id: req.serviceId, name: req.service?.name || 'خدمة', price: req.price || req.service?.price || 0 }))
     setPaymentAmount(req.dynamicPrice || req.price || req.service?.price || 0)
     setPaymentForm({ method: '', paymentMethodId: '', transactionRef: '', senderName: '', senderPhone: '', exchangeName: '', walletType: '' })
     // Fetch admin payment methods
@@ -2943,15 +3070,15 @@ export default function BeneficiaryDashboard() {
       <Dialog open={paymentDialog} onOpenChange={setPaymentDialog}>
         <DialogContent className="sm:max-w-md border-0 shadow-2xl p-0 max-h-[90vh] overflow-y-auto" dir="rtl">
           {/* Gradient Header */}
-          <div className="bg-gradient-to-l from-emerald-600 via-teal-600 to-emerald-700 p-5 text-white relative overflow-hidden">
+          <div className={`p-5 text-white relative overflow-hidden ${isEmergencyPaymentFlow ? 'bg-gradient-to-l from-red-600 via-rose-600 to-red-700' : 'bg-gradient-to-l from-emerald-600 via-teal-600 to-emerald-700'}`}>
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.1)_0%,transparent_70%)]" />
             <div className="relative flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
-                <CreditCard className="w-5 h-5" />
+                {isEmergencyPaymentFlow ? <Siren className="w-5 h-5" /> : <CreditCard className="w-5 h-5" />}
               </div>
               <div>
-                <DialogTitle className="text-lg font-bold">ادفع الآن</DialogTitle>
-                <p className="text-emerald-100 text-xs mt-0.5">أكمل عملية الدفع لطلبك</p>
+                <DialogTitle className="text-lg font-bold">{isEmergencyPaymentFlow ? 'ادفع طلب الطوارئ' : 'ادفع الآن'}</DialogTitle>
+                <p className={`${isEmergencyPaymentFlow ? 'text-red-100' : 'text-emerald-100'} text-xs mt-0.5`}>{isEmergencyPaymentFlow ? 'أكمل عملية الدفع لطلب الطوارئ' : 'أكمل عملية الدفع لطلبك'}</p>
               </div>
             </div>
           </div>
@@ -3344,7 +3471,7 @@ export default function BeneficiaryDashboard() {
       </Dialog>
 
       {/* ===== EMERGENCY DIALOG ===== */}
-      <Dialog open={emergencyDialog} onOpenChange={setEmergencyDialog}>
+      <Dialog open={emergencyDialog} onOpenChange={(open) => { setEmergencyDialog(open); if (open) fetchEmergencyPaymentMethods() }}>
         <DialogContent className="sm:max-w-md border-0 shadow-2xl p-0 max-h-[90vh] overflow-y-auto" dir="rtl">
           {/* Red Gradient Header */}
           <div className="bg-gradient-to-l from-red-600 via-rose-600 to-red-700 p-5 text-white relative overflow-hidden">
@@ -3390,15 +3517,35 @@ export default function BeneficiaryDashboard() {
                   )
                 })}
               </div>
-              {emergencyForm.serviceType && (adminSettings.emergencyServicePrices?.[emergencyForm.serviceType] || adminSettings.emergencyServicePrices?.['أخرى'] || 0) > 0 && (
-                <div className="p-3 bg-red-50/80 rounded-xl border border-red-100">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-red-700">السعر الأساسي</span>
-                    <span className="text-sm font-bold text-red-600">{(adminSettings.emergencyServicePrices?.[emergencyForm.serviceType] || adminSettings.emergencyServicePrices?.['أخرى'] || 0).toLocaleString('ar-YE')} ر.ي</span>
+              {/* Dynamic Pricing Breakdown for Emergency */}
+              {emergencyForm.serviceType && (() => {
+                const priceInfo = getEmergencyDynamicPrice()
+                if (priceInfo.basePrice === 0) return null
+                return (
+                  <div className="p-3 bg-red-50/80 rounded-xl border border-red-100">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-red-700 font-medium">السعر الأساسي</span>
+                      <span className="text-red-600 font-bold">{formatPrice(priceInfo.basePrice)}</span>
+                    </div>
+                    {priceInfo.nightFee > 0 && (
+                      <div className="flex items-center justify-between text-xs mt-1">
+                        <span className="text-amber-600">رسوم الليل ({priceInfo.nightPercent}%)</span>
+                        <span className="text-amber-600">+{formatPrice(priceInfo.nightFee)}</span>
+                      </div>
+                    )}
+                    {priceInfo.fridayFee > 0 && (
+                      <div className="flex items-center justify-between text-xs mt-1">
+                        <span className="text-blue-600">رسوم الجمعة ({priceInfo.fridayPercent}%)</span>
+                        <span className="text-blue-600">+{formatPrice(priceInfo.fridayFee)}</span>
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between text-sm font-bold mt-1 pt-1 border-t border-red-200">
+                      <span className="text-red-800">الإجمالي</span>
+                      <span className="text-red-700">{formatPrice(priceInfo.dynamicPrice)}</span>
+                    </div>
                   </div>
-                  <p className="text-[10px] text-red-500 mt-1">قد يتم إضافة رسوم إضافية حسب الوقت والمسافة (التسعير الديناميكي)</p>
-                </div>
-              )}
+                )
+              })()}
             </div>
 
             {/* Address Field */}
@@ -3476,6 +3623,113 @@ export default function BeneficiaryDashboard() {
               )}
             </div>
 
+            {/* Payment Method - Emergency */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium text-red-700">
+                <CreditCard className="w-3.5 h-3.5 inline ml-1" />
+                طريقة الدفع
+              </Label>
+              {emergencyPaymentMethodsLoading ? (
+                <div className="flex items-center gap-2 p-4 bg-red-50 rounded-xl justify-center">
+                  <Loader2 className="w-4 h-4 animate-spin text-red-500" />
+                  <span className="text-sm text-red-600">جاري تحميل طرق الدفع...</span>
+                </div>
+              ) : emergencyPaymentMethods.length > 0 ? (
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {(() => {
+                    const walletMethods = emergencyPaymentMethods.filter((m: any) => m.type === 'wallet-deposit')
+                    const exchangeMethods = emergencyPaymentMethods.filter((m: any) => m.type === 'exchange-transfer')
+                    const bankMethods = emergencyPaymentMethods.filter((m: any) => m.type === 'bank-transfer')
+                    const otherMethods = emergencyPaymentMethods.filter((m: any) => !['wallet-deposit', 'exchange-transfer', 'bank-transfer', 'cash'].includes(m.type))
+
+                    type GroupInfo = { label: string; icon: any; color: string; methods: any[] }
+                    const groups: GroupInfo[] = [
+                      { label: 'إيداع عبر محفظة', icon: Wallet, color: 'from-blue-400 to-indigo-500', methods: walletMethods },
+                      { label: 'تحويل عبر صراف', icon: Send, color: 'from-amber-400 to-orange-500', methods: exchangeMethods },
+                      { label: 'تحويل بنكي', icon: Building, color: 'from-emerald-400 to-teal-500', methods: bankMethods },
+                      { label: 'أخرى', icon: CreditCard, color: 'from-purple-400 to-violet-500', methods: otherMethods },
+                    ].filter(g => g.methods.length > 0)
+
+                    return (
+                      <>
+                        {groups.map(group => (
+                          <div key={group.label} className="space-y-1.5">
+                            <div className="flex items-center gap-1.5 px-1">
+                              <group.icon className="w-3.5 h-3.5 text-gray-400" />
+                              <span className="text-xs font-bold text-gray-500">{group.label}</span>
+                            </div>
+                            {group.methods.map((pm: any) => {
+                              const isSelected = emergencyForm.paymentMethodId === pm.id
+                              const Icon = group.icon
+                              return (
+                                <button
+                                  key={pm.id}
+                                  type="button"
+                                  onClick={() => setEmergencyForm(prev => ({ ...prev, paymentMethod: pm.type, paymentMethodId: pm.id }))}
+                                  className={`w-full p-3 rounded-xl border-2 transition-all text-right ${
+                                    isSelected
+                                      ? 'border-red-400 bg-red-50 shadow-md'
+                                      : 'border-gray-200 hover:border-red-200 hover:bg-gray-50'
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-2.5">
+                                    <div className={`w-9 h-9 rounded-lg bg-gradient-to-br ${group.color} flex items-center justify-center shadow-sm shrink-0`}>
+                                      <Icon className="w-4 h-4 text-white" />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <p className="font-bold text-sm truncate">{pm.name}</p>
+                                      {pm.accountNumber && (
+                                        <span className="text-[10px] text-gray-500 font-mono" dir="ltr">{pm.accountNumber}</span>
+                                      )}
+                                    </div>
+                                    {isSelected && <Check className="w-4 h-4 text-red-500 shrink-0" />}
+                                  </div>
+                                </button>
+                              )
+                            })}
+                          </div>
+                        ))}
+                        {/* Cash option */}
+                        <button
+                          type="button"
+                          onClick={() => setEmergencyForm(prev => ({ ...prev, paymentMethod: 'cash', paymentMethodId: 'cash-on-delivery' }))}
+                          className={`w-full p-3 rounded-xl border-2 transition-all text-right ${
+                            emergencyForm.paymentMethod === 'cash'
+                              ? 'border-red-400 bg-red-50 shadow-md'
+                              : 'border-gray-200 hover:border-red-200 hover:bg-gray-50'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-gray-400 to-gray-500 flex items-center justify-center shadow-sm shrink-0">
+                              <DollarSign className="w-4 h-4 text-white" />
+                            </div>
+                            <div className="flex-1">
+                              <p className="font-bold text-sm">نقدي عند الاستلام</p>
+                              <p className="text-[10px] text-gray-500">سيتم الدفع نقداً عند وصول الممرض</p>
+                            </div>
+                            {emergencyForm.paymentMethod === 'cash' && <Check className="w-4 h-4 text-red-500 shrink-0" />}
+                          </div>
+                        </button>
+                      </>
+                    )
+                  })()}
+                </div>
+              ) : (
+                <div className="p-4 bg-amber-50 rounded-xl text-center">
+                  <CreditCard className="w-8 h-8 text-amber-400 mx-auto mb-2" />
+                  <p className="text-amber-700 text-sm font-medium">لا توجد طرق دفع إلكترونية متاحة حالياً</p>
+                  <p className="text-amber-600 text-xs mt-1">يمكنك الدفع نقداً عند الاستلام</p>
+                  <button
+                    type="button"
+                    onClick={() => setEmergencyForm(prev => ({ ...prev, paymentMethod: 'cash', paymentMethodId: 'cash-on-delivery' }))}
+                    className="mt-3 px-4 py-2 bg-amber-500 text-white rounded-xl text-sm hover:bg-amber-600 transition-colors"
+                  >
+                    الدفع نقداً عند الاستلام
+                  </button>
+                </div>
+              )}
+            </div>
+
             {/* Notes Field */}
             <div className="space-y-2">
               <Label className="text-sm font-medium">ملاحظات إضافية</Label>
@@ -3489,6 +3743,40 @@ export default function BeneficiaryDashboard() {
             </div>
 
             <Separator />
+
+            {/* Price Summary */}
+            {emergencyForm.serviceType && (() => {
+              const priceInfo = getEmergencyDynamicPrice()
+              if (priceInfo.basePrice === 0) return null
+              return (
+                <div className="p-4 rounded-xl bg-gradient-to-l from-red-50/50 to-rose-50/50 border border-red-100/50">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">السعر الأساسي</span>
+                    <span>{formatPrice(priceInfo.basePrice)}</span>
+                  </div>
+                  {priceInfo.nightFee > 0 && (
+                    <div className="flex items-center justify-between text-sm mt-1">
+                      <span className="text-amber-600">رسوم الليل</span>
+                      <span className="text-amber-600">+{formatPrice(priceInfo.nightFee)}</span>
+                    </div>
+                  )}
+                  {priceInfo.fridayFee > 0 && (
+                    <div className="flex items-center justify-between text-sm mt-1">
+                      <span className="text-blue-600">رسوم الجمعة</span>
+                      <span className="text-blue-600">+{formatPrice(priceInfo.fridayFee)}</span>
+                    </div>
+                  )}
+                  <Separator className="my-2" />
+                  <div className="flex items-center justify-between font-bold">
+                    <span>السعر الإجمالي</span>
+                    <span className="text-red-700 text-lg">{formatPrice(priceInfo.dynamicPrice)}</span>
+                  </div>
+                  {emergencyForm.paymentMethod === 'cash' && (
+                    <p className="text-[10px] text-gray-500 mt-1">سيتم الدفع نقداً عند الوصول</p>
+                  )}
+                </div>
+              )
+            })()}
 
             {/* Call Admin Section */}
             {adminSettings.emergencyPhone && (
@@ -3512,7 +3800,7 @@ export default function BeneficiaryDashboard() {
             {/* Submit Button */}
             <Button
               onClick={handleEmergencyRequest}
-              disabled={emergencySubmitting || !emergencyForm.serviceType || !emergencyForm.address}
+              disabled={emergencySubmitting || !emergencyForm.serviceType || !emergencyForm.address || !emergencyForm.paymentMethod}
               className="w-full bg-gradient-to-r from-red-500 to-rose-500 text-white hover:shadow-lg rounded-xl text-base py-3"
             >
               {emergencySubmitting ? (
@@ -3951,7 +4239,7 @@ export default function BeneficiaryDashboard() {
             {/* Submit Button */}
             <Button
               onClick={handleRequestService}
-              disabled={submitting || !requestForm.address.trim()}
+              disabled={submitting || !requestForm.address.trim() || !requestForm.paymentMethod}
               className="w-full bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white hover:shadow-lg hover:shadow-violet-500/25 rounded-xl"
             >
               {submitting ? (
