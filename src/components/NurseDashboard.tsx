@@ -7,7 +7,8 @@ import {
   Menu, X, Phone, MapPin, Clock, HelpCircle, Bell, Activity,
   Calendar, Star, Filter, MessageSquare, ChevronDown, ChevronUp,
   Mail, Shield, Award, Navigation, Info, Sparkles, AlertTriangle,
-  Briefcase, Check, DollarSign, Camera, Upload, Plus, Trash2, Send, Wallet
+  Briefcase, Check, DollarSign, Camera, Upload, Plus, Trash2, Send, Wallet,
+  XCircle, Wrench
 } from 'lucide-react'
 import { useAppStore, formatPrice, getStatusLabel, getStatusColor } from '@/lib/store'
 import { openInMaps, getGPSLocation, searchLocation, extractCoordinates, getDisplayLocation, getMapEmbedUrl, getDirectionsUrl } from '@/lib/location-utils'
@@ -304,6 +305,8 @@ export default function NurseDashboard() {
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false)
   const [rejectAssignmentId, setRejectAssignmentId] = useState<string | null>(null)
   const [rejectReason, setRejectReason] = useState('')
+  const [rejectCustomReason, setRejectCustomReason] = useState('')
+  const [rejectSelectedOption, setRejectSelectedOption] = useState<string>('')
 
   // Chat state
   const [activeChatRequestId, setActiveChatRequestId] = useState<string | null>(null)
@@ -3178,58 +3181,147 @@ export default function NurseDashboard() {
         </DialogContent>
       </Dialog>
 
-      {/* Reject Assignment Dialog */}
-      <Dialog open={rejectDialogOpen} onOpenChange={(open) => { setRejectDialogOpen(open); if (!open) { setRejectReason(''); setRejectAssignmentId(null) } }}>
-        <DialogContent className="sm:max-w-md border-0 shadow-2xl" dir="rtl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-red-500 to-rose-600 flex items-center justify-center shadow-lg shadow-red-500/25">
-                <X className="w-5 h-5 text-white" />
+      {/* Reject Assignment Dialog — Professional Redesign */}
+      <Dialog open={rejectDialogOpen} onOpenChange={(open) => { setRejectDialogOpen(open); if (!open) { setRejectReason(''); setRejectAssignmentId(null); setRejectCustomReason(''); setRejectSelectedOption('') } }}>
+        <DialogContent className="sm:max-w-md border-0 shadow-2xl p-0 max-h-[90vh] flex flex-col" dir="rtl">
+          <DialogHeader className="px-6 pt-6 pb-2 shrink-0">
+            <DialogTitle className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-red-500 to-rose-600 flex items-center justify-center shadow-lg shadow-red-500/25">
+                <XCircle className="w-6 h-6 text-white" />
               </div>
-              رفض المهمة
+              <div>
+                <p className="text-lg font-bold">رفض المهمة</p>
+                <p className="text-xs text-gray-400 font-normal">اختر سبب الرفض ثم اضغط تأكيد</p>
+              </div>
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-2">
+          <div className="px-6 py-3 overflow-y-auto flex-1 min-h-0 space-y-4">
+            {/* Warning */}
             <div className="p-3 bg-red-50/80 rounded-xl flex items-start gap-2.5 ring-1 ring-red-200/50">
               <AlertTriangle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
-              <div>
-                <p className="text-sm font-bold text-red-700">تنبيه مهم</p>
-                <p className="text-xs text-red-600 mt-0.5">رفض المهمة سيُعلم الإدارة تلقائياً للبحث عن ممرض آخر. لن يتم تعيين هذه المهمة لك مرة أخرى.</p>
+              <p className="text-xs text-red-600 leading-relaxed">رفض المهمة سيُعلم الإدارة تلقائياً للبحث عن ممرض آخر. لن يتم تعيين هذه المهمة لك مرة أخرى.</p>
+            </div>
+
+            {/* Step Label */}
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 rounded-full bg-red-500 text-white text-xs flex items-center justify-center font-bold shrink-0">1</div>
+              <p className="text-sm font-bold text-gray-700">اختر سبب الرفض</p>
+            </div>
+
+            {/* Reason Selection Cards */}
+            <div className="space-y-2">
+              {[
+                { id: 'busy', label: 'أنا مشغول', desc: 'لدي مهام أخرى حالياً', icon: Clock },
+                { id: 'far', label: 'الموقع بعيد', desc: 'موقع المستفيد بعيد جداً', icon: MapPin },
+                { id: 'unqualified', label: 'لا أملك المهارة', desc: 'الخدمة خارج تخصصي', icon: Shield },
+                { id: 'equipment', label: 'لا أملك المعدات', desc: 'المعدات اللازمة غير متوفرة', icon: Wrench },
+                { id: 'emergency', label: 'ظرف طارئ', desc: 'حالة طارئة تمنعني', icon: AlertTriangle },
+                { id: 'time', label: 'الوقت غير مناسب', desc: 'الوقت المحدد لا يناسبني', icon: Calendar },
+                { id: 'custom', label: 'سبب آخر', desc: 'أدخل سببك الخاص', icon: MessageSquare },
+              ].map(option => {
+                const isSelected = rejectSelectedOption === option.id
+                const Icon = option.icon
+                return (
+                  <button
+                    key={option.id}
+                    onClick={() => {
+                      setRejectSelectedOption(option.id)
+                      if (option.id === 'custom') {
+                        setRejectReason('')
+                        setRejectCustomReason('')
+                      } else {
+                        setRejectReason(option.label)
+                        setRejectCustomReason('')
+                      }
+                    }}
+                    className={`w-full flex items-center gap-3 p-3 rounded-xl border-2 transition-all duration-200 text-right ${
+                      isSelected
+                        ? 'border-red-400 bg-red-50/80 shadow-md shadow-red-500/10 ring-1 ring-red-200/50'
+                        : 'border-gray-200 hover:border-red-200 hover:bg-red-50/30'
+                    }`}
+                  >
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
+                      isSelected
+                        ? 'bg-gradient-to-br from-red-500 to-rose-600 shadow-md shadow-red-500/25'
+                        : 'bg-gray-100'
+                    }`}>
+                      <Icon className={`w-5 h-5 ${isSelected ? 'text-white' : 'text-gray-400'}`} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-sm font-bold ${isSelected ? 'text-red-700' : 'text-gray-700'}`}>{option.label}</p>
+                      <p className={`text-xs ${isSelected ? 'text-red-500' : 'text-gray-400'}`}>{option.desc}</p>
+                    </div>
+                    {isSelected && (
+                      <div className="w-6 h-6 rounded-full bg-red-500 flex items-center justify-center shrink-0">
+                        <Check className="w-4 h-4 text-white" />
+                      </div>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+
+            {/* Custom reason input — shown only when "سبب آخر" is selected */}
+            {rejectSelectedOption === 'custom' && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-full bg-amber-500 text-white text-xs flex items-center justify-center font-bold shrink-0">2</div>
+                  <p className="text-sm font-bold text-gray-700">اكتب سببك</p>
+                </div>
+                <Textarea
+                  value={rejectCustomReason}
+                  onChange={(e) => setRejectCustomReason(e.target.value)}
+                  placeholder="يرجى توضيح سبب رفضك للمهمة..."
+                  className="border-red-200 focus:border-red-400 min-h-[80px] resize-none rounded-xl"
+                  maxLength={500}
+                  autoFocus
+                />
+                <p className="text-[10px] text-gray-400 text-left">{rejectCustomReason.length}/500</p>
               </div>
-            </div>
-            <div>
-              <Label className="text-sm font-bold text-gray-700 mb-1.5 block">سبب الرفض <span className="text-red-500">*</span></Label>
-              <Textarea
-                value={rejectReason}
-                onChange={(e) => setRejectReason(e.target.value)}
-                placeholder="يرجى توضيح سبب رفض المهمة (مثال: لدي مهمة أخرى في نفس الوقت، الموقع بعيد جداً، لا أملك المعدات اللازمة...)"
-                className="border-red-200 focus:border-red-400 min-h-[100px] resize-none"
-                maxLength={500}
-              />
-              <p className="text-[10px] text-gray-400 mt-1 text-left">{rejectReason.length}/500</p>
-            </div>
-            {/* Quick reason suggestions */}
-            <div className="flex flex-wrap gap-1.5">
-              {['لدي مهمة أخرى', 'الموقع بعيد', 'لا أملك المعدات', 'الوقت غير مناسب', 'ظرف طارئ'].map(reason => (
-                <button
-                  key={reason}
-                  onClick={() => setRejectReason(reason)}
-                  className="px-2.5 py-1 text-xs rounded-lg bg-gray-100 text-gray-600 hover:bg-red-50 hover:text-red-600 transition-colors border border-gray-200 hover:border-red-200"
-                >
-                  {reason}
-                </button>
-              ))}
-            </div>
+            )}
           </div>
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => { setRejectDialogOpen(false); setRejectReason(''); setRejectAssignmentId(null) }} className="flex-1">تراجع</Button>
+          <DialogFooter className="gap-2 px-6 pb-6 pt-3 shrink-0 border-t border-gray-100 bg-white/80 backdrop-blur-sm sticky bottom-0">
+            <Button variant="outline" onClick={() => { setRejectDialogOpen(false); setRejectReason(''); setRejectAssignmentId(null); setRejectCustomReason(''); setRejectSelectedOption('') }} className="flex-1 h-11">تراجع</Button>
             <Button
               variant="destructive"
-              onClick={handleConfirmReject}
-              disabled={actionLoading || !rejectReason.trim()}
-              className="flex-1 bg-gradient-to-l from-red-500 to-rose-600 shadow-lg shadow-red-500/25"
+              onClick={async () => {
+                const finalReason = rejectSelectedOption === 'custom' ? rejectCustomReason.trim() : rejectReason
+                if (!finalReason) {
+                  toast({ title: 'خطأ', description: rejectSelectedOption === 'custom' ? 'يرجى كتابة سبب الرفض' : 'يرجى اختيار سبب الرفض', variant: 'destructive' })
+                  return
+                }
+                setRejectReason(finalReason)
+                // Directly call the reject logic instead of setTimeout
+                if (!rejectAssignmentId || !nurseId) return
+                setActionLoading(true)
+                try {
+                  const res = await fetch('/api/nurse/accept-assignment', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ assignmentId: rejectAssignmentId, nurseId, action: 'reject', rejectionReason: finalReason }),
+                  })
+                  if (res.ok) {
+                    toast({ title: 'تم رفض المهمة', description: 'تم إبلاغ الإدارة وسيتم تعيين ممرض آخر' })
+                    setRejectDialogOpen(false)
+                    setRejectAssignmentId(null)
+                    setRejectReason('')
+                    setRejectCustomReason('')
+                    setRejectSelectedOption('')
+                    fetchAssignments()
+                  } else {
+                    const data = await res.json().catch(() => ({}))
+                    toast({ title: 'خطأ', description: data.error || 'حدث خطأ', variant: 'destructive' })
+                  }
+                } catch {
+                  toast({ title: 'خطأ', description: 'حدث خطأ في الاتصال', variant: 'destructive' })
+                } finally {
+                  setActionLoading(false)
+                }
+              }}
+              disabled={actionLoading || (!rejectReason.trim() && !rejectCustomReason?.trim()) || (rejectSelectedOption === 'custom' && !rejectCustomReason.trim())}
+              className="flex-1 h-11 bg-gradient-to-l from-red-500 to-rose-600 shadow-lg shadow-red-500/25"
             >
-              {actionLoading ? <Loader2 className="w-4 h-4 ml-1 animate-spin" /> : <X className="w-4 h-4 ml-1" />}
+              {actionLoading ? <Loader2 className="w-4 h-4 ml-1 animate-spin" /> : <XCircle className="w-4 h-4 ml-1" />}
               تأكيد الرفض
             </Button>
           </DialogFooter>

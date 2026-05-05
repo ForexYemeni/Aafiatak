@@ -5,6 +5,9 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: true,
   },
   reactStrictMode: false,
+  turbopack: {
+    root: '..',
+  },
   serverExternalPackages: [
     'firebase-admin',
     '@google-cloud/firestore',
