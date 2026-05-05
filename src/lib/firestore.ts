@@ -450,7 +450,7 @@ export async function updateServiceRequest(id: string, data: Record<string, any>
   
   // Return the updated request with joined data
   const doc = await firestore.collection('serviceRequests').doc(id).get()
-  const requestData = doc.data()!
+  const requestData = convertTimestamps(doc.data()!)
   
   const beneficiaryDoc = await firestore.collection('beneficiaries').doc(requestData.beneficiaryId).get()
   const serviceDoc = await firestore.collection('services').doc(requestData.serviceId).get()
@@ -463,7 +463,7 @@ export async function updateServiceRequest(id: string, data: Record<string, any>
   
   let assignment = null
   if (!assignmentSnapshot.empty) {
-    const assignData = assignmentSnapshot.docs[0].data()
+    const assignData = convertTimestamps(assignmentSnapshot.docs[0].data())
     const nurseDoc = await firestore.collection('nurses').doc(assignData.nurseId).get()
     assignment = {
       id: assignmentSnapshot.docs[0].id,
@@ -542,11 +542,11 @@ export async function getAssignmentsByNurseId(nurseId: string) {
   
   const assignments = []
   for (const doc of snapshot.docs) {
-    const data = doc.data()
+    const data = convertTimestamps(doc.data())
     const requestDoc = await firestore.collection('serviceRequests').doc(data.requestId).get()
     
     if (requestDoc.exists) {
-      const requestData = requestDoc.data()!
+      const requestData = convertTimestamps(requestDoc.data()!)
       const beneficiaryDoc = await firestore.collection('beneficiaries').doc(requestData.beneficiaryId).get()
       const serviceDoc = await firestore.collection('services').doc(requestData.serviceId).get()
       
@@ -585,7 +585,7 @@ export async function createAssignment(data: {
   const nurseDoc = await firestore.collection('nurses').doc(data.nurseId).get()
   // Fetch the request with beneficiary and service
   const requestDoc = await firestore.collection('serviceRequests').doc(data.requestId).get()
-  const requestData = requestDoc.data()!
+  const requestData = convertTimestamps(requestDoc.data()!)
   const beneficiaryDoc = await firestore.collection('beneficiaries').doc(requestData.beneficiaryId).get()
   const serviceDoc = await firestore.collection('services').doc(requestData.serviceId).get()
 
@@ -624,12 +624,12 @@ export async function updateAssignment(id: string, data: Record<string, any>) {
   
   // Return the updated assignment with joined data
   const doc = await firestore.collection('serviceAssignments').doc(id).get()
-  const assignData = doc.data()!
+  const assignData = convertTimestamps(doc.data()!)
   
   const requestDoc = await firestore.collection('serviceRequests').doc(assignData.requestId).get()
   let requestWithJoins = null
   if (requestDoc.exists) {
-    const requestData = requestDoc.data()!
+    const requestData = convertTimestamps(requestDoc.data()!)
     const beneficiaryDoc = await firestore.collection('beneficiaries').doc(requestData.beneficiaryId).get()
     const serviceDoc = await firestore.collection('services').doc(requestData.serviceId).get()
     requestWithJoins = {
@@ -741,7 +741,7 @@ export async function getAllBeneficiaries() {
     .orderBy('createdAt', 'desc')
     .get()
   return snapshot.docs.map(doc => {
-    const data = doc.data()
+    const data = convertTimestamps(doc.data())
     const { password, ...rest } = data
     return { id: doc.id, ...rest }
   })
@@ -1211,7 +1211,7 @@ export async function getSubAdmins(adminId: string) {
       .orderBy('createdAt', 'desc')
       .get()
     return snapshot.docs.map(doc => {
-      const data = doc.data()
+      const data = convertTimestamps(doc.data())
       const { password, ...rest } = data
       return { id: doc.id, ...rest }
     })
@@ -1223,7 +1223,7 @@ export async function getSubAdmins(adminId: string) {
         .where('adminId', '==', adminId)
         .get()
       const docs = snapshot.docs.map(doc => {
-        const data = doc.data()
+        const data = convertTimestamps(doc.data())
         const { password, ...rest } = data
         return { id: doc.id, ...rest }
       })
@@ -1274,7 +1274,7 @@ export async function updateSubAdmin(id: string, data: Record<string, any>) {
   }
   await firestore.collection('subAdmins').doc(id).update(updateData)
   const doc = await firestore.collection('subAdmins').doc(id).get()
-  const docData = doc.data()!
+  const docData = convertTimestamps(doc.data()!)
   const { password, ...rest } = docData
   return { id: doc.id, ...rest }
 }

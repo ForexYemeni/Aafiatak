@@ -89,6 +89,8 @@ interface AdminSettings {
 const statusFilters = [
   { key: 'all', label: 'الكل' },
   { key: 'pending', label: 'قيد الانتظار' },
+  { key: 'pending_confirmation', label: 'بانتظار التأكيد' },
+  { key: 'pending_payment', label: 'بانتظار الدفع' },
   { key: 'approved', label: 'مقبول' },
   { key: 'in_progress', label: 'قيد التنفيذ' },
   { key: 'completed', label: 'مكتمل' },
@@ -139,6 +141,8 @@ const emergencyServiceTypes = [
 // Status right border color mapping (RTL)
 const statusBorderColor: Record<string, string> = {
   pending: 'border-r-4 border-r-amber-400',
+  pending_confirmation: 'border-r-4 border-r-yellow-400',
+  pending_payment: 'border-r-4 border-r-orange-400',
   approved: 'border-r-4 border-r-emerald-400',
   in_progress: 'border-r-4 border-r-blue-400',
   completed: 'border-r-4 border-r-violet-400',
@@ -150,6 +154,8 @@ const statusBorderColor: Record<string, string> = {
 // Status badge gradient mapping
 const statusGradientBadge: Record<string, string> = {
   pending: 'bg-gradient-to-r from-amber-500 to-orange-500 text-white',
+  pending_confirmation: 'bg-gradient-to-r from-yellow-500 to-amber-500 text-white',
+  pending_payment: 'bg-gradient-to-r from-orange-500 to-red-500 text-white',
   approved: 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white',
   in_progress: 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white',
   completed: 'bg-gradient-to-r from-violet-500 to-purple-500 text-white',
@@ -1034,7 +1040,14 @@ export default function BeneficiaryDashboard() {
     try {
       const now = new Date()
       const coords = extractCoordinates(address)
-      const res = await fetch(`/api/dynamic-pricing?serviceIds=${serviceIds.join(',')}&time=${now.getHours()}&dayOfWeek=${now.getDay()}&distanceKm=${coords ? '' : '0'}`)
+      // If we have coordinates, calculate distance; otherwise send 0
+      let distanceParam = '0'
+      if (coords) {
+        // Use a reasonable estimate or let the server calculate based on coordinates
+        // For now, we send coordinates so the server can estimate distance
+        distanceParam = '0' // Will be enhanced with actual distance calculation
+      }
+      const res = await fetch(`/api/dynamic-pricing?serviceIds=${serviceIds.join(',')}&time=${now.getHours()}&dayOfWeek=${now.getDay()}&distanceKm=${distanceParam}`)
       if (res.ok) {
         const data = await res.json()
         setDynamicPricing(data)
@@ -1226,7 +1239,7 @@ export default function BeneficiaryDashboard() {
 
   // Computed values
   const categories = [...new Set(services.map(s => s.category))]
-  const pendingRequests = requests.filter(r => r.status === 'pending').length
+  const pendingRequests = requests.filter(r => r.status === 'pending' || r.status === 'pending_confirmation' || r.status === 'pending_payment').length
   const completedRequests = requests.filter(r => r.status === 'completed').length
   const unreadNotifications = notifications.filter(n => !n.read).length
 
@@ -1245,6 +1258,8 @@ export default function BeneficiaryDashboard() {
 
   const filteredRequests = statusFilter === 'all'
     ? requests
+    : statusFilter === 'pending'
+    ? requests.filter(r => r.status === 'pending' || r.status === 'pending_confirmation' || r.status === 'pending_payment')
     : requests.filter(r => r.status === statusFilter)
 
   const paymentHistory = requests.filter(r => r.status === 'completed')
@@ -1299,6 +1314,18 @@ export default function BeneficiaryDashboard() {
       return basePrice * (1 - validCoupon.discountPercent / 100)
     }
     return basePrice
+  }
+
+  // Calculate final price with dynamic pricing + coupon
+  const getFinalPrice = () => {
+    if (dynamicPricing?.totalPrice) {
+      // Apply coupon discount to the dynamic total price
+      if (validCoupon) {
+        return Math.round(dynamicPricing.totalPrice * (1 - validCoupon.discountPercent / 100))
+      }
+      return dynamicPricing.totalPrice
+    }
+    return getDiscountedPrice()
   }
 
   return (
@@ -1870,7 +1897,7 @@ export default function BeneficiaryDashboard() {
                                         </Button>
                                       </>
                                     )}
-                                    {req.status === 'pending' && (
+                                    {(req.status === 'pending' || req.status === 'pending_confirmation' || req.status === 'pending_payment') && (
                                       <Button
                                         variant="outline"
                                         size="sm"
@@ -2023,16 +2050,16 @@ export default function BeneficiaryDashboard() {
                               <p className="text-xs text-muted-foreground">السعر الأساسي</p>
                               <p className="text-lg font-bold text-emerald-600">{formatPrice(dynamicPricing.basePrice || 0)}</p>
                             </div>
-                            {dynamicPricing.distanceFee > 0 && (
+                            {dynamicPricing.pricing?.distanceSurcharge > 0 && (
                               <div>
                                 <p className="text-xs text-muted-foreground">رسوم المسافة</p>
-                                <p className="text-lg font-bold text-amber-600">+{formatPrice(dynamicPricing.distanceFee)}</p>
+                                <p className="text-lg font-bold text-amber-600">+{formatPrice(dynamicPricing.pricing.distanceSurcharge)}</p>
                               </div>
                             )}
-                            {dynamicPricing.timeFee > 0 && (
+                            {dynamicPricing.pricing?.timeFee > 0 && (
                               <div>
                                 <p className="text-xs text-muted-foreground">رسوم الوقت</p>
-                                <p className="text-lg font-bold text-blue-600">+{formatPrice(dynamicPricing.timeFee)}</p>
+                                <p className="text-lg font-bold text-blue-600">+{formatPrice(dynamicPricing.pricing.timeFee)}</p>
                               </div>
                             )}
                             <div className="mr-auto">
@@ -3671,7 +3698,7 @@ export default function BeneficiaryDashboard() {
               {selectedService && (
                 <div className="mt-2 flex items-center justify-between">
                   <p className="text-violet-100 text-sm">{selectedService.name}</p>
-                  <span className="text-white font-bold">{formatPrice(dynamicPricing?.totalPrice || selectedService.price)}</span>
+                  <span className="text-white font-bold">{formatPrice(getFinalPrice() || selectedService.price)}</span>
                 </div>
               )}
             </div>
@@ -4051,16 +4078,16 @@ export default function BeneficiaryDashboard() {
                     <span className="text-muted-foreground">السعر الأساسي</span>
                     <span>{formatPrice(dynamicPricing.basePrice || 0)}</span>
                   </div>
-                  {dynamicPricing.distanceFee > 0 && (
+                  {dynamicPricing.pricing?.distanceSurcharge > 0 && (
                     <div className="flex items-center justify-between text-xs mb-1">
                       <span className="text-amber-600">رسوم المسافة</span>
-                      <span className="text-amber-600">+{formatPrice(dynamicPricing.distanceFee)}</span>
+                      <span className="text-amber-600">+{formatPrice(dynamicPricing.pricing.distanceSurcharge)}</span>
                     </div>
                   )}
-                  {dynamicPricing.timeFee > 0 && (
+                  {dynamicPricing.pricing?.timeFee > 0 && (
                     <div className="flex items-center justify-between text-xs mb-1">
                       <span className="text-blue-600">رسوم الوقت</span>
-                      <span className="text-blue-600">+{formatPrice(dynamicPricing.timeFee)}</span>
+                      <span className="text-blue-600">+{formatPrice(dynamicPricing.pricing.timeFee)}</span>
                     </div>
                   )}
                 </div>
@@ -4078,7 +4105,7 @@ export default function BeneficiaryDashboard() {
               <Separator className="my-2" />
               <div className="flex items-center justify-between font-bold">
                 <span>السعر الإجمالي</span>
-                <span className="text-violet-700 text-lg">{formatPrice(dynamicPricing?.totalPrice || getDiscountedPrice())}</span>
+                <span className="text-violet-700 text-lg">{formatPrice(getFinalPrice())}</span>
               </div>
             </div>
 

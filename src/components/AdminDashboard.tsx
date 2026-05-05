@@ -1376,7 +1376,10 @@ export default function AdminDashboard() {
                                       <Clock className="w-3 h-3" />
                                       {formatDateTime(r.createdAt)}
                                     </span>
-                                    {r.updatedAt && r.updatedAt !== r.createdAt && (
+                                    {r.updatedAt && (() => {
+                                      const getSec = (t: any) => typeof t === 'object' && t !== null ? (t.seconds ?? t._seconds ?? 0) : 0
+                                      return getSec(r.updatedAt) !== getSec(r.createdAt) || ((r.updatedAt?.nanoseconds ?? 0) !== (r.createdAt?.nanoseconds ?? 0))
+                                    })() && (
                                       <span className="text-xs text-blue-400 flex items-center gap-1">
                                         <Navigation className="w-3 h-3" />
                                         آخر تحديث: {formatDateTime(r.updatedAt)}

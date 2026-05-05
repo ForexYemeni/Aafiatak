@@ -1130,8 +1130,9 @@ export default function NurseDashboard() {
                             )}
                             {assignment.request?.service?.price !== undefined && (() => {
                               const totalPrice = assignment.request?.dynamicPrice || assignment.request?.service?.price || 0
-                              const commissionPercent = 15
-                              const nurseFee = Math.round(totalPrice * (100 - commissionPercent) / 100)
+                              // Use commission from request data, fallback to 15%
+                              const commissionPercent = assignment.request?.commission?.percent || 15
+                              const nurseFee = assignment.request?.commission?.nursePayout || Math.round(totalPrice * (100 - commissionPercent) / 100)
                               return (
                                 <div className="flex items-center gap-1.5">
                                   <span className="font-medium text-gray-700">رسومك:</span>
@@ -2415,13 +2416,14 @@ export default function NurseDashboard() {
   // ==================== Earnings Tab ====================
 
   const EarningsTab = () => {
-    const commissionPercent = 15
-    const completedAssignments = assignments.filter(a => a.status === 'completed')
-    const totalEarnings = completedAssignments.reduce((sum, a) => {
+    const getCommissionPercent = (a: Assignment) => a.request?.commission?.percent || 15
+    const getNurseFee = (a: Assignment) => {
+      if (a.request?.commission?.nursePayout) return a.request.commission.nursePayout
       const totalPrice = a.request?.dynamicPrice || a.request?.service?.price || 0
-      const nurseFee = Math.round(totalPrice * (100 - commissionPercent) / 100)
-      return sum + nurseFee
-    }, 0)
+      return Math.round(totalPrice * (100 - getCommissionPercent(a)) / 100)
+    }
+    const completedAssignments = assignments.filter(a => a.status === 'completed')
+    const totalEarnings = completedAssignments.reduce((sum, a) => sum + getNurseFee(a), 0)
     const now = new Date()
     const thisMonthAssignments = completedAssignments.filter(a => {
       if (!a.updatedAt) return false
@@ -2433,11 +2435,7 @@ export default function NurseDashboard() {
       } else return false
       return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear()
     })
-    const thisMonthEarnings = thisMonthAssignments.reduce((sum, a) => {
-      const totalPrice = a.request?.dynamicPrice || a.request?.service?.price || 0
-      const nurseFee = Math.round(totalPrice * (100 - commissionPercent) / 100)
-      return sum + nurseFee
-    }, 0)
+    const thisMonthEarnings = thisMonthAssignments.reduce((sum, a) => sum + getNurseFee(a), 0)
 
     const stats = [
       {
@@ -2538,7 +2536,7 @@ export default function NurseDashboard() {
                       </div>
                     </div>
                     <div className="text-left shrink-0">
-                      <p className="text-sm font-bold text-emerald-600">{formatPrice(Math.round((assignment.request?.dynamicPrice || assignment.request?.service?.price || 0) * (100 - commissionPercent) / 100))}</p>
+                      <p className="text-sm font-bold text-emerald-600">{formatPrice(getNurseFee(assignment))}</p>
                       <p className="text-[10px] text-gray-400">{formatDate(assignment.updatedAt)}</p>
                     </div>
                   </div>

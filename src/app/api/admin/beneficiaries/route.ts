@@ -1,20 +1,14 @@
 import { NextResponse } from 'next/server'
-import { firestore, firebaseInitialized } from '@/lib/firebase-admin'
+import { firebaseInitialized } from '@/lib/firebase-admin'
+import { getAllBeneficiaries } from '@/lib/firestore'
 
 export async function GET() {
   try {
-    if (!firebaseInitialized || !firestore) {
+    if (!firebaseInitialized) {
       return NextResponse.json({ error: 'Firebase غير متصل' }, { status: 500 })
     }
 
-    const snapshot = await firestore.collection('beneficiaries').orderBy('createdAt', 'desc').get()
-    const beneficiaries = snapshot.docs.map(doc => {
-      const data = doc.data()
-      // Remove password from response
-      const { password, ...rest } = data
-      return { id: doc.id, ...rest }
-    })
-
+    const beneficiaries = await getAllBeneficiaries()
     return NextResponse.json(beneficiaries)
   } catch (error: any) {
     console.error('Get beneficiaries error:', error.message)

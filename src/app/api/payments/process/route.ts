@@ -8,7 +8,19 @@ function checkFirebase() {
 }
 
 function docToObject(doc: FirebaseFirestore.QueryDocumentSnapshot | FirebaseFirestore.DocumentSnapshot) {
-  return { id: doc.id, ...doc.data() }
+  const data = doc.data()
+  const converted = {} as Record<string, any>
+  for (const key of Object.keys(data || {})) {
+    const val = data![key]
+    if (val && typeof val === 'object' && 'seconds' in val && 'nanoseconds' in val) {
+      converted[key] = { seconds: val.seconds, nanoseconds: val.nanoseconds }
+    } else if (val && typeof val === 'object' && '_seconds' in val && '_nanoseconds' in val) {
+      converted[key] = { seconds: val._seconds, nanoseconds: val._nanoseconds }
+    } else {
+      converted[key] = val
+    }
+  }
+  return { id: doc.id, ...converted }
 }
 
 export async function GET(request: NextRequest) {
@@ -102,9 +114,23 @@ export async function POST(request: NextRequest) {
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     })
 
+    // Re-read to get actual timestamps
+    const createdDoc = await firestore.collection('transactions').doc(docRef.id).get()
+    const createdData = createdDoc.data()
     return NextResponse.json({
       id: docRef.id,
-      ...transactionData,
+      ...createdData ? (() => {
+        const c = {} as Record<string, any>
+        for (const key of Object.keys(createdData)) {
+          const val = createdData[key]
+          if (val && typeof val === 'object' && 'seconds' in val && 'nanoseconds' in val) {
+            c[key] = { seconds: val.seconds, nanoseconds: val.nanoseconds }
+          } else {
+            c[key] = val
+          }
+        }
+        return c
+      })() : transactionData,
       message: paymentStatus === 'pending_confirmation'
         ? 'تم إرسال إثبات الدفع بنجاح. سيتم مراجعته من قبل الإدارة وتأكيد الطلب'
         : 'تم إنشاء معاملة الدفع بنجاح',

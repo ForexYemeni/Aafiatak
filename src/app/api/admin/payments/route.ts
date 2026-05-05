@@ -11,7 +11,21 @@ export async function GET() {
   try {
     checkFirebase()
     const snapshot = await firestore.collection('paymentMethods').orderBy('createdAt', 'desc').get()
-    const payments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+    const payments = snapshot.docs.map(doc => {
+      const data = doc.data()
+      const converted = {} as Record<string, any>
+      for (const key of Object.keys(data)) {
+        const val = data[key]
+        if (val && typeof val === 'object' && 'seconds' in val && 'nanoseconds' in val) {
+          converted[key] = { seconds: val.seconds, nanoseconds: val.nanoseconds }
+        } else if (val && typeof val === 'object' && '_seconds' in val && '_nanoseconds' in val) {
+          converted[key] = { seconds: val._seconds, nanoseconds: val._nanoseconds }
+        } else {
+          converted[key] = val
+        }
+      }
+      return { id: doc.id, ...converted }
+    })
     return NextResponse.json(payments)
   } catch (error: any) {
     console.error('Get payment methods error:', error.message)
@@ -105,7 +119,19 @@ export async function POST(request: NextRequest) {
     }
 
     const docRef = await firestore.collection('paymentMethods').add(paymentData)
-    return NextResponse.json({ id: docRef.id, ...paymentData })
+    // Re-read the document to get actual timestamps instead of sentinel values
+    const createdDoc = await firestore.collection('paymentMethods').doc(docRef.id).get()
+    const createdData = createdDoc.data()
+    const convertedData = {} as Record<string, any>
+    for (const key of Object.keys(createdData || {})) {
+      const val = createdData![key]
+      if (val && typeof val === 'object' && 'seconds' in val && 'nanoseconds' in val) {
+        convertedData[key] = { seconds: val.seconds, nanoseconds: val.nanoseconds }
+      } else {
+        convertedData[key] = val
+      }
+    }
+    return NextResponse.json({ id: docRef.id, ...convertedData })
   } catch (error: any) {
     console.error('Create payment method error:', error.message)
     return NextResponse.json({ error: 'حدث خطأ في الخادم' }, { status: 500 })

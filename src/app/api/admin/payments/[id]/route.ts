@@ -34,7 +34,17 @@ export async function PUT(
     await firestore.collection('paymentMethods').doc(id).update(updateData)
 
     const updated = await firestore.collection('paymentMethods').doc(id).get()
-    return NextResponse.json({ id: updated.id, ...updated.data() })
+    const updatedData = updated.data()
+    const convertedData = {} as Record<string, any>
+    for (const key of Object.keys(updatedData || {})) {
+      const val = updatedData![key]
+      if (val && typeof val === 'object' && 'seconds' in val && 'nanoseconds' in val) {
+        convertedData[key] = { seconds: val.seconds, nanoseconds: val.nanoseconds }
+      } else {
+        convertedData[key] = val
+      }
+    }
+    return NextResponse.json({ id: updated.id, ...convertedData })
   } catch (error: any) {
     console.error('Update payment method error:', error.message)
     return NextResponse.json({ error: 'حدث خطأ في الخادم' }, { status: 500 })
