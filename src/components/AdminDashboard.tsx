@@ -479,7 +479,9 @@ export default function AdminDashboard() {
   // ─── Request actions ───────────────────────────────────────
   const handleOpenApproveDialog = async (req: any) => {
     setSelectedRequest(req); setApproveMode('assign'); setSelectedNurseId(''); setNurseDistances({});
-    setPaymentConfirmed(false); setPaymentConfirmStep(true); setApproveServicesExpanded(false); setApproveDialog(true)
+    // If request is already approved/paid, skip payment confirmation step
+    const alreadyPaid = req.status === 'approved' || req.paymentStatus === 'paid'
+    setPaymentConfirmed(alreadyPaid); setPaymentConfirmStep(!alreadyPaid); setApproveServicesExpanded(false); setApproveDialog(true)
     // Fetch nurses from API if not already loaded (e.g. when on requests tab)
     let currentNurses = nurses
     if (nurses.length === 0) {
