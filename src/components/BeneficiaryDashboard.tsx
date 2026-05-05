@@ -3434,7 +3434,16 @@ export default function BeneficiaryDashboard() {
                         const phone = adminSettings.whatsappNumber || adminSettings.phone || ''
                         const orderId = lastCreatedRequestId ? lastCreatedRequestId.slice(0, 8).toUpperCase() : ''
                         const amountStr = formatPrice(amount)
-                        const message = `سلام عليكم\n\nأريد إثبات دفع لطلب #${orderId}\nالمبلغ: ${amountStr}\nطريقة الدفع: ${typeLabel}\n\nتم التحويل بنجاح ✅\nمرفق لقطة شاشة إثبات التحويل`
+                        // Build detailed payment method info
+                        let paymentDetail = typeLabel
+                        if (selectedPm.exchangeName) paymentDetail += ` (${selectedPm.exchangeName})`
+                        if (selectedPm.walletType) {
+                          const walletNames: Record<string, string> = { 'one-cash': 'ون كاش', 'cash-wallet': 'محفظة كاش', 'jawali': 'جوالي', 'yemen-wallet': 'يمن والت', 'saba-cash': 'سبأكاش', 'mahfathati': 'محفظتي', 'pyes': 'بيس', 'floosak': 'فلوسك', 'jaib': 'جيب', 'shamil-money': 'شامل مالي', 'em-pay': 'إم باي', 'bin-dowal-pay': 'بن دول باي', 'national-wallet': 'المحفظة الوطنية', 'other': 'أخرى' }
+                          paymentDetail += ` (${walletNames[selectedPm.walletType] || selectedPm.walletType})`
+                        }
+                        if (selectedPm.bankName) paymentDetail += ` (${selectedPm.bankName})`
+                        const benefPhone = beneficiaryUser?.phone || ''
+                        const message = `سلام عليكم\n\nأريد إثبات دفع لطلب #${orderId}\nالمبلغ: ${amountStr}\nطريقة الدفع: ${paymentDetail}${benefPhone ? `\nرقم المستفيد: ${benefPhone}` : ''}\n\nتم التحويل بنجاح ✅\nمرفق لقطة شاشة إثبات التحويل`
                         const whatsappUrl = phone
                           ? `https://wa.me/${phone}?text=${encodeURIComponent(message)}`
                           : `https://wa.me/?text=${encodeURIComponent(message)}`

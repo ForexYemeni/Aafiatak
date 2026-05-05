@@ -976,8 +976,16 @@ export async function createEmergencyRequest(data: {
   const { status: providedStatus, paymentStatus, ...restData } = data
   const finalStatus = providedStatus || 'pending'
 
+  // Filter out undefined values to prevent Firestore errors
+  const cleanData: Record<string, any> = {}
+  for (const [key, value] of Object.entries(restData)) {
+    if (value !== undefined) {
+      cleanData[key] = value
+    }
+  }
+
   const docRef = await firestore.collection('emergencyRequests').add({
-    ...restData,
+    ...cleanData,
     beneficiaryName,
     status: finalStatus,
     paymentStatus: paymentStatus || 'unpaid',
@@ -985,7 +993,7 @@ export async function createEmergencyRequest(data: {
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   })
-  return { id: docRef.id, ...restData, beneficiaryName, status: finalStatus, paymentStatus: paymentStatus || 'unpaid', isEmergency: true }
+  return { id: docRef.id, ...cleanData, beneficiaryName, status: finalStatus, paymentStatus: paymentStatus || 'unpaid', isEmergency: true }
 }
 
 export async function getEmergencyRequestsByBeneficiary(beneficiaryId: string) {

@@ -1449,7 +1449,10 @@ export default function AdminDashboard() {
                                 )}
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-2 flex-wrap">
-                                    <p className="font-bold">{r.service?.name || 'خدمة غير محددة'}</p>
+                                    <p className="font-bold">{r.isMultiService && r.services ? r.services.map((s: any) => s.name).join(' + ') : (r.service?.name || 'خدمة غير محددة')}</p>
+                                    {r.isMultiService && r.services && r.services.length > 1 && (
+                                      <Badge className="bg-violet-100 text-violet-700 border-0 text-[10px] px-1.5 py-0">{r.services.length} خدمات</Badge>
+                                    )}
                                     <Badge className={`${getStatusColor(r.status)} border text-xs font-bold px-2.5 py-0.5`}>{getStatusLabel(r.status)}</Badge>
                                     {r.isEmergency && <Badge className="bg-red-500 text-white border-0 text-xs animate-pulse"><AlertTriangle className="w-3 h-3 ml-1" />طوارئ</Badge>}
                                   </div>
@@ -2639,8 +2642,24 @@ export default function AdminDashboard() {
                       <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center">
                         <ClipboardList className="w-4 h-4 text-white" />
                       </div>
-                      <p className="font-bold text-gray-800">{selectedRequest.service?.name || 'خدمة'}</p>
+                      <p className="font-bold text-gray-800">{selectedRequest.isMultiService && selectedRequest.services ? selectedRequest.services.map((s: any) => s.name).join(' + ') : (selectedRequest.service?.name || 'خدمة')}</p>
                     </div>
+                    {/* Multi-service details */}
+                    {selectedRequest.isMultiService && selectedRequest.services && selectedRequest.services.length > 1 && (
+                      <div className="mt-2 p-2.5 bg-white/60 rounded-lg border border-amber-100 space-y-1.5">
+                        <p className="text-xs font-bold text-amber-700">الخدمات المطلوبة ({selectedRequest.services.length})</p>
+                        {selectedRequest.services.map((s: any, idx: number) => (
+                          <div key={s.id || idx} className="flex items-center justify-between text-sm">
+                            <span className="text-gray-700">{idx + 1}. {s.name}</span>
+                            <span className="text-amber-600 font-medium">{formatPrice(s.price)}</span>
+                          </div>
+                        ))}
+                        <div className="border-t border-amber-200 pt-1.5 flex items-center justify-between">
+                          <span className="text-xs font-bold text-amber-700">مجموع الخدمات</span>
+                          <span className="text-xs font-bold text-amber-700">{formatPrice(selectedRequest.services.reduce((sum: number, s: any) => sum + (s.price || 0), 0))}</span>
+                        </div>
+                      </div>
+                    )}
                     <p className="text-sm text-gray-500">المستفيد: {selectedRequest.beneficiary?.name || 'غير محدد'}</p>
                     {(selectedRequest.beneficiary?.location || selectedRequest.address || selectedRequest.location) && (
                       <button
