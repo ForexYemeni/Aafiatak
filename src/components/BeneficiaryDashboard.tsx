@@ -1634,6 +1634,101 @@ export default function BeneficiaryDashboard() {
                 {/* ===== SERVICES TAB ===== */}
                 {activeTab === 'services' && (
                   <div className="space-y-6">
+                    {/* ===== Order Completion Card - TOP ===== */}
+                    <AnimatePresence>
+                      {selectedServices.length > 0 && (
+                        <motion.div
+                          initial={{ opacity: 0, y: -20, scale: 0.97 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          exit={{ opacity: 0, y: -20, scale: 0.97 }}
+                          transition={{ duration: 0.35, ease: 'easeOut' }}
+                          className="relative"
+                        >
+                          <div className="relative overflow-hidden rounded-2xl shadow-2xl shadow-violet-500/20">
+                            {/* Gradient Background */}
+                            <div className="absolute inset-0 bg-gradient-to-l from-violet-600 via-purple-600 to-fuchsia-600" />
+                            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.15)_0%,transparent_60%)]" />
+                            {/* Decorative dots */}
+                            <div className="absolute top-3 left-3 w-24 h-24 opacity-10">
+                              <svg viewBox="0 0 100 100" fill="white"><circle cx="10" cy="10" r="2"/><circle cx="30" cy="10" r="2"/><circle cx="50" cy="10" r="2"/><circle cx="10" cy="30" r="2"/><circle cx="30" cy="30" r="2"/><circle cx="50" cy="30" r="2"/><circle cx="10" cy="50" r="2"/><circle cx="30" cy="50" r="2"/><circle cx="50" cy="50" r="2"/></svg>
+                            </div>
+
+                            <div className="relative z-10 p-5 text-white">
+                              {/* Header Row */}
+                              <div className="flex items-center justify-between mb-4">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-11 h-11 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center shadow-lg border border-white/10">
+                                    <ShoppingBag className="w-5 h-5" />
+                                  </div>
+                                  <div>
+                                    <h3 className="font-bold text-base">سلة الخدمات المختارة</h3>
+                                    <p className="text-violet-200 text-xs">{selectedServices.length} {selectedServices.length === 1 ? 'خدمة مختارة' : selectedServices.length === 2 ? 'خدمتان مختارتان' : 'خدمات مختارة'}</p>
+                                  </div>
+                                </div>
+                                <button
+                                  onClick={() => { setSelectedServices([]); setSelectedService(null); setDynamicPricing(null) }}
+                                  className="flex items-center gap-1.5 bg-white/15 hover:bg-white/25 backdrop-blur-sm px-3 py-1.5 rounded-xl text-xs transition-all duration-200 border border-white/10"
+                                >
+                                  <XCircle className="w-3.5 h-3.5" />
+                                  إلغاء الكل
+                                </button>
+                              </div>
+
+                              {/* Selected Services Tags */}
+                              <div className="flex flex-wrap gap-2 mb-4 max-h-24 overflow-y-auto">
+                                {selectedServices.map((s: any) => (
+                                  <span key={s.id} className="inline-flex items-center gap-1.5 bg-white/15 backdrop-blur-sm rounded-lg px-3 py-1.5 text-xs border border-white/10 hover:bg-white/25 transition-colors">
+                                    <span className="truncate max-w-[120px]">{s.name}</span>
+                                    <span className="text-emerald-200 font-bold">{formatPrice(s.price)}</span>
+                                    <button
+                                      onClick={() => {
+                                        const newSel = selectedServices.filter((sv: any) => sv.id !== s.id)
+                                        setSelectedServices(newSel)
+                                        if (newSel.length === 0) { setSelectedService(null); setDynamicPricing(null) }
+                                        else if (newSel.length > 0) fetchDynamicPricing(newSel.map((sv: any) => sv.id), beneficiaryUser?.location || requestForm.address || '')
+                                      }}
+                                      className="hover:bg-white/30 rounded-full p-0.5 transition-colors mr-0.5"
+                                    >
+                                      <X className="w-3 h-3" />
+                                    </button>
+                                  </span>
+                                ))}
+                              </div>
+
+                              {/* Price & Action Row */}
+                              <div className="flex items-center justify-between gap-4 pt-3 border-t border-white/15">
+                                <div>
+                                  <span className="text-violet-200 text-xs">الإجمالي</span>
+                                  <div className="flex items-baseline gap-1">
+                                    <p className="text-2xl font-black">
+                                      {formatPrice(dynamicPricing?.totalPrice || selectedServices.reduce((sum: number, s: any) => sum + (s.price || 0), 0))}
+                                    </p>
+                                    {dynamicPricing?.pricing && (
+                                      <span className="text-[10px] text-violet-200">شامل الرسوم</span>
+                                    )}
+                                  </div>
+                                </div>
+                                <Button
+                                  onClick={() => {
+                                    setRequestForm(prev => ({ ...prev, address: prev.address || beneficiaryUser?.location || profileLocation || '' }))
+                                    fetchRequestPaymentMethods()
+                                    if (selectedServices.length > 0) {
+                                      fetchDynamicPricing(selectedServices.map((s: any) => s.id), beneficiaryUser?.location || profileLocation || '')
+                                    }
+                                    setRequestDialog(true)
+                                  }}
+                                  className="bg-white text-violet-700 hover:bg-violet-50 font-bold px-8 py-3 rounded-xl shadow-lg hover:shadow-xl hover:scale-[1.03] active:scale-[0.97] transition-all text-base"
+                                >
+                                  <ShoppingBag className="w-5 h-5 ml-2" />
+                                  إتمام الطلب
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+
                     {/* Stats Cards */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
                       {[
@@ -1897,73 +1992,7 @@ export default function BeneficiaryDashboard() {
                       </div>
                     )}
 
-                    {/* ===== Floating Selected Services Bar ===== */}
-                    <AnimatePresence>
-                      {selectedServices.length > 0 && (
-                        <motion.div
-                          initial={{ opacity: 0, y: 40 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: 40 }}
-                          className="sticky bottom-4 z-30 mx-2"
-                        >
-                          <div className="bg-gradient-to-l from-violet-600 via-purple-600 to-fuchsia-600 rounded-2xl shadow-2xl shadow-violet-500/30 p-4 text-white">
-                            <div className="flex items-center justify-between mb-3">
-                              <div className="flex items-center gap-2">
-                                <ShoppingBag className="w-5 h-5" />
-                                <span className="font-bold text-sm">{selectedServices.length} خدمات مختارة</span>
-                              </div>
-                              <button
-                                onClick={() => { setSelectedServices([]); setSelectedService(null); setDynamicPricing(null) }}
-                                className="text-white/70 hover:text-white text-xs flex items-center gap-1 transition-colors"
-                              >
-                                <XCircle className="w-3.5 h-3.5" />
-                                إلغاء الكل
-                              </button>
-                            </div>
-                            <div className="flex flex-wrap gap-1.5 mb-3 max-h-20 overflow-y-auto">
-                              {selectedServices.map((s: any) => (
-                                <span key={s.id} className="inline-flex items-center gap-1 bg-white/20 rounded-lg px-2.5 py-1 text-xs">
-                                  {s.name}
-                                  <button
-                                    onClick={() => {
-                                      const newSel = selectedServices.filter((sv: any) => sv.id !== s.id)
-                                      setSelectedServices(newSel)
-                                      if (newSel.length === 0) { setSelectedService(null); setDynamicPricing(null) }
-                                      else if (newSel.length > 0) fetchDynamicPricing(newSel.map((sv: any) => sv.id), beneficiaryUser?.location || requestForm.address || '')
-                                    }}
-                                    className="hover:bg-white/30 rounded-full p-0.5 transition-colors"
-                                  >
-                                    <X className="w-3 h-3" />
-                                  </button>
-                                </span>
-                              ))}
-                            </div>
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <span className="text-violet-100 text-xs">الإجمالي</span>
-                                <p className="text-xl font-black">
-                                  {formatPrice(dynamicPricing?.totalPrice || selectedServices.reduce((sum: number, s: any) => sum + (s.price || 0), 0))}
-                                </p>
-                              </div>
-                              <Button
-                                onClick={() => {
-                                  setRequestForm(prev => ({ ...prev, address: prev.address || beneficiaryUser?.location || profileLocation || '' }))
-                                  fetchRequestPaymentMethods()
-                                  if (selectedServices.length > 0) {
-                                    fetchDynamicPricing(selectedServices.map((s: any) => s.id), beneficiaryUser?.location || profileLocation || '')
-                                  }
-                                  setRequestDialog(true)
-                                }}
-                                className="bg-white text-violet-700 hover:bg-violet-50 font-bold px-6 rounded-xl shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all"
-                              >
-                                إتمام الطلب
-                                <ChevronDown className="w-4 h-4 mr-1 rotate-[-90deg]" />
-                              </Button>
-                            </div>
-                          </div>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
+
                   </div>
                 )}
 
