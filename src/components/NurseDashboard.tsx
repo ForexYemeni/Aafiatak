@@ -157,6 +157,10 @@ interface NurseProfile {
   nationalId: string
   licenseNumber: string
   licenseExpiryDate: string
+  nationalIdPhotoUrl?: string
+  licensePhotoUrl?: string
+  isVerified?: boolean
+  documentsSubmittedAt?: any
   status: string
   createdAt?: any
 }
@@ -333,6 +337,13 @@ export default function NurseDashboard() {
   const [portfolioSaving, setPortfolioSaving] = useState(false)
   const [newSpecialization, setNewSpecialization] = useState('')
   const [newCertification, setNewCertification] = useState('')
+
+  // Document upload state
+  const [documentUploading, setDocumentUploading] = useState(false)
+  const [nationalIdPreview, setNationalIdPreview] = useState<string | null>(null)
+  const [licensePreview, setLicensePreview] = useState<string | null>(null)
+  const nationalIdInputRef = useRef<HTMLInputElement | null>(null)
+  const licenseInputRef = useRef<HTMLInputElement | null>(null)
 
   // Location sharing state
   const [locationSharing, setLocationSharing] = useState(false)
@@ -765,6 +776,98 @@ export default function NurseDashboard() {
       toast({ title: 'خطأ', description: 'حدث خطأ في الاتصال', variant: 'destructive' })
     } finally {
       setProfileSaving(false)
+    }
+  }
+
+  // ─── Document Upload Handler ──────────────────────────────────
+  const compressImage = (file: File, maxWidth = 1200, quality = 0.7): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        const img = document.createElement('img')
+        img.onload = () => {
+          const canvas = document.createElement('canvas')
+          let width = img.width
+          let height = img.height
+          if (width > maxWidth) {
+            height = (height * maxWidth) / width
+            width = maxWidth
+          }
+          canvas.width = width
+          canvas.height = height
+          const ctx = canvas.getContext('2d')
+          if (!ctx) { reject(new Error('Canvas not supported')); return }
+          ctx.drawImage(img, 0, 0, width, height)
+          const dataUrl = canvas.toDataURL('image/jpeg', quality)
+          resolve(dataUrl)
+        }
+        img.onerror = () => reject(new Error('Failed to load image'))
+        img.src = e.target?.result as string
+      }
+      reader.onerror = () => reject(new Error('Failed to read file'))
+      reader.readAsDataURL(file)
+    })
+  }
+
+  const handleDocumentUpload = async (type: 'nationalId' | 'license') => {
+    const inputRef = type === 'nationalId' ? nationalIdInputRef : licenseInputRef
+    inputRef.current?.click()
+  }
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>, type: 'nationalId' | 'license') => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast({ title: 'خطأ', description: 'يرجى اختيار ملف صورة (JPG, PNG, WEBP)', variant: 'destructive' })
+      return
+    }
+
+    // Validate file size (max 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      toast({ title: 'خطأ', description: 'حجم الصورة يجب أن يكون أقل من 10 ميجابايت', variant: 'destructive' })
+      return
+    }
+
+    setDocumentUploading(true)
+    try {
+      const base64 = await compressImage(file)
+
+      // Show preview immediately
+      if (type === 'nationalId') {
+        setNationalIdPreview(base64)
+      } else {
+        setLicensePreview(base64)
+      }
+
+      // Save to server
+      const fieldName = type === 'nationalId' ? 'nationalIdPhotoUrl' : 'licensePhotoUrl'
+      const res = await fetch('/api/nurse/profile', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nurseId, [fieldName]: base64 }),
+      })
+
+      if (res.ok) {
+        toast({
+          title: type === 'nationalId' ? 'تم رفع صورة البطاقة الوطنية' : 'تم رفع صورة رخصة المزاولة',
+          description: 'سيتم مراجعة المستند من قبل الإدارة',
+        })
+        fetchProfile()
+      } else {
+        const data = await res.json().catch(() => ({}))
+        toast({ title: 'خطأ', description: data.error || 'فشل رفع المستند', variant: 'destructive' })
+        // Reset preview on failure
+        if (type === 'nationalId') setNationalIdPreview(null)
+        else setLicensePreview(null)
+      }
+    } catch {
+      toast({ title: 'خطأ', description: 'حدث خطأ أثناء معالجة الصورة', variant: 'destructive' })
+    } finally {
+      setDocumentUploading(false)
+      // Reset file input
+      e.target.value = ''
     }
   }
 
@@ -1649,11 +1752,222 @@ export default function NurseDashboard() {
                 <div className="flex items-center gap-2">
                   <Info className="w-4 h-4 text-amber-600 shrink-0" />
                   <p className="text-sm text-amber-700">
-                    حسابك قيد المراجعة. يرجى تقديم المستندات المطلوبة لإتمام عملية التحقق من حسابك.
+                    حسابك قيد المراجعة. يرجى رفع المستندات المطلوبة أدناه لإتمام عملية التحقق من حسابك.
                   </p>
                 </div>
               </div>
             )}
+
+            {/* ═══════ Document Upload Section ═══════ */}
+            <Card className="border-0 shadow-lg bg-white/80 backdrop-blur-xl mb-6 overflow-hidden">
+              <div className="bg-gradient-to-l from-violet-500 via-purple-500 to-fuchsia-500 p-4 text-white">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center shadow-md">
+                    <Shield className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-lg">وثائق التحقق من الهوية</h3>
+                    <p className="text-purple-100 text-xs mt-0.5">
+                      {isVerified
+                        ? 'تم التحقق من هويتك بنجاح ✓'
+                        : 'ارفع صور البطاقة الوطنية ورخصة المزاولة للتحقق من حسابك'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <CardContent className="p-5 space-y-5">
+                {/* Verification Status Indicator */}
+                <div className={`flex items-center gap-3 p-3.5 rounded-xl ${isVerified ? 'bg-emerald-50/80 ring-1 ring-emerald-200/50' : 'bg-amber-50/80 ring-1 ring-amber-200/50'}`}>
+                  {isVerified ? (
+                    <>
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center shadow-md shrink-0">
+                        <CheckCircle className="w-5 h-5 text-white" />
+                      </div>
+                      <div>
+                        <p className="font-bold text-emerald-700">تم التحقق من الهوية</p>
+                        <p className="text-xs text-emerald-600">يمكنك استلام المهام والعمل بشكل كامل</p>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-md shrink-0 animate-pulse">
+                        <Shield className="w-5 h-5 text-white" />
+                      </div>
+                      <div>
+                        <p className="font-bold text-amber-700">بانتظار التحقق</p>
+                        <p className="text-xs text-amber-600">
+                          {(profile as any).nationalIdPhotoUrl || (profile as any).licensePhotoUrl
+                            ? 'تم رفع المستندات، جاري المراجعة من قبل الإدارة'
+                            : 'يرجى رفع المستندات المطلوبة لإتمام التحقق'}
+                        </p>
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                {/* Hidden file inputs */}
+                <input
+                  ref={nationalIdInputRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  className="hidden"
+                  onChange={e => handleFileChange(e, 'nationalId')}
+                />
+                <input
+                  ref={licenseInputRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  className="hidden"
+                  onChange={e => handleFileChange(e, 'license')}
+                />
+
+                {/* Upload Cards Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* National ID Card Upload */}
+                  <div className="rounded-xl ring-1 ring-blue-200/50 overflow-hidden bg-gradient-to-br from-blue-50/50 to-indigo-50/30">
+                    <div className="p-3 bg-gradient-to-l from-blue-500 to-indigo-500 text-white">
+                      <div className="flex items-center gap-2">
+                        <Shield className="w-4 h-4" />
+                        <span className="font-bold text-sm">البطاقة الوطنية</span>
+                      </div>
+                      <p className="text-blue-100 text-[10px] mt-0.5">صورة واضحة للبطاقة الشخصية</p>
+                    </div>
+                    <div className="p-3">
+                      {/* Preview or Placeholder */}
+                      {(nationalIdPreview || (profile as any).nationalIdPhotoUrl) ? (
+                        <div className="relative group">
+                          <div className="w-full h-36 rounded-lg overflow-hidden border border-blue-200/50 bg-white">
+                            <img
+                              src={nationalIdPreview || (profile as any).nationalIdPhotoUrl}
+                              alt="البطاقة الوطنية"
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-all duration-300 rounded-lg flex items-center justify-center">
+                            <button
+                              onClick={() => handleDocumentUpload('nationalId')}
+                              disabled={documentUploading}
+                              className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-white/90 backdrop-blur-sm rounded-lg px-3 py-1.5 text-xs font-bold text-blue-600 shadow-lg"
+                            >
+                              <Camera className="w-3.5 h-3.5 inline ml-1" />
+                              إعادة الرفع
+                            </button>
+                          </div>
+                          <div className="absolute top-2 left-2">
+                            <Badge className="bg-emerald-500 text-white text-[9px] shadow-md">
+                              <CheckCircle className="w-2.5 h-2.5 ml-0.5" />
+                              مرفوعة
+                            </Badge>
+                          </div>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => handleDocumentUpload('nationalId')}
+                          disabled={documentUploading}
+                          className="w-full h-36 rounded-lg border-2 border-dashed border-blue-300/50 hover:border-blue-400 bg-blue-50/30 hover:bg-blue-100/50 transition-all duration-300 flex flex-col items-center justify-center gap-2 group"
+                        >
+                          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center shadow-lg shadow-blue-500/25 group-hover:scale-110 transition-transform duration-300">
+                            {documentUploading ? (
+                              <Loader2 className="w-6 h-6 text-white animate-spin" />
+                            ) : (
+                              <Camera className="w-6 h-6 text-white" />
+                            )}
+                          </div>
+                          <div className="text-center">
+                            <p className="text-xs font-bold text-blue-600">رفع صورة البطاقة</p>
+                            <p className="text-[10px] text-blue-400">اضغط لالتقاط صورة أو اختيار ملف</p>
+                          </div>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* License Card Upload */}
+                  <div className="rounded-xl ring-1 ring-amber-200/50 overflow-hidden bg-gradient-to-br from-amber-50/50 to-orange-50/30">
+                    <div className="p-3 bg-gradient-to-l from-amber-500 to-orange-500 text-white">
+                      <div className="flex items-center gap-2">
+                        <Award className="w-4 h-4" />
+                        <span className="font-bold text-sm">رخصة المزاولة</span>
+                      </div>
+                      <p className="text-amber-100 text-[10px] mt-0.5">صورة واضحة لرخصة مزاولة المهنة</p>
+                    </div>
+                    <div className="p-3">
+                      {/* Preview or Placeholder */}
+                      {(licensePreview || (profile as any).licensePhotoUrl) ? (
+                        <div className="relative group">
+                          <div className="w-full h-36 rounded-lg overflow-hidden border border-amber-200/50 bg-white">
+                            <img
+                              src={licensePreview || (profile as any).licensePhotoUrl}
+                              alt="رخصة المزاولة"
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-all duration-300 rounded-lg flex items-center justify-center">
+                            <button
+                              onClick={() => handleDocumentUpload('license')}
+                              disabled={documentUploading}
+                              className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-white/90 backdrop-blur-sm rounded-lg px-3 py-1.5 text-xs font-bold text-amber-600 shadow-lg"
+                            >
+                              <Camera className="w-3.5 h-3.5 inline ml-1" />
+                              إعادة الرفع
+                            </button>
+                          </div>
+                          <div className="absolute top-2 left-2">
+                            <Badge className="bg-emerald-500 text-white text-[9px] shadow-md">
+                              <CheckCircle className="w-2.5 h-2.5 ml-0.5" />
+                              مرفوعة
+                            </Badge>
+                          </div>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => handleDocumentUpload('license')}
+                          disabled={documentUploading}
+                          className="w-full h-36 rounded-lg border-2 border-dashed border-amber-300/50 hover:border-amber-400 bg-amber-50/30 hover:bg-amber-100/50 transition-all duration-300 flex flex-col items-center justify-center gap-2 group"
+                        >
+                          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-lg shadow-amber-500/25 group-hover:scale-110 transition-transform duration-300">
+                            {documentUploading ? (
+                              <Loader2 className="w-6 h-6 text-white animate-spin" />
+                            ) : (
+                              <Camera className="w-6 h-6 text-white" />
+                            )}
+                          </div>
+                          <div className="text-center">
+                            <p className="text-xs font-bold text-amber-600">رفع صورة الرخصة</p>
+                            <p className="text-[10px] text-amber-400">اضغط لالتقاط صورة أو اختيار ملف</p>
+                          </div>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Upload Tips */}
+                {!isVerified && (
+                  <div className="p-3 bg-gradient-to-l from-blue-50/30 to-indigo-50/30 rounded-xl ring-1 ring-blue-100/50">
+                    <p className="text-xs font-bold text-gray-600 mb-2 flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-blue-500" />
+                      نصائح لالتقاط صور واضحة
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                      {[
+                        'تأكد من إضاءة جيدة عند التصوير',
+                        'اجعل المستند بأكمله داخل الإطار',
+                        'تجنب الانعكاسات والظلال',
+                        'استخدم كاميرا الهاتف الخلفي للوضوح',
+                      ].map((tip, i) => (
+                        <div key={i} className="flex items-center gap-1.5 text-[10px] text-gray-500">
+                          <Check className="w-3 h-3 text-blue-400 shrink-0" />
+                          <span>{tip}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
 
             {/* Location Sharing Toggle */}
             <div className="mb-6 bg-gradient-to-l from-cyan-50/50 via-blue-50/50 to-indigo-50/50 rounded-xl p-4 ring-1 ring-blue-200/30">

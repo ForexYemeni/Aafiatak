@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json()
-    const { nurseId, location } = body
+    const { nurseId, location, nationalIdPhotoUrl, licensePhotoUrl } = body
 
     if (!nurseId) {
       return NextResponse.json({ error: 'معرف الممرض مطلوب' }, { status: 400 })
@@ -39,9 +39,17 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'الممرض غير موجود' }, { status: 404 })
     }
 
-    // Only allow updating location field
-    const updateData: Record<string, string> = {}
+    // Allow updating specific fields
+    const updateData: Record<string, any> = {}
     if (location !== undefined) updateData.location = location
+    if (nationalIdPhotoUrl !== undefined) updateData.nationalIdPhotoUrl = nationalIdPhotoUrl
+    if (licensePhotoUrl !== undefined) updateData.licensePhotoUrl = licensePhotoUrl
+
+    // If document photos were uploaded and nurse is not verified, set isVerified to false (pending review)
+    if ((nationalIdPhotoUrl || licensePhotoUrl) && !(existing as any).isVerified) {
+      updateData.isVerified = false
+      updateData.documentsSubmittedAt = new Date().toISOString()
+    }
 
     if (Object.keys(updateData).length === 0) {
       return NextResponse.json({ error: 'لا توجد بيانات للتحديث' }, { status: 400 })
