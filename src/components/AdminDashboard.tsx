@@ -11,7 +11,8 @@ import {
   Ban, Unlock, Eye, AlertTriangle, UsersRound, Settings,
   ChevronDown, AlertCircle, MessageSquare, Clock, MapPin, Calendar, Navigation,
   FileWarning, ShieldCheck, ShieldAlert, Image as ImageIcon,
-  Wallet, Send, Building, DollarSign, Save, Copy, Maximize2, ZoomIn
+  Wallet, Send, Building, DollarSign, Save, Copy, Maximize2, ZoomIn,
+  Bell, BadgeCheck, Receipt
 } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RTooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts'
 import { useAppStore, formatPrice, getStatusLabel, getStatusColor } from '@/lib/store'
@@ -78,6 +79,11 @@ interface DashboardStats {
   approvedRequests: number
   completedRequests: number
   totalRevenue: number
+  unverifiedNurses?: number
+  pendingComplaints?: number
+  pendingPaymentConfirmations?: number
+  pendingEmergency?: number
+  pendingAssignmentAcceptance?: number
 }
 
 const PIE_COLORS = ['#f59e0b', '#10b981', '#ef4444', '#3b82f6', '#8b5cf6', '#6b7280']
@@ -1044,18 +1050,85 @@ export default function AdminDashboard() {
                       <p className="text-gray-500 text-sm mt-1">نظرة عامة على النظام</p>
                     </div>
 
-                    {/* Emergency Badge */}
-                    {emergencyRequests.filter((e: any) => e.status === 'pending').length > 0 && (
-                      <motion.div variants={cardVariants} initial="hidden" animate="visible">
-                        <Card className="border-0 shadow-lg shadow-red-500/20 bg-gradient-to-l from-red-500 to-orange-500 text-white overflow-hidden relative">
-                          <CardContent className="p-4 flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center animate-pulse"><AlertTriangle className="w-5 h-5 text-white" /></div>
-                            <div className="flex-1"><p className="font-bold text-lg">{emergencyRequests.filter((e: any) => e.status === 'pending').length} طلب طوارئ</p><p className="text-red-100 text-xs">طلبات تتطلب اهتمام فوري</p></div>
-                            <Button size="sm" variant="secondary" className="bg-white/20 hover:bg-white/30 text-white border-0" onClick={() => setActiveTab('emergency')}>عرض التفاصيل</Button>
-                          </CardContent>
-                        </Card>
-                      </motion.div>
-                    )}
+                    {/* Pending Actions Banner */}
+                    {(() => {
+                      const pendingItems = [
+                        { key: 'emergency', count: stats.pendingEmergency || emergencyRequests.filter((e: any) => e.status === 'pending').length, label: 'طلب طوارئ', plural: 'طلبات طوارئ', gradient: 'from-red-500 to-rose-600', icon: AlertTriangle, tab: 'emergency' as Tab },
+                        { key: 'unverified', count: stats.unverifiedNurses || 0, label: 'توثيق ممرض', plural: 'توثيق ممرضين', gradient: 'from-amber-500 to-orange-500', icon: BadgeCheck, tab: 'nurses' as Tab },
+                        { key: 'pendingNurses', count: stats.pendingNurses || 0, label: 'موافقة ممرض', plural: 'موافقة ممرضين', gradient: 'from-yellow-500 to-amber-500', icon: UserPlus, tab: 'nurses' as Tab },
+                        { key: 'pendingRequests', count: stats.pendingRequests || 0, label: 'طلب خدمة', plural: 'طلبات خدمات', gradient: 'from-blue-500 to-indigo-500', icon: ClipboardList, tab: 'requests' as Tab },
+                        { key: 'paymentConfirm', count: stats.pendingPaymentConfirmations || 0, label: 'تأكيد دفع', plural: 'تأكيدات دفع', gradient: 'from-emerald-500 to-teal-500', icon: Receipt, tab: 'requests' as Tab },
+                        { key: 'complaints', count: stats.pendingComplaints || 0, label: 'شكوى/بلاغ', plural: 'شكاوى وبلاغات', gradient: 'from-purple-500 to-fuchsia-500', icon: MessageSquare, tab: 'complaints' as Tab },
+                      ].filter(item => item.count > 0)
+                      const totalPending = pendingItems.reduce((sum, item) => sum + item.count, 0)
+
+                      if (totalPending === 0) return (
+                        <motion.div variants={cardVariants} initial="hidden" animate="visible">
+                          <Card className="border-0 shadow-lg shadow-emerald-500/15 bg-gradient-to-l from-emerald-50 via-green-50 to-teal-50 ring-1 ring-emerald-200/50">
+                            <CardContent className="p-4 flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center shadow-lg shadow-emerald-500/25">
+                                <CheckCircle className="w-5 h-5 text-white" />
+                              </div>
+                              <div className="flex-1">
+                                <p className="font-bold text-emerald-700">لا توجد إجراءات معلقة</p>
+                                <p className="text-emerald-600/60 text-xs">جميع المهام مكتملة</p>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        </motion.div>
+                      )
+
+                      return (
+                        <motion.div variants={cardVariants} initial="hidden" animate="visible" className="space-y-3">
+                          {/* Summary Banner */}
+                          <Card className="border-0 shadow-xl shadow-amber-500/15 bg-gradient-to-l from-amber-500 via-orange-500 to-rose-500 text-white overflow-hidden relative">
+                            <div className="absolute top-0 left-0 w-40 h-40 bg-white/5 rounded-full -translate-x-1/2 -translate-y-1/2" />
+                            <div className="absolute bottom-0 right-0 w-28 h-28 bg-white/5 rounded-full translate-x-1/3 translate-y-1/3" />
+                            <CardContent className="p-5 relative z-10">
+                              <div className="flex items-center gap-4">
+                                <div className="w-14 h-14 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center animate-pulse shadow-lg">
+                                  <Bell className="w-7 h-7 text-white" />
+                                </div>
+                                <div className="flex-1">
+                                  <p className="font-bold text-xl">{totalPending} إجراء معلق</p>
+                                  <p className="text-amber-100 text-sm">يتطلب اهتمامك ومراجعتك</p>
+                                </div>
+                              </div>
+                            </CardContent>
+                          </Card>
+
+                          {/* Action Cards Grid */}
+                          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                            {pendingItems.map((item) => {
+                              const Icon = item.icon
+                              return (
+                                <motion.button
+                                  key={item.key}
+                                  whileHover={{ y: -3, scale: 1.02 }}
+                                  whileTap={{ scale: 0.98 }}
+                                  onClick={() => setActiveTab(item.tab)}
+                                  className="group relative overflow-hidden rounded-2xl bg-white shadow-md hover:shadow-xl transition-shadow duration-300 text-right"
+                                >
+                                  {/* Top gradient accent */}
+                                  <div className={`h-1.5 bg-gradient-to-l ${item.gradient}`} />
+                                  <div className="p-3.5">
+                                    <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${item.gradient} flex items-center justify-center shadow-md mb-2.5 group-hover:scale-110 transition-transform`}>
+                                      <Icon className="w-5 h-5 text-white" />
+                                    </div>
+                                    <p className="text-2xl font-black text-gray-800 mb-0.5">{item.count}</p>
+                                    <p className="text-[11px] font-bold text-gray-500 leading-tight">
+                                      {item.count === 1 ? item.label : item.plural}
+                                    </p>
+                                  </div>
+                                  {/* Hover overlay */}
+                                  <div className={`absolute inset-0 bg-gradient-to-br ${item.gradient} opacity-0 group-hover:opacity-5 transition-opacity duration-300`} />
+                                </motion.button>
+                              )
+                            })}
+                          </div>
+                        </motion.div>
+                      )
+                    })()}
 
                     {/* Stats Grid */}
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
