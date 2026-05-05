@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Stethoscope, ClipboardList, User, LogOut, Loader2, Play, CheckCircle,
@@ -931,7 +931,39 @@ export default function NurseDashboard() {
   const completedCount = assignments.filter(a => a.status === 'completed').length
   const unreadNotifications = notifications.filter(n => !n.read).length
 
-  const filteredAssignments = assignments.filter(a => {
+  // Sort assignments: active first (assigned → accepted → in_progress), then completed, newest first within each status
+  const sortedAssignments = useMemo(() => {
+    const statusOrder: Record<string, number> = {
+      'assigned': 0,
+      'accepted': 1,
+      'in_progress': 2,
+      'completed': 3,
+      'cancelled': 4,
+      'rejected': 5,
+    }
+    const getTimestamp = (ts: any): number => {
+      if (!ts) return 0
+      try {
+        if (typeof ts === 'object' && ts !== null) {
+          const sec = ts.seconds ?? ts._seconds ?? 0
+          if (sec) return sec * 1000
+          if (ts instanceof Date) return ts.getTime()
+          if (typeof ts.toDate === 'function') return ts.toDate().getTime()
+        }
+        if (typeof ts === 'number') return ts
+        if (typeof ts === 'string') return new Date(ts).getTime()
+      } catch {}
+      return 0
+    }
+    return [...assignments].sort((a, b) => {
+      const aOrder = statusOrder[a.status] ?? 99
+      const bOrder = statusOrder[b.status] ?? 99
+      if (aOrder !== bOrder) return aOrder - bOrder
+      return getTimestamp(b.createdAt) - getTimestamp(a.createdAt)
+    })
+  }, [assignments])
+
+  const filteredAssignments = sortedAssignments.filter(a => {
     if (statusFilter === 'all') return true
     return a.status === statusFilter
   })
