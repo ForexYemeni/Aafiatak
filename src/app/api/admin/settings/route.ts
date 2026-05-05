@@ -21,6 +21,14 @@ export async function GET() {
         distanceFeePerKmOver30: 200,
         distanceFreeKm: 5,
         commissionPercent: 15,
+        emergencyServicePrices: {
+          'تمريض منزلي عاجل': 5000,
+          'إسعافات أولية': 3000,
+          'حقن وريدي': 4000,
+          'قياس الضغط والسكر': 2500,
+          'عناية بالجروح': 3500,
+          'أخرى': 3000,
+        },
       })
     }
     return NextResponse.json(settings)
@@ -33,7 +41,7 @@ export async function GET() {
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json()
-    const allowedFields = ['phone', 'email', 'emergencyPhone', 'whatsappNumber', 'referralBonusPoints', 'referralBonusPointsReceiver', 'referralEnabled', 'nightSurchargePercent', 'fridaySurchargePercent', 'distanceFeesEnabled', 'distanceFeePerKm5to15', 'distanceFeePerKm15to30', 'distanceFeePerKmOver30', 'distanceFreeKm', 'commissionPercent']
+    const allowedFields = ['phone', 'email', 'emergencyPhone', 'whatsappNumber', 'referralBonusPoints', 'referralBonusPointsReceiver', 'referralEnabled', 'nightSurchargePercent', 'fridaySurchargePercent', 'distanceFeesEnabled', 'distanceFeePerKm5to15', 'distanceFeePerKm15to30', 'distanceFeePerKmOver30', 'distanceFreeKm', 'commissionPercent', 'emergencyServicePrices']
     const updateData: Record<string, any> = {}
 
     for (const field of allowedFields) {

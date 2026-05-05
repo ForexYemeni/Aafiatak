@@ -957,6 +957,10 @@ export async function createEmergencyRequest(data: {
   serviceType: string
   address: string
   notes?: string
+  price?: number
+  dynamicPrice?: number
+  pricingBreakdown?: Record<string, any>
+  commission?: Record<string, any>
 }) {
   checkFirebase()
   const benefDoc = await firestore.collection('beneficiaries').doc(data.beneficiaryId).get()

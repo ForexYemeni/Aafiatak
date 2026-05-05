@@ -3368,20 +3368,37 @@ export default function BeneficiaryDashboard() {
                 نوع الخدمة العاجلة
               </Label>
               <div className="grid grid-cols-2 gap-2">
-                {emergencyServiceTypes.map(type => (
-                  <button
-                    key={type}
-                    onClick={() => setEmergencyForm(prev => ({ ...prev, serviceType: type }))}
-                    className={`px-3 py-2 rounded-xl text-xs font-medium transition-all duration-200 ${
-                      emergencyForm.serviceType === type
-                        ? 'bg-gradient-to-r from-red-500 to-rose-500 text-white shadow-md'
-                        : 'bg-gray-50 text-gray-600 border border-gray-200 hover:border-red-300 hover:text-red-600'
-                    }`}
-                  >
-                    {type}
-                  </button>
-                ))}
+                {emergencyServiceTypes.map(type => {
+                  const servicePrice = adminSettings.emergencyServicePrices?.[type] || adminSettings.emergencyServicePrices?.['أخرى'] || 0
+                  return (
+                    <button
+                      key={type}
+                      onClick={() => setEmergencyForm(prev => ({ ...prev, serviceType: type }))}
+                      className={`px-3 py-2 rounded-xl text-xs font-medium transition-all duration-200 text-right ${
+                        emergencyForm.serviceType === type
+                          ? 'bg-gradient-to-r from-red-500 to-rose-500 text-white shadow-md'
+                          : 'bg-gray-50 text-gray-600 border border-gray-200 hover:border-red-300 hover:text-red-600'
+                      }`}
+                    >
+                      <div>{type}</div>
+                      {servicePrice > 0 && (
+                        <div className={`text-[10px] mt-0.5 ${emergencyForm.serviceType === type ? 'text-red-100' : 'text-gray-400'}`}>
+                          {servicePrice.toLocaleString('ar-YE')} ر.ي
+                        </div>
+                      )}
+                    </button>
+                  )
+                })}
               </div>
+              {emergencyForm.serviceType && (adminSettings.emergencyServicePrices?.[emergencyForm.serviceType] || adminSettings.emergencyServicePrices?.['أخرى'] || 0) > 0 && (
+                <div className="p-3 bg-red-50/80 rounded-xl border border-red-100">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-red-700">السعر الأساسي</span>
+                    <span className="text-sm font-bold text-red-600">{(adminSettings.emergencyServicePrices?.[emergencyForm.serviceType] || adminSettings.emergencyServicePrices?.['أخرى'] || 0).toLocaleString('ar-YE')} ر.ي</span>
+                  </div>
+                  <p className="text-[10px] text-red-500 mt-1">قد يتم إضافة رسوم إضافية حسب الوقت والمسافة (التسعير الديناميكي)</p>
+                </div>
+              )}
             </div>
 
             {/* Address Field */}

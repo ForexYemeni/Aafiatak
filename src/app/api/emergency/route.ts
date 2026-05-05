@@ -4,10 +4,67 @@ import { createEmergencyRequest, getAdminSettings } from '@/lib/firestore'
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { beneficiaryId, serviceType, address, notes } = body
+    const { beneficiaryId, serviceType, address, notes, price } = body
 
     if (!beneficiaryId || !serviceType || !address) {
       return NextResponse.json({ error: 'يرجى ملء جميع الحقول المطلوبة' }, { status: 400 })
+    }
+
+    // Get price from admin settings if not provided
+    let basePrice = price || 0
+    let dynamicPrice = 0
+    let pricingBreakdown: Record<string, any> = {}
+    let commission: Record<string, any> = {}
+
+    try {
+      const settings = await getAdminSettings()
+      if (settings) {
+        // Get base price from emergency service prices
+        if (!basePrice && settings.emergencyServicePrices) {
+          basePrice = settings.emergencyServicePrices[serviceType] || settings.emergencyServicePrices['أخرى'] || 0
+        }
+
+        // Apply dynamic pricing
+        if (basePrice > 0) {
+          const now = new Date()
+          const hour = now.getHours()
+          const day = now.getDay() // 0=Sunday, 5=Friday
+          let surchargeTotal = 0
+
+          // Night surcharge (10 PM to 6 AM)
+          const nightPercent = settings.nightSurchargePercent || 50
+          if (hour >= 22 || hour < 6) {
+            const nightAmount = Math.round(basePrice * nightPercent / 100)
+            surchargeTotal += nightAmount
+            pricingBreakdown.nightSurcharge = { percent: nightPercent, amount: nightAmount }
+          }
+
+          // Friday surcharge
+          const fridayPercent = settings.fridaySurchargePercent || 25
+          if (day === 5) {
+            const fridayAmount = Math.round(basePrice * fridayPercent / 100)
+            surchargeTotal += fridayAmount
+            pricingBreakdown.fridaySurcharge = { percent: fridayPercent, amount: fridayAmount }
+          }
+
+          dynamicPrice = basePrice + surchargeTotal
+          pricingBreakdown.basePrice = basePrice
+          pricingBreakdown.totalSurcharge = surchargeTotal
+          pricingBreakdown.dynamicPrice = dynamicPrice
+
+          // Commission
+          const commissionPercent = settings.commissionPercent || 15
+          const commissionAmount = Math.round(dynamicPrice * commissionPercent / 100)
+          commission = {
+            percent: commissionPercent,
+            amount: commissionAmount,
+            nursePayout: dynamicPrice - commissionAmount,
+          }
+        }
+      }
+    } catch {
+      // Settings not available, use base price without dynamic pricing
+      dynamicPrice = basePrice
     }
 
     const emergencyRequest = await createEmergencyRequest({
@@ -15,6 +72,10 @@ export async function POST(request: NextRequest) {
       serviceType,
       address,
       notes: notes || undefined,
+      price: basePrice,
+      dynamicPrice: dynamicPrice || basePrice,
+      pricingBreakdown: Object.keys(pricingBreakdown).length > 0 ? pricingBreakdown : undefined,
+      commission: Object.keys(commission).length > 0 ? commission : undefined,
     })
 
     // Get admin settings for emergency phone

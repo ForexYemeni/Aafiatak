@@ -1525,6 +1525,9 @@ export default function AdminDashboard() {
                                       )}
                                       {req.notes && <p className="text-gray-500"><span className="font-medium">ملاحظات:</span> {req.notes}</p>}
                                       {req.nurseName && <p className="text-blue-600"><span className="font-medium">الممرض المعين:</span> {req.nurseName}</p>}
+                                      {(req.dynamicPrice || req.price) && (
+                                        <p className="text-emerald-600 font-semibold"><span className="font-medium">السعر:</span> {formatPrice(req.dynamicPrice || req.price || 0)}</p>
+                                      )}
                                       <p className="text-gray-400 text-xs">{formatDateTime(req.createdAt)}</p>
                                     </div>
                                   </div>
@@ -1890,6 +1893,49 @@ export default function AdminDashboard() {
                           </CardContent>
                         </Card>
 
+                        <Card className="border-0 shadow-lg overflow-hidden">
+                          <div className="bg-gradient-to-l from-red-500 to-red-600 p-4 text-white">
+                            <div className="flex items-center gap-2"><AlertTriangle className="w-5 h-5" /><span className="font-bold">أسعار خدمات الطوارئ</span></div>
+                            <p className="text-red-100 text-xs mt-1">تحديد السعر الأساسي لكل نوع من خدمات الطوارئ</p>
+                          </div>
+                          <CardContent className="p-4 space-y-3">
+                            {[
+                              { key: 'تمريض منزلي عاجل', label: 'تمريض منزلي عاجل' },
+                              { key: 'إسعافات أولية', label: 'إسعافات أولية' },
+                              { key: 'حقن وريدي', label: 'حقن وريدي' },
+                              { key: 'قياس الضغط والسكر', label: 'قياس الضغط والسكر' },
+                              { key: 'عناية بالجروح', label: 'عناية بالجروح' },
+                              { key: 'أخرى', label: 'أخرى (الافتراضي)' },
+                            ].map(item => (
+                              <div key={item.key} className="flex items-center gap-3">
+                                <Label className="font-medium text-sm min-w-[140px]">{item.label}</Label>
+                                <div className="flex-1 flex items-center gap-1">
+                                  <Input
+                                    type="number"
+                                    value={(settings.emergencyServicePrices as Record<string, number>)?.[item.key] ?? (item.key === 'أخرى' ? 3000 : 0)}
+                                    onChange={e => {
+                                      const currentPrices = (settings.emergencyServicePrices as Record<string, number>) || {}
+                                      setSettings({
+                                        ...settings,
+                                        emergencyServicePrices: {
+                                          ...currentPrices,
+                                          [item.key]: Number(e.target.value),
+                                        }
+                                      })
+                                    }}
+                                    className="border-amber-200"
+                                    min={0}
+                                  />
+                                  <span className="text-xs text-gray-500 shrink-0">ر.ي</span>
+                                </div>
+                              </div>
+                            ))}
+                            <div className="p-3 bg-red-50/50 rounded-xl border border-red-100">
+                              <p className="text-xs text-red-600">يتم تطبيق التسعير الديناميكي (رسوم الليل، الجمعة) على هذه الأسعار تلقائياً عند إنشاء طلب الطوارئ</p>
+                            </div>
+                          </CardContent>
+                        </Card>
+
                         <Button className="w-full bg-gradient-to-l from-violet-500 via-purple-500 to-fuchsia-500 text-white shadow-lg shadow-violet-500/25 h-12 text-base" onClick={() => showConfirmDialog('حفظ إعدادات التسعير', 'سيتم تحديث جميع إعدادات التسعير الديناميكي. هل أنت متأكد؟', TrendingUp, 'text-violet-500', () => handleSaveSettings({
                           nightSurchargePercent: settings.nightSurchargePercent,
                           fridaySurchargePercent: settings.fridaySurchargePercent,
@@ -1899,6 +1945,7 @@ export default function AdminDashboard() {
                           distanceFeePerKmOver30: settings.distanceFeePerKmOver30,
                           distanceFreeKm: settings.distanceFreeKm,
                           commissionPercent: settings.commissionPercent,
+                          emergencyServicePrices: settings.emergencyServicePrices,
                         }))}><Save className="w-5 h-5 ml-2" />حفظ جميع إعدادات التسعير</Button>
                       </div>
                     )}
