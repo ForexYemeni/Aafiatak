@@ -153,7 +153,7 @@ export function formatPrice(price: number): string {
 export function getStatusLabel(status: string): string {
   const map: Record<string, string> = {
     pending: 'قيد الانتظار',
-    pending_confirmation: 'بانتظار التأكيد',
+    pending_confirmation: 'بانتظار تأكيد الدفع',
     pending_payment: 'بانتظار الدفع',
     approved: 'مقبول',
     rejected: 'مرفوض',

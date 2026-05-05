@@ -95,10 +95,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'يوجد معاملة دفع سابقة لهذا الطلب', existingTransactionId: existingTxSnapshot.docs[0].id }, { status: 409 })
     }
 
-    // For wallet/exchange/bank: require transaction reference (proof of payment)
-    // Payment is 'pending' until admin confirms
+    // For wallet/exchange/bank: payment proof submitted via WhatsApp
+    // Set to pending_confirmation since user is proving payment
     const isCashOnDelivery = paymentMethod === 'cash'
-    const paymentStatus = isCashOnDelivery ? 'pending' : (transactionRef ? 'pending_confirmation' : 'pending')
+    const paymentStatus = isCashOnDelivery ? 'pending' : 'pending_confirmation'
 
     const transactionData = {
       requestId,
@@ -120,13 +120,21 @@ export async function POST(request: NextRequest) {
 
     const docRef = await firestore.collection('transactions').add(transactionData)
 
-    // Update the request with payment info
-    await firestore.collection(requestCollection).doc(requestId).update({
+    // Update the request with payment info and change status to pending_confirmation
+    const requestUpdateData: Record<string, any> = {
       paymentStatus: paymentStatus,
       paymentMethod,
       transactionId: docRef.id,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    })
+    }
+    // If electronic payment, change request status to pending_confirmation
+    if (!isCashOnDelivery) {
+      requestUpdateData.status = 'pending_confirmation'
+    } else {
+      requestUpdateData.status = 'pending_confirmation'
+      requestUpdateData.paymentMethod = 'cash_on_delivery'
+    }
+    await firestore.collection(requestCollection).doc(requestId).update(requestUpdateData)
 
     // Re-read to get actual timestamps
     const createdDoc = await firestore.collection('transactions').doc(docRef.id).get()

@@ -1893,14 +1893,52 @@ export default function AdminDashboard() {
                         <Card className="border-0 shadow-lg overflow-hidden">
                           <div className="bg-gradient-to-l from-emerald-500 to-teal-600 p-4 text-white">
                             <div className="flex items-center gap-2"><CreditCard className="w-5 h-5" /><span className="font-bold">إعدادات إثبات الدفع</span></div>
-                            <p className="text-emerald-100 text-xs mt-1">عندما يختار المستفيد الدفع إلكترونياً، يتم عرض بيانات الحساب كاملة مع زر "إثبات الدفع" يحوله لواتساب الإدارة</p>
+                            <p className="text-emerald-100 text-xs mt-1">عندما يختار المستفيد الدفع إلكترونياً، يتم عرض بيانات الحساب كاملة مع أزرار "إثبات الدفع" لكل رقم واتساب</p>
                           </div>
                           <CardContent className="p-4 space-y-4">
                             <div className="p-3 bg-emerald-50/50 rounded-xl border border-emerald-100">
-                              <p className="text-sm text-emerald-700">رقم واتساب الإدارة هو الرقم الذي سيتواصل معه المستفيد لإرسال إثبات الدفع (إيصال التحويل)</p>
+                              <p className="text-sm text-emerald-700">أرقام واتساب الإدارة هي الأرقام التي سيتواصل معها المستفيد لإرسال إثبات الدفع (إيصال التحويل). يمكنك إضافة عدة أرقام.</p>
                             </div>
-                            <div><Label className="font-medium">رقم واتساب الإدارة (لإثبات الدفع) *</Label><Input value={settings.whatsappNumber || ''} onChange={e => setSettings({ ...settings, whatsappNumber: e.target.value })} placeholder="مثال: 967771234567" className="border-amber-200 mt-1" dir="ltr" /><p className="text-xs text-gray-400 mt-1">أدخل الرقم بالصيغة الدولية بدون + (مثال: 967771234567)</p></div>
-                            <Button className="bg-gradient-to-l from-emerald-500 to-teal-600 text-white shadow-lg" onClick={() => showConfirmDialog('حفظ رقم الواتساب', 'سيتم تحديث رقم واتساب الإدارة لإثبات الدفع. هل أنت متأكد؟', MessageSquare, 'text-emerald-500', () => handleSaveSettings({ whatsappNumber: settings.whatsappNumber }))}><Save className="w-4 h-4 ml-2" />حفظ رقم الواتساب</Button>
+                            {/* Multiple WhatsApp Numbers */}
+                            <div>
+                              <Label className="font-medium">أرقام واتساب الإدارة (لإثبات الدفع)</Label>
+                              <div className="space-y-2 mt-2">
+                                {(settings.whatsappNumbers || []).length > 0 && (settings.whatsappNumbers || []).map((num: string, idx: number) => (
+                                  <div key={idx} className="flex items-center gap-2">
+                                    <div className="flex-1 p-2.5 bg-emerald-50 rounded-lg border border-emerald-200 text-sm font-mono" dir="ltr">{num}</div>
+                                    <Button variant="outline" size="sm" className="text-red-500 border-red-200 hover:bg-red-50 shrink-0" onClick={() => {
+                                      const updated = [...(settings.whatsappNumbers || [])]
+                                      updated.splice(idx, 1)
+                                      setSettings({ ...settings, whatsappNumbers: updated })
+                                    }}><Trash2 className="w-3.5 h-3.5" /></Button>
+                                  </div>
+                                ))}
+                                <div className="flex items-center gap-2">
+                                  <Input
+                                    id="newWhatsappNumber"
+                                    placeholder="مثال: 967771234567"
+                                    className="border-emerald-200 flex-1"
+                                    dir="ltr"
+                                  />
+                                  <Button className="bg-emerald-500 hover:bg-emerald-600 text-white shrink-0" onClick={() => {
+                                    const input = document.getElementById('newWhatsappNumber') as HTMLInputElement
+                                    const val = input?.value?.trim()
+                                    if (val) {
+                                      const updated = [...(settings.whatsappNumbers || []), val]
+                                      setSettings({ ...settings, whatsappNumbers: updated, whatsappNumber: updated[0] })
+                                      input.value = ''
+                                    }
+                                  }}><Plus className="w-4 h-4" /></Button>
+                                </div>
+                              </div>
+                              <p className="text-xs text-gray-400 mt-2">أدخل الرقم بالصيغة الدولية بدون + (مثال: 967771234567) ثم اضغط زر الإضافة</p>
+                            </div>
+                            {/* Legacy single number field (kept for backward compat) */}
+                            <div className="border-t pt-3">
+                              <Label className="font-medium text-xs text-gray-500">الرقم الأساسي (قديم)</Label>
+                              <Input value={settings.whatsappNumber || ''} onChange={e => setSettings({ ...settings, whatsappNumber: e.target.value })} placeholder="مثال: 967771234567" className="border-amber-200 mt-1" dir="ltr" />
+                            </div>
+                            <Button className="bg-gradient-to-l from-emerald-500 to-teal-600 text-white shadow-lg w-full" onClick={() => showConfirmDialog('حفظ أرقام الواتساب', 'سيتم تحديث أرقام واتساب الإدارة لإثبات الدفع. هل أنت متأكد؟', MessageSquare, 'text-emerald-500', () => handleSaveSettings({ whatsappNumbers: settings.whatsappNumbers || [], whatsappNumber: settings.whatsappNumber }))}><Save className="w-4 h-4 ml-2" />حفظ أرقام الواتساب</Button>
                           </CardContent>
                         </Card>
                       </div>

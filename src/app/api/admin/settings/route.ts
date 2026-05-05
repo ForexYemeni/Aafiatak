@@ -10,6 +10,7 @@ export async function GET() {
         email: '',
         emergencyPhone: '',
         whatsappNumber: '',
+        whatsappNumbers: [],
         referralBonusPoints: 50,
         referralBonusPointsReceiver: 25,
         referralEnabled: true,
@@ -31,6 +32,10 @@ export async function GET() {
         },
       })
     }
+    // Ensure whatsappNumbers is always an array
+    if (!settings.whatsappNumbers) {
+      settings.whatsappNumbers = settings.whatsappNumber ? [settings.whatsappNumber] : []
+    }
     return NextResponse.json(settings)
   } catch (error: any) {
     console.error('Get admin settings error:', error.message)
@@ -41,7 +46,7 @@ export async function GET() {
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json()
-    const allowedFields = ['phone', 'email', 'emergencyPhone', 'whatsappNumber', 'referralBonusPoints', 'referralBonusPointsReceiver', 'referralEnabled', 'nightSurchargePercent', 'fridaySurchargePercent', 'distanceFeesEnabled', 'distanceFeePerKm5to15', 'distanceFeePerKm15to30', 'distanceFeePerKmOver30', 'distanceFreeKm', 'commissionPercent', 'emergencyServicePrices']
+    const allowedFields = ['phone', 'email', 'emergencyPhone', 'whatsappNumber', 'whatsappNumbers', 'referralBonusPoints', 'referralBonusPointsReceiver', 'referralEnabled', 'nightSurchargePercent', 'fridaySurchargePercent', 'distanceFeesEnabled', 'distanceFeePerKm5to15', 'distanceFeePerKm15to30', 'distanceFeePerKmOver30', 'distanceFreeKm', 'commissionPercent', 'emergencyServicePrices']
     const updateData: Record<string, any> = {}
 
     for (const field of allowedFields) {

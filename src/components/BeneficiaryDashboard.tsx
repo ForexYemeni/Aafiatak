@@ -81,6 +81,7 @@ interface AdminSettings {
   email?: string
   emergencyPhone?: string
   whatsappNumber?: string
+  whatsappNumbers?: string[]
   referralBonusPoints?: number
   referralBonusPointsReceiver?: number
   referralEnabled?: boolean
@@ -93,7 +94,7 @@ interface AdminSettings {
 const statusFilters = [
   { key: 'all', label: 'الكل' },
   { key: 'pending', label: 'قيد الانتظار' },
-  { key: 'pending_confirmation', label: 'بانتظار التأكيد' },
+  { key: 'pending_confirmation', label: 'بانتظار تأكيد الدفع' },
   { key: 'pending_payment', label: 'بانتظار الدفع' },
   { key: 'approved', label: 'مقبول' },
   { key: 'in_progress', label: 'قيد التنفيذ' },
@@ -658,12 +659,38 @@ export default function BeneficiaryDashboard() {
       'exchange-transfer': 'تحويل صراف',
       'bank-transfer': 'تحويل بنكي',
       'cash': 'نقدي عند الاستلام',
+      'cash_on_delivery': 'الدفع عند الاستلام',
       'card': 'بطاقة',
       'wallet': 'محفظة إلكترونية',
       'transfer': 'تحويل بنكي',
-      'الدفع عند الاستلام': 'نقدي عند الاستلام',
+      'الدفع عند الاستلام': 'الدفع عند الاستلام',
+      'pending': 'قيد الانتظار',
+      'pending_confirmation': 'بانتظار تأكيد الدفع',
+      'pending_payment': 'بانتظار الدفع',
+      'paid': 'مدفوع',
+      'unpaid': 'غير مدفوع',
+      'rejected': 'مرفوض',
+      'confirmed': 'مؤكد',
+      // English fallbacks (in case stored without hyphens or different casing)
+      'wallet deposit': 'إيداع محفظة',
+      'bank transfer': 'تحويل بنكي',
+      'exchange transfer': 'تحويل صراف',
+      'Wallet Deposit': 'إيداع محفظة',
+      'Bank Transfer': 'تحويل بنكي',
+      'Exchange Transfer': 'تحويل صراف',
+      'Cash': 'نقدي عند الاستلام',
+      'Card': 'بطاقة',
     }
-    return labels[method] || method
+    // If not found in labels, check if it contains English words and try partial match
+    if (labels[method]) return labels[method]
+    // Partial match fallback
+    const lower = method.toLowerCase()
+    if (lower.includes('wallet') || lower.includes('محفظة')) return 'إيداع محفظة'
+    if (lower.includes('bank') || lower.includes('بنك')) return 'تحويل بنكي'
+    if (lower.includes('exchange') || lower.includes('صراف')) return 'تحويل صراف'
+    if (lower.includes('cash') || lower.includes('نقد') || lower.includes('استلام')) return 'الدفع عند الاستلام'
+    if (lower.includes('transfer') || lower.includes('تحويل')) return 'تحويل بنكي'
+    return method
   }
 
   // Reorder handler
@@ -3446,15 +3473,22 @@ export default function BeneficiaryDashboard() {
                     </div>
                   </div>
 
-                  {/* Prove Payment - WhatsApp Button */}
-                  <div className="space-y-2">
-                    <p className="text-xs text-gray-500 text-center">بعد التحويل، اضغط الزر أدناه لإرسال إثبات الدفع عبر واتساب</p>
-                    <button
-                      onClick={() => {
+                  {/* Prove Payment - WhatsApp Buttons */}
+                  <div className="space-y-3">
+                    <p className="text-xs text-gray-500 text-center font-medium">بعد التحويل، اختر أحد أرقام واتساب أدناه لإرسال إثبات الدفع</p>
+                    {(() => {
+                      const allWhatsappNumbers = [
+                        ...(adminSettings.whatsappNumbers || []),
+                        ...(adminSettings.whatsappNumber && !(adminSettings.whatsappNumbers || []).includes(adminSettings.whatsappNumber) ? [adminSettings.whatsappNumber] : []),
+                      ].filter(Boolean)
+                      if (allWhatsappNumbers.length === 0) {
+                        // Fallback to single number
                         const phone = adminSettings.whatsappNumber || adminSettings.phone || ''
+                        if (phone) allWhatsappNumbers.push(phone)
+                      }
+                      const buildWhatsappUrl = (phoneNum: string) => {
                         const orderId = lastCreatedRequestId ? lastCreatedRequestId.slice(0, 8).toUpperCase() : ''
                         const amountStr = formatPrice(amount)
-                        // Build detailed payment method info
                         let paymentDetail = typeLabel
                         if (selectedPm.exchangeName) paymentDetail += ` (${selectedPm.exchangeName})`
                         if (selectedPm.walletType) {
@@ -3463,24 +3497,44 @@ export default function BeneficiaryDashboard() {
                         }
                         if (selectedPm.bankName) paymentDetail += ` (${selectedPm.bankName})`
                         const benefPhone = beneficiaryUser?.phone || ''
-                        const message = `سلام عليكم\n\nأريد إثبات دفع لطلب #${orderId}\nالمبلغ: ${amountStr}\nطريقة الدفع: ${paymentDetail}${benefPhone ? `\nرقم المستفيد: ${benefPhone}` : ''}\n\nتم التحويل بنجاح ✅\nمرفق لقطة شاشة إثبات التحويل`
-                        const whatsappUrl = phone
-                          ? `https://wa.me/${phone}?text=${encodeURIComponent(message)}`
+                        const message = `سلام عليكم\n\nأريد إثبات دفع لطلب #${orderId}\nالمبلغ: ${amountStr}\nطريقة الدفع: ${paymentDetail}${benefPhone ? `\nرقم المستفيد: ${benefPhone}` : ''}\n\nتم التحويل بنجاح\nمرفق لقطة شاشة إثبات التحويل`
+                        return phoneNum
+                          ? `https://wa.me/${phoneNum}?text=${encodeURIComponent(message)}`
                           : `https://wa.me/?text=${encodeURIComponent(message)}`
-                        window.open(whatsappUrl, '_blank')
-                        // Also update request status to pending_confirmation
+                      }
+                      const handleWhatsappClick = (phoneNum: string) => {
+                        window.open(buildWhatsappUrl(phoneNum), '_blank')
                         handleProcessPayment()
-                      }}
-                      disabled={paymentSubmitting}
-                      className="w-full p-4 rounded-xl bg-gradient-to-l from-green-500 via-green-600 to-emerald-600 text-white font-bold shadow-lg shadow-green-500/25 hover:shadow-green-500/40 transition-all flex items-center justify-center gap-2"
-                    >
-                      {paymentSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : (
-                        <>
-                          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
-                          إثبات الدفع عبر واتساب
-                        </>
-                      )}
-                    </button>
+                      }
+                      return allWhatsappNumbers.length > 0 ? allWhatsappNumbers.map((num, idx) => (
+                        <button
+                          key={idx}
+                          onClick={() => handleWhatsappClick(num)}
+                          disabled={paymentSubmitting}
+                          className="w-full p-4 rounded-xl bg-gradient-to-l from-green-500 via-green-600 to-emerald-600 text-white font-bold shadow-lg shadow-green-500/25 hover:shadow-green-500/40 transition-all flex items-center justify-center gap-2"
+                        >
+                          {paymentSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : (
+                            <>
+                              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+                              إثبات الدفع عبر واتساب {allWhatsappNumbers.length > 1 ? `${num}` : ''}
+                            </>
+                          )}
+                        </button>
+                      )) : (
+                        <button
+                          onClick={() => handleWhatsappClick('')}
+                          disabled={paymentSubmitting}
+                          className="w-full p-4 rounded-xl bg-gradient-to-l from-green-500 via-green-600 to-emerald-600 text-white font-bold shadow-lg shadow-green-500/25 hover:shadow-green-500/40 transition-all flex items-center justify-center gap-2"
+                        >
+                          {paymentSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : (
+                            <>
+                              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+                              إثبات الدفع عبر واتساب
+                            </>
+                          )}
+                        </button>
+                      )
+                    })()}
                     <p className="text-[10px] text-gray-400 text-center">سيتم فتح واتساب مع رسالة جاهزة تحتوي رقم الطلب - أرفق لقطة شاشة إثبات التحويل</p>
                   </div>
                 </div>
@@ -4491,24 +4545,42 @@ export default function BeneficiaryDashboard() {
               </div>
             </div>
 
-            {/* Info */}
-            <div className="p-3 bg-gray-50 rounded-xl text-center">
-              <p className="text-sm text-gray-600">رقم الطلب</p>
-              <p className="text-lg font-bold font-mono text-gray-800 mt-1">#{cancelRequestId ? cancelRequestId.slice(0, 8).toUpperCase() : ''}</p>
-            </div>
+            {/* Request Info */}
+            {cancelRequestId && (() => {
+              const cancelReq = requests.find((r: any) => r.id === cancelRequestId)
+              if (!cancelReq) return null
+              return (
+                <div className="p-3 bg-gradient-to-l from-gray-50 to-slate-50 rounded-xl space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-gray-500">رقم الطلب</p>
+                    <p className="text-sm font-bold font-mono text-gray-800">#{cancelRequestId.slice(0, 8).toUpperCase()}</p>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-gray-500">الخدمة</p>
+                    <p className="text-sm font-semibold text-gray-800">{cancelReq.service?.name || cancelReq.serviceType || 'خدمة'}</p>
+                  </div>
+                  {cancelReq.price > 0 && (
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs text-gray-500">المبلغ</p>
+                      <p className="text-sm font-bold text-emerald-600">{formatPrice(cancelReq.price || cancelReq.service?.price || 0)}</p>
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
 
             {/* Action Buttons */}
             <div className="flex gap-3">
               <Button
                 variant="outline"
-                className="flex-1 rounded-xl border-gray-300 hover:bg-gray-50 text-gray-700"
+                className="flex-1 rounded-xl border-gray-300 hover:bg-gray-50 text-gray-700 h-12"
                 onClick={() => setCancelDialog(false)}
                 disabled={cancelling}
               >
                 تراجع
               </Button>
               <Button
-                className="flex-1 bg-gradient-to-r from-red-500 to-rose-500 text-white hover:shadow-lg rounded-xl"
+                className="flex-1 bg-gradient-to-r from-red-500 to-rose-500 text-white hover:shadow-lg rounded-xl h-12"
                 onClick={handleCancelRequest}
                 disabled={cancelling}
               >
