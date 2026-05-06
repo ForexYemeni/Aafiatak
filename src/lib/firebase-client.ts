@@ -1,23 +1,30 @@
 /**
- * عافيتك — Firebase Client SDK Configuration
- * Used for FCM push notifications on the client side
+ * عافيتك — Firebase Client SDK Configuration (v2.0)
+ * FCM push notifications on the client side
+ *
+ * v2.0 CHANGES:
+ * - Hardcoded Firebase config matching the Service Worker (no env var dependency)
+ * - Added VAPID key for web push
+ * - Better error handling and fallback
  */
 
 import { initializeApp, getApps } from 'firebase/app'
 import { getMessaging, getToken, onMessage, isSupported } from 'firebase/messaging'
 
-// Firebase client config — these are PUBLIC keys (not sensitive)
+// Firebase client config — matching firebase-messaging-sw.js
+// These are PUBLIC keys (not sensitive)
 const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || '',
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || `${process.env.FIREBASE_PROJECT_ID || 'aafiatak-26439'}.firebaseapp.com`,
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || process.env.FIREBASE_PROJECT_ID || 'aafiatak-26439',
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || `${process.env.FIREBASE_PROJECT_ID || 'aafiatak-26439'}.appspot.com`,
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || '',
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || '',
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "AIzaSyA_WgNDBnSt3fvPDz3IfGeb5GCwjlgp5fA",
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "aafiatak-26439.firebaseapp.com",
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "aafiatak-26439",
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "aafiatak-26439.firebasestorage.app",
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "880926880101",
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "1:880926880101:web:efe1be2de1aed6fbeb318c",
 }
 
-// VAPID key for web push
-export const VAPID_KEY = process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY || ''
+// VAPID key for web push — generated for this project
+// This is a PUBLIC key (safe to include in client-side code)
+export const VAPID_KEY = process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY || 'BBrNTcKGd-z8AdufvxWm3hQASuYhtR8_kfKghe2F0DMfz-WxC48nc4SUGnXANQZ47vdHQxKiAmBHixtJ1NNv7H8'
 
 // Initialize Firebase client
 let app
@@ -54,7 +61,7 @@ export async function requestNotificationPermission(): Promise<string | null> {
     if (!messaging) return null
 
     if (!VAPID_KEY) {
-      console.warn('FCM: VAPID key not configured. Set NEXT_PUBLIC_FIREBASE_VAPID_KEY in .env.local')
+      console.warn('FCM: VAPID key not configured.')
       return null
     }
 
@@ -65,6 +72,7 @@ export async function requestNotificationPermission(): Promise<string | null> {
     }
 
     const token = await getToken(messaging, { vapidKey: VAPID_KEY })
+    console.log('FCM: Token obtained:', token ? token.substring(0, 20) + '...' : 'null')
     return token
   } catch (error: any) {
     console.error('FCM: Error getting token:', error.message)

@@ -1,15 +1,17 @@
 /**
- * عافيتك — Notification Bell Component (v6)
+ * عافيتك — Notification Bell Component (v7 - DEFINITIVE)
  *
- * v6 KEY CHANGES (Voice Notification System):
- * 1. Integrated TTS voice notifications - reads notification text aloud
- * 2. Voice settings: language (ar/en), gender (male/female), volume, rate
- * 3. Quiet hours support for voice notifications
- * 4. Play button per notification to re-read with TTS
- * 5. Voice settings accessible from bell dropdown
+ * v7 KEY CHANGES:
+ * 1. ✅ Browser Notification POPUPS for polling-detected notifications
+ * 2. ✅ Browser Notification POPUPS for FCM foreground messages
+ * 3. ✅ Auto-play sound + TTS for ALL new notifications (not just FCM)
+ * 4. ✅ Works even WITHOUT FCM (polling + Browser Notification API)
+ * 5. ✅ Vibration support for mobile devices
+ * 6. ✅ Clicking notification opens the app
  *
- * v5 features preserved:
+ * Previous features preserved:
  * - sound-manager v11 with proper AudioContext resumption
+ * - TTS voice notifications with Arabic support
  * - Strong deduplication by both ID and content
  * - Singleton pattern for polling + FCM listener
  */
@@ -20,7 +22,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Bell, BellOff, BellRing, CheckCheck, Volume2, VolumeX, Shield, Sparkles, Settings } from 'lucide-react'
 import { useAppStore } from '@/lib/store'
-import { playNotificationSound, isSoundEnabled, setSoundEnabled as setSoundStorage, testNotificationSound, initSoundSystem, getAudioContextState } from '@/lib/sound-manager'
+import { playNotificationSound, isSoundEnabled, setSoundEnabled as setSoundStorage, testNotificationSound, initSoundSystem, getAudioContextState, resumeAudioContext } from '@/lib/sound-manager'
 import { speakNotification, stopTTS, isTTSSpeaking, testTTS, getTTSSettings, saveTTSSettings, initTTS, isTTSEnabled, setTTSEnabled, createVoiceNotification, type VoiceGender, type VoiceLanguage, type TTSSettings } from '@/lib/voice-manager'
 import { onForegroundMessage } from '@/lib/firebase-client'
 
@@ -97,6 +99,60 @@ function isAndroidApp(): boolean {
 }
 
 // ═══════════════════════════════════════════════════════════════
+//  SHOW BROWSER NOTIFICATION POPUP
+//  This is the KEY missing feature — shows a real OS notification
+// ═══════════════════════════════════════════════════════════════
+
+function showBrowserNotification(
+  title: string,
+  body: string,
+  type: string,
+  notifId?: string,
+  url?: string
+): void {
+  if (typeof window === 'undefined') return
+  if (!('Notification' in window)) return
+  if (Notification.permission !== 'granted') return
+
+  try {
+    const notif = new Notification(title, {
+      body: body,
+      icon: '/logo-192.png',
+      badge: '/logo-192.png',
+      tag: notifId ? `aafiatak-${notifId}` : `aafiatak-${type}-${Date.now()}`,
+      dir: 'rtl',
+      lang: 'ar',
+      silent: false,
+      requireInteraction: type === 'emergency' || type === 'assignment',
+      data: {
+        url: url || '/',
+        type: type,
+        notifId: notifId || '',
+      },
+      // Vibration patterns
+      vibrate: type === 'emergency'
+        ? [200, 100, 200, 100, 200, 100, 200]
+        : type === 'assignment'
+        ? [200, 50, 200]
+        : [100],
+    })
+
+    notif.onclick = () => {
+      window.focus()
+      const targetUrl = notif.data?.url || '/'
+      if (targetUrl !== '/') {
+        window.location.href = targetUrl
+      }
+      notif.close()
+    }
+
+    console.log('🔔 [Browser Notif] Shown:', title)
+  } catch (e) {
+    console.warn('🔔 [Browser Notif] Failed:', e)
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
 //  MODULE-LEVEL SINGLETON STATE
 // ═══════════════════════════════════════════════════════════════
 
@@ -118,26 +174,18 @@ let globalSoundSystemInitialized = false
 let globalSwMessageListenerSetup = false
 
 // ─── Service Worker Message Listener ───
-// Listens for messages from the Service Worker when the user clicks
-// a background notification. This triggers TTS automatically.
 function singletonInitSWMessageListener() {
   if (globalSwMessageListenerSetup) return
   if (typeof window === 'undefined' || !navigator.serviceWorker) return
   globalSwMessageListenerSetup = true
 
-  // Listen for messages from the Service Worker
   navigator.serviceWorker.addEventListener('message', (event) => {
     const data = event.data
     if (!data) return
 
-    // Handle notification click → auto-speak
     if (data.type === 'NOTIFICATION_CLICKED_SPEAK') {
       console.log('🗣️ [SW Message] Notification clicked, will speak:', data.titleAr || data.title)
-
-      // Resume AudioContext so TTS can work
       resumeAudioContext()
-
-      // Small delay to ensure the app is fully loaded
       setTimeout(() => {
         const voiceNotif = createVoiceNotification(
           data.notifType || 'system',
@@ -148,11 +196,9 @@ function singletonInitSWMessageListener() {
           data.notifType === 'emergency' ? 'urgent' : 'normal'
         )
         speakNotification(voiceNotif)
-        console.log('🗣️ [SW Message] TTS triggered for:', data.titleAr || data.title)
       }, 1000)
     }
 
-    // Handle sound play request from SW
     if (data.type === 'PLAY_NOTIFICATION_SOUND') {
       console.log('🔊 [SW Message] Play sound request:', data.notifType)
       resumeAudioContext()
@@ -188,11 +234,9 @@ function deduplicateNotifications(notifs: NotifItem[]): NotifItem[] {
   const result: NotifItem[] = []
 
   for (const n of notifs) {
-    // 1. Skip exact ID duplicates
     if (seenById.has(n.id)) continue
     seenById.add(n.id)
 
-    // 2. Skip content duplicates (same title + type within 60s window)
     const contentKey = `${n.title}||${n.type}`
     const existing = seenByContent.get(contentKey)
 
@@ -201,7 +245,6 @@ function deduplicateNotifications(notifs: NotifItem[]): NotifItem[] {
       const currentTime = getTimeValue(n.createdAt)
 
       if (Math.abs(existingTime - currentTime) < 60000) {
-        // Duplicate — keep the unread one
         if (existing.isRead && !n.isRead) {
           const idx = result.findIndex(r => r.id === existing.id)
           if (idx !== -1) result[idx] = n
@@ -241,17 +284,15 @@ async function singletonFetchNotifications() {
         createdAt: n.createdAt, data: n.data,
       }))
 
-      // Deduplicate
       notifs = deduplicateNotifications(notifs)
 
-      // Find truly NEW unread notifications (not in known IDs and not already had sound)
+      // Find truly NEW unread notifications
       const newUnreadNotifs = notifs.filter(n =>
         !n.isRead &&
         !globalKnownIds.has(n.id) &&
         !globalSoundPlayedIds.has(n.id)
       )
 
-      // Add all IDs to known set
       notifs.forEach(n => globalKnownIds.add(n.id))
 
       // Cleanup old IDs from memory
@@ -268,23 +309,29 @@ async function singletonFetchNotifications() {
 
       const unread = notifs.filter(n => !n.isRead).length
 
-      // Update shared state
       latestNotifs = notifs
       latestUnreadCount = unread
       notifyAllSubscribers()
 
-      // Play sound + TTS ONLY for genuinely NEW notifications (not on first load)
-      if (newUnreadNotifs.length > 0 && globalInitialFetchDone && isSoundEnabled()) {
+      // ═══════════════════════════════════════════════════════
+      //  PLAY SOUND + TTS + SHOW BROWSER NOTIFICATION
+      //  This is the KEY fix - shows popup + sound + voice
+      // ═══════════════════════════════════════════════════════
+      if (newUnreadNotifs.length > 0 && globalInitialFetchDone) {
         const firstNew = newUnreadNotifs[0]
         const notifType = firstNew.type || 'system'
 
-        // Mark sound as played for these IDs to prevent duplicate sounds
+        // Mark sound as played for these IDs
         newUnreadNotifs.forEach(n => globalSoundPlayedIds.add(n.id))
 
-        console.log('🔊 [Singleton] New notification via polling:', firstNew.title, notifType)
-        playNotificationSound(notifType, firstNew.title, firstNew.message)
+        console.log('🔔 [Singleton] New notification via polling:', firstNew.title, notifType)
 
-        // 🔊 TTS: Read notification aloud after tone
+        // 1. Play notification sound
+        if (isSoundEnabled()) {
+          playNotificationSound(notifType, firstNew.title, firstNew.message)
+        }
+
+        // 2. TTS: Read notification aloud
         if (isTTSEnabled()) {
           const voiceNotif = createVoiceNotification(
             notifType,
@@ -296,6 +343,15 @@ async function singletonFetchNotifications() {
           )
           speakNotification(voiceNotif)
         }
+
+        // 3. ✅ NEW: Show browser notification POPUP
+        showBrowserNotification(
+          firstNew.title,
+          firstNew.message,
+          notifType,
+          firstNew.id,
+          firstNew.data?.url || '/'
+        )
       }
 
       if (!globalInitialFetchDone) {
@@ -325,10 +381,10 @@ function singletonInitFcmListener() {
       globalSoundPlayedIds.add(idStr)
     }
 
-    // Play sound ONCE
+    // 1. Play sound
     playNotificationSound(type, title, body)
 
-    // 🔊 TTS: Read FCM notification aloud
+    // 2. TTS: Read FCM notification aloud
     if (isTTSEnabled()) {
       const voiceNotif = createVoiceNotification(
         type, title, body, undefined, undefined,
@@ -336,6 +392,10 @@ function singletonInitFcmListener() {
       )
       speakNotification(voiceNotif)
     }
+
+    // 3. ✅ NEW: Show browser notification POPUP for FCM foreground messages
+    // FCM foreground messages do NOT auto-show notifications — we must do it
+    showBrowserNotification(title, body, type, notifId ? String(notifId) : undefined, payload?.data?.url)
 
     // Refresh list
     singletonFetchNotifications()
@@ -382,7 +442,6 @@ function singletonInitCapacitorListener() {
 
       playNotificationSound(type, title, body)
 
-      // 🔊 TTS: Read Capacitor push notification aloud
       if (isTTSEnabled()) {
         const voiceNotif = createVoiceNotification(
           type, title, body, undefined, undefined,
@@ -390,6 +449,8 @@ function singletonInitCapacitorListener() {
         )
         speakNotification(voiceNotif)
       }
+
+      showBrowserNotification(title, body, type, notifId ? String(notifId) : undefined)
 
       singletonFetchNotifications()
     })
@@ -718,11 +779,9 @@ export default function NotificationBell({ gradientFrom, gradientTo, userType }:
         <motion.button
           ref={bellRef}
           onClick={() => {
-            // USER GESTURE — resume AudioContext so sounds can play
             try {
               const AC = window.AudioContext || (window as any).webkitAudioContext
               if (AC && typeof AC !== 'undefined') {
-                // Resume our shared AudioContext from sound-manager
                 console.log('🔊 [Bell] User clicked bell, AudioContext state:', getAudioContextState())
               }
             } catch {}
