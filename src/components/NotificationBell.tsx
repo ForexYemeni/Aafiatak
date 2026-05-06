@@ -17,7 +17,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Bell, BellOff, BellRing, CheckCheck, Volume2, VolumeX, Shield, Sparkles, Settings } from 'lucide-react'
 import { useAppStore } from '@/lib/store'
-import { playNotificationSound, isSoundEnabled, setSoundEnabled, testNotificationSound } from '@/lib/sound-manager'
+import { playNotificationSound, isSoundEnabled, setSoundEnabled as setSoundStorage, testNotificationSound, initSoundSystem } from '@/lib/sound-manager'
 
 interface NotifItem {
   id: string
@@ -116,18 +116,10 @@ export default function NotificationBell({ gradientFrom, gradientTo, userType }:
   // When the polling fetch detects new unread items, we only play sound
   // for IDs not already in this set. This prevents double-playing.
   const knownNotificationIds = useRef<Set<string>>(new Set())
-  const soundCooldown = useRef<number>(0) // timestamp of last sound play
 
-  // ─── Play sound with cooldown to prevent duplicates ───
-  const playSoundSafely = useCallback((type: string = 'system') => {
-    const now = Date.now()
-    // Don't play sound if one was played within the last 3 seconds
-    if (now - soundCooldown.current < 3000) {
-      console.log('🔔 Sound cooldown active, skipping duplicate')
-      return
-    }
-    soundCooldown.current = now
-    playNotificationSound(type)
+  // ─── Initialize sound system on mount ───
+  useEffect(() => {
+    initSoundSystem()
   }, [])
 
   // ─── Send FCM token to server ───
@@ -168,14 +160,12 @@ export default function NotificationBell({ gradientFrom, gradientTo, userType }:
       })
 
       // Listen for push notification received while app is in foreground
-      // Play sound with cooldown — the native FCM service does NOT show notifications
-      // when the app is in foreground (it checks MainActivity.isAppInForeground),
-      // so this is the ONLY sound source when the user is actively using the app.
+      // Play sound — cooldown is handled inside playNotificationSound
       pushPlugin.addListener('pushNotificationReceived', (notification: any) => {
         console.log('📱 Push received in foreground:', notification)
-        // Play sound with cooldown protection (prevents duplicate if native also fires)
+        // Play sound (cooldown prevents duplicates from polling + push)
         const type = notification?.data?.type || 'system'
-        playSoundSafely(type)
+        playNotificationSound(type)
         // Add notification ID to known set to prevent polling re-trigger
         const notifId = notification?.data?.id || notification?.data?.requestId
         if (notifId) {
@@ -201,7 +191,7 @@ export default function NotificationBell({ gradientFrom, gradientTo, userType }:
         }
       } catch {}
     }
-  }, [sendTokenToServer, playSoundSafely])
+  }, [sendTokenToServer, playNotificationSound])
 
   // Fetch notifications
   const fetchNotifications = useCallback(async () => {
@@ -238,13 +228,11 @@ export default function NotificationBell({ gradientFrom, gradientTo, userType }:
 
         // Only play sound for genuinely NEW unread notifications
         // AND skip on the very first fetch (app load) to avoid playing old notifications
-        // On Android/Capacitor: skip sound entirely — the native FCM service handles sounds.
-        // This prevents duplicate sounds and sound replay after marking as read.
-        const isNative = isCapacitorNative() || isAndroidApp()
-        if (newUnreadNotifs.length > 0 && initialFetchDone.current && soundEnabled && !isNative) {
+        // Sound system has built-in cooldown (3s) to prevent duplicates from push + polling
+        if (newUnreadNotifs.length > 0 && initialFetchDone.current && soundEnabled) {
           // Determine sound type from the notification type
           const notifType = newUnreadNotifs[0].type || 'system'
-          playSoundSafely(notifType)
+          playNotificationSound(notifType)
         }
 
         // Mark initial fetch as done after first successful fetch
@@ -253,7 +241,7 @@ export default function NotificationBell({ gradientFrom, gradientTo, userType }:
         }
       }
     } catch {}
-  }, [user, userType, soundEnabled, playSoundSafely])
+  }, [user, userType, soundEnabled, playNotificationSound])
 
   useEffect(() => { fetchNotifications(); const i = setInterval(fetchNotifications, 15000); return () => clearInterval(i) }, [fetchNotifications])
 
@@ -464,7 +452,9 @@ export default function NotificationBell({ gradientFrom, gradientTo, userType }:
   }, [notifications, user, userType])
 
   const toggleSound = useCallback(() => {
-    const v = !soundEnabled; setSoundEnabled(v); setSoundEnabled(v)
+    const v = !soundEnabled
+    setSoundEnabled(v) // Update React state
+    setSoundStorage(v) // Update localStorage
     if (v) testNotificationSound('system')
   }, [soundEnabled])
 
