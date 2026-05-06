@@ -26,6 +26,7 @@ import { useToast } from '@/hooks/use-toast'
 import ChatSystem from '@/components/ChatSystem'
 import Image from 'next/image'
 import { notifyBeneficiary, notifyAdmin } from '@/lib/notifications'
+import { playLocalActionSound } from '@/lib/sound-manager'
 import NotificationBell from '@/components/NotificationBell'
 
 // ==================== Date Helpers ====================
@@ -531,6 +532,7 @@ export default function NurseDashboard() {
         })
         const assignment = assignments.find(a => a.id === assignmentId)
         notifyBeneficiary.nurseAssigned(assignment?.request?.beneficiary?.id || '', nurseName, assignment?.requestId || '').catch(() => {})
+        playLocalActionSound('assignment')  // Sound feedback for nurse accepting assignment
         fetchAssignments()
       } else {
         const data = await res.json().catch(() => ({})).catch(() => ({}))
@@ -791,6 +793,7 @@ export default function NurseDashboard() {
             // Notify beneficiary that the service is completed
             if (assignment?.request?.beneficiary?.id) {
               notifyBeneficiary.orderCompleted(assignment.request.beneficiary.id, assignment.requestId).catch(() => {})
+              playLocalActionSound('rating')  // Sound feedback for nurse completing assignment
             }
           }
         }
@@ -799,6 +802,7 @@ export default function NurseDashboard() {
           const assignment = assignments.find(a => a.id === assignmentId)
           if (assignment?.request?.beneficiary?.id && assignment?.request?.service?.name) {
             notifyBeneficiary.nurseEnRoute(assignment.request.beneficiary.id, nurseName, 'قريباً').catch(() => {})
+            playLocalActionSound('status_change')  // Sound feedback for nurse starting task
           }
         }
         toast({
@@ -843,6 +847,7 @@ export default function NurseDashboard() {
         // Notify beneficiary that the service is completed
         if (selectedAssignment?.request?.beneficiary?.id) {
           notifyBeneficiary.orderCompleted(selectedAssignment.request.beneficiary.id, requestId).catch(() => {})
+          playLocalActionSound('rating')  // Sound feedback for nurse completing assignment
         }
         toast({ title: 'تم إكمال المهمة بنجاح', description: 'شكراً لجهودك في إنجاز هذه المهمة' })
         fetchAssignments()

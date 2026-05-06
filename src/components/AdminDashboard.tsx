@@ -30,6 +30,7 @@ import { Separator } from '@/components/ui/separator'
 import { useToast } from '@/hooks/use-toast'
 import Image from 'next/image'
 import { notifyBeneficiary, notifyNurse } from '@/lib/notifications'
+import { playLocalActionSound } from '@/lib/sound-manager'
 import NotificationBell from '@/components/NotificationBell'
 
 // ─── Date Helpers ──────────────────────────────────────────────
@@ -500,6 +501,7 @@ export default function AdminDashboard() {
         if (status === 'approved') {
           const nurse = nurses.find((n: any) => n.id === id)
           notifyNurse.accountApproved(id).catch(() => {})
+          playLocalActionSound('system')  // Sound feedback for admin action
           logActivity('nurse_approve', `تم قبول ممرض: ${nurse?.firstName || ''} ${nurse?.lastName || ''}`)
         }
         fetchData()
@@ -576,6 +578,7 @@ export default function AdminDashboard() {
           setPaymentConfirmStep(false)
           toast({ title: 'تم تأكيد الدفع وقبول الطلب', description: 'الآن يمكنك تعيين ممرض أو التنفيذ المباشر' })
           notifyBeneficiary.paymentConfirmed(selectedRequest.beneficiary?.id || '', selectedRequest.id).catch(() => {})
+          playLocalActionSound('payment')  // Sound feedback for admin confirming payment
           fetchData()
         } else {
           const data = await res.json()
@@ -604,6 +607,7 @@ export default function AdminDashboard() {
             const nurse = nurses.find((n: any) => n.id === selectedNurseId)
             notifyBeneficiary.nurseAssigned(selectedRequest.beneficiary?.id || '', `${nurse?.firstName || ''} ${nurse?.lastName || ''}`, selectedRequest.id).catch(() => {})
             notifyNurse.newAssignment(selectedNurseId, selectedRequest.service?.name || (selectedRequest.isMultiService ? 'خدمة متعددة' : 'خدمة'), selectedRequest.id).catch(() => {})
+            playLocalActionSound('assignment')  // Sound feedback for admin assigning nurse
             setApproveDialog(false); fetchData()
           }
           else { const data = await res.json(); toast({ title: 'خطأ', description: data.error, variant: 'destructive' }) }
@@ -634,6 +638,7 @@ export default function AdminDashboard() {
         if (req?.beneficiary?.id) {
           if (status === 'approved') {
             notifyBeneficiary.orderApproved(req.beneficiary.id, id).catch(() => {})
+            playLocalActionSound('status_change')  // Sound feedback for admin approving request
           }
         }
         fetchData()
@@ -732,6 +737,7 @@ export default function AdminDashboard() {
         const transaction = transactions.find((t: any) => t.id === transactionId)
         if (transaction?.beneficiaryId) {
           notifyBeneficiary.paymentConfirmed(transaction.beneficiaryId, transaction.requestId || '').catch(() => {})
+          playLocalActionSound('payment')  // Sound feedback for admin confirming payment
         }
         fetchData()
       } else {
@@ -757,6 +763,7 @@ export default function AdminDashboard() {
         const req = requests.find((r: any) => r.id === requestId)
         if (req?.beneficiary?.id) {
           notifyBeneficiary.paymentConfirmed(req.beneficiary.id, requestId).catch(() => {})
+          playLocalActionSound('payment')  // Sound feedback for admin confirming payment
         }
         fetchData()
       } else {

@@ -29,6 +29,7 @@ import dynamic from 'next/dynamic'
 const TrackingMap = dynamic(() => import('@/components/TrackingMap'), { ssr: false })
 import Image from 'next/image'
 import { notifyAdmin, notifyNurse } from '@/lib/notifications'
+import { playLocalActionSound } from '@/lib/sound-manager'
 import NotificationBell from '@/components/NotificationBell'
 
 // ===== Date Formatting Helpers =====
@@ -583,6 +584,7 @@ export default function BeneficiaryDashboard() {
         // Notify admin about new order
         const serviceName = selectedService?.name || (selectedServices.length > 1 ? 'خدمة متعددة' : selectedServices[0]?.name || 'خدمة')
         notifyAdmin.newOrder('', beneficiaryUser?.name || '', serviceName, data.id || data.requestId || '').catch(() => {})
+        playLocalActionSound('appointment')  // Sound feedback for the beneficiary
         // Add loyalty points
         try {
           await fetch('/api/loyalty', {
@@ -838,6 +840,7 @@ export default function BeneficiaryDashboard() {
       if (res.ok) {
         // Notify admin about emergency request
         notifyAdmin.emergencyRequest('', beneficiaryUser?.name || '', data.id || data.requestId || '').catch(() => {})
+        playLocalActionSound('emergency')  // Sound feedback for the beneficiary
         // Add loyalty points
         try {
           await fetch('/api/loyalty', {
@@ -1015,6 +1018,7 @@ export default function BeneficiaryDashboard() {
         // Notify nurse about the new rating
         if (ratingNurseId) {
           notifyNurse.newRating(ratingNurseId, ratingValue).catch(() => {})
+          playLocalActionSound('rating')  // Sound feedback for rating submitted
         }
       } else {
         const data = await res.json()
@@ -1230,6 +1234,7 @@ export default function BeneficiaryDashboard() {
         }
         // Notify admin about payment proof
         notifyAdmin.paymentProof('', beneficiaryUser?.name || '', String(paymentAmount || dynamicPricing?.totalPrice || 0)).catch(() => {})
+        playLocalActionSound('payment')  // Sound feedback for payment proof sent
         setPaymentDialog(false)
         setIsEmergencyPaymentFlow(false)
         setPaymentForm({ method: '', paymentMethodId: '', transactionRef: '', senderName: '', senderPhone: '', exchangeName: '', walletType: '' })

@@ -17,7 +17,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Bell, BellOff, BellRing, CheckCheck, Volume2, VolumeX, Shield, Sparkles, Settings } from 'lucide-react'
 import { useAppStore } from '@/lib/store'
-import { playNotificationSound, isSoundEnabled, setSoundEnabled as setSoundStorage, testNotificationSound, initSoundSystem } from '@/lib/sound-manager'
+import { playNotificationSound, playLocalActionSound, isSoundEnabled, setSoundEnabled as setSoundStorage, testNotificationSound, initSoundSystem } from '@/lib/sound-manager'
 
 interface NotifItem {
   id: string
@@ -163,13 +163,15 @@ export default function NotificationBell({ gradientFrom, gradientTo, userType }:
       // Play sound — cooldown is handled inside playNotificationSound
       pushPlugin.addListener('pushNotificationReceived', (notification: any) => {
         console.log('📱 Push received in foreground:', notification)
-        // Play sound (cooldown prevents duplicates from polling + push)
-        const type = notification?.data?.type || 'system'
-        playNotificationSound(type)
+        // Play sound with notification data for Browser Notification fallback
+        const type = notification?.data?.type || notification?.type || 'system'
+        const title = notification?.title || notification?.data?.title || ''
+        const body = notification?.body || notification?.data?.body || notification?.data?.message || ''
+        playNotificationSound(type, title, body)
         // Add notification ID to known set to prevent polling re-trigger
-        const notifId = notification?.data?.id || notification?.data?.requestId
+        const notifId = notification?.data?.id || notification?.data?.requestId || notification?.id
         if (notifId) {
-          knownNotificationIds.current.add(notifId)
+          knownNotificationIds.current.add(String(notifId))
         }
         // Refresh the notification list
         fetchNotifications()
@@ -230,9 +232,11 @@ export default function NotificationBell({ gradientFrom, gradientTo, userType }:
         // AND skip on the very first fetch (app load) to avoid playing old notifications
         // Sound system has built-in cooldown (3s) to prevent duplicates from push + polling
         if (newUnreadNotifs.length > 0 && initialFetchDone.current && soundEnabled) {
-          // Determine sound type from the notification type
-          const notifType = newUnreadNotifs[0].type || 'system'
-          playNotificationSound(notifType)
+          // Play sound with notification data for Browser Notification API
+          const firstNew = newUnreadNotifs[0]
+          const notifType = firstNew.type || 'system'
+          console.log('🔊 New notification detected via polling:', firstNew.title, notifType)
+          playNotificationSound(notifType, firstNew.title, firstNew.message)
         }
 
         // Mark initial fetch as done after first successful fetch
