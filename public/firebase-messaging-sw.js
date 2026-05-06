@@ -1,12 +1,14 @@
 /* ========================================================
-   عافيتك — Unified Service Worker v2.0
+   عافيتك — Unified Service Worker v3.0
    FCM push notifications + caching + VOICE notification support
-   
-   KEY CHANGES v2.0:
-   - Plays notification sound when background message arrives
-   - Adds "استمع" (Listen) action button on notifications
-   - When user clicks notification → opens app and triggers TTS
-   - Communicates with the app via postMessage to auto-speak
+   PWA Install support + Enhanced offline experience
+
+   KEY CHANGES v3.0:
+   - Improved PWA installability with proper caching
+   - Better notification sound in background (Web Audio in SW)
+   - Auto-TTS when notification clicked + app was closed
+   - Offline fallback page with Arabic UI
+   - Precache critical assets for instant load
    ======================================================== */
 
 // ─── Firebase Cloud Messaging ───
@@ -27,10 +29,15 @@ firebase.initializeApp({
 const messaging = firebase.messaging();
 
 // ─── Cache Configuration ───
-const CACHE_NAME = 'afiyatak-v3';
-const STATIC_ASSETS = [
+const CACHE_NAME = 'afiyatak-v4';
+const RUNTIME_CACHE = 'afiyatak-runtime-v4';
+
+const PRECACHE_URLS = [
   '/',
   '/logo.png',
+  '/logo-192.png',
+  '/logo-512.png',
+  '/manifest.json',
   '/sounds/emergency.wav',
   '/sounds/assignment.wav',
   '/sounds/chat.wav',
@@ -43,43 +50,46 @@ const STATIC_ASSETS = [
 ];
 
 // ═══════════════════════════════════════════════════════
-//  PRE-CACHE SOUNDS DURING INSTALL
+//  PRE-CACHE ASSETS DURING INSTALL
 // ═══════════════════════════════════════════════════════
 
 self.addEventListener('install', (event) => {
+  console.log('[SW v3] Installing...');
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      // Cache static assets - don't block on sound files if they fail
       return Promise.allSettled(
-        STATIC_ASSETS.map(url => 
+        PRECACHE_URLS.map(url =>
           cache.add(url).catch(err => {
-            console.warn('SW: Failed to cache', url, err);
+            console.warn('[SW] Failed to cache', url, err);
           })
         )
       );
     })
   );
+  // Force activation immediately
   self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
+  console.log('[SW v3] Activating...');
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames
-          .filter((name) => name !== CACHE_NAME)
+          .filter((name) => name !== CACHE_NAME && name !== RUNTIME_CACHE)
           .map((name) => caches.delete(name))
       );
+    }).then(() => {
+      // Claim all clients immediately
+      return self.clients.claim();
     })
   );
-  self.clients.claim();
 });
 
 // ═══════════════════════════════════════════════════════
 //  NOTIFICATION SOUND IN SERVICE WORKER
 // ═══════════════════════════════════════════════════════
 
-// Map notification types to sound files
 const SOUND_MAP = {
   assignment: '/sounds/assignment.wav',
   chat: '/sounds/chat.wav',
@@ -94,17 +104,15 @@ const SOUND_MAP = {
 
 /**
  * Play a notification sound in the Service Worker context.
- * Uses the AudioContext API available in Service Workers (Chrome/Edge).
- * Falls back to the browser's default notification sound.
+ * Uses Web Audio API (oscillator) which works in Chrome/Edge SW.
  */
 async function playServiceWorkerSound(type) {
   try {
-    // Try to use the Service Worker's AudioContext (available in some browsers)
+    // Try Web Audio API in Service Worker
     if (typeof AudioContext !== 'undefined' || typeof webkitAudioContext !== 'undefined') {
       const AC = AudioContext || webkitAudioContext;
       const ctx = new AC();
-      
-      // Different tones for different notification types
+
       const tones = {
         emergency:    { freq: 1200, dur: 250, repeat: 3, gap: 150, wave: 'sawtooth' },
         assignment:   { freq: 880,  dur: 180, repeat: 2, gap: 120, wave: 'sine' },
@@ -119,7 +127,6 @@ async function playServiceWorkerSound(type) {
 
       const t = tones[type] || tones.system;
 
-      // Resume context if suspended
       if (ctx.state === 'suspended') {
         await ctx.resume();
       }
@@ -133,7 +140,6 @@ async function playServiceWorkerSound(type) {
         osc.frequency.value = t.freq;
         osc.type = t.wave;
 
-        // Smooth envelope
         gain.gain.setValueAtTime(0.001, start);
         gain.gain.exponentialRampToValueAtTime(0.6, start + 0.01);
         gain.gain.setValueAtTime(0.6, start + t.dur / 1000 - 0.03);
@@ -143,25 +149,24 @@ async function playServiceWorkerSound(type) {
         osc.stop(start + t.dur / 1000 + 0.01);
       }
 
-      console.log('🔊 [SW] Played tone for:', type);
+      console.log('[SW] Played tone for:', type);
       return;
     }
   } catch (e) {
-    console.warn('🔊 [SW] AudioContext tone failed:', e.message);
+    console.warn('[SW] AudioContext tone failed:', e.message);
   }
 
-  // Fallback: Try to play the actual WAV file via a client window
+  // Fallback: Ask any open window to play the sound
   try {
     const clientList = await clients.matchAll({ type: 'window', includeUncontrolled: true });
     if (clientList.length > 0) {
-      // There's an open window - ask it to play the sound
       clientList[0].postMessage({
         type: 'PLAY_NOTIFICATION_SOUND',
         notifType: type,
       });
     }
   } catch (e) {
-    console.warn('🔊 [SW] Sound fallback failed:', e.message);
+    console.warn('[SW] Sound fallback failed:', e.message);
   }
 }
 
@@ -177,23 +182,23 @@ messaging.onBackgroundMessage((payload) => {
 
   // Notification type configuration
   const typeConfig = {
-    assignment:    { icon: '/logo.png', badge: '/logo.png', tag: 'assignment', vibrate: [200, 50, 200], requireInteraction: true },
-    chat:          { icon: '/logo.png', badge: '/logo.png', tag: 'chat', vibrate: [100], requireInteraction: false },
-    payment:       { icon: '/logo.png', badge: '/logo.png', tag: 'payment', vibrate: [150, 50, 150], requireInteraction: false },
-    emergency:     { icon: '/logo.png', badge: '/logo.png', tag: 'emergency', vibrate: [200, 100, 200, 100, 200, 100, 200], requireInteraction: true },
-    status_change: { icon: '/logo.png', badge: '/logo.png', tag: 'status', vibrate: [100], requireInteraction: false },
-    rating:        { icon: '/logo.png', badge: '/logo.png', tag: 'rating', vibrate: [150, 50, 150], requireInteraction: false },
-    system:        { icon: '/logo.png', badge: '/logo.png', tag: 'system', vibrate: [100], requireInteraction: false },
-    reminder:      { icon: '/logo.png', badge: '/logo.png', tag: 'reminder', vibrate: [150, 80, 150], requireInteraction: false },
-    appointment:   { icon: '/logo.png', badge: '/logo.png', tag: 'appointment', vibrate: [200, 50, 200], requireInteraction: false },
+    assignment:    { icon: '/logo-192.png', badge: '/logo-192.png', tag: 'assignment', vibrate: [200, 50, 200], requireInteraction: true },
+    chat:          { icon: '/logo-192.png', badge: '/logo-192.png', tag: 'chat', vibrate: [100], requireInteraction: false },
+    payment:       { icon: '/logo-192.png', badge: '/logo-192.png', tag: 'payment', vibrate: [150, 50, 150], requireInteraction: false },
+    emergency:     { icon: '/logo-192.png', badge: '/logo-192.png', tag: 'emergency', vibrate: [200, 100, 200, 100, 200, 100, 200], requireInteraction: true },
+    status_change: { icon: '/logo-192.png', badge: '/logo-192.png', tag: 'status', vibrate: [100], requireInteraction: false },
+    rating:        { icon: '/logo-192.png', badge: '/logo-192.png', tag: 'rating', vibrate: [150, 50, 150], requireInteraction: false },
+    system:        { icon: '/logo-192.png', badge: '/logo-192.png', tag: 'system', vibrate: [100], requireInteraction: false },
+    reminder:      { icon: '/logo-192.png', badge: '/logo-192.png', tag: 'reminder', vibrate: [150, 80, 150], requireInteraction: false },
+    appointment:   { icon: '/logo-192.png', badge: '/logo-192.png', tag: 'appointment', vibrate: [200, 50, 200], requireInteraction: false },
   };
 
   const config = typeConfig[notifType] || typeConfig.system;
 
-  // Play the notification sound
+  // Play the notification sound in background
   playServiceWorkerSound(notifType);
 
-  // Build notification data for TTS
+  // Build TTS data for when user clicks
   const ttsData = {
     titleAr: titleAr || title || 'إشعار جديد',
     bodyAr: bodyAr || body || '',
@@ -210,19 +215,20 @@ messaging.onBackgroundMessage((payload) => {
     data: {
       url: url || '/',
       type: notifType,
-      // Store TTS data so we can speak when the user clicks
+      // TTS data for auto-speak on click
       ttsTitle: title || '',
       ttsBody: body || '',
       ttsTitleAr: ttsData.titleAr,
       ttsBodyAr: ttsData.bodyAr,
       ttsType: notifType,
-      shouldSpeak: 'true', // Flag to trigger TTS on click
+      shouldSpeak: 'true',
+      timestamp: Date.now(),
       ...payload.data,
     },
     dir: 'rtl',
     lang: 'ar',
     requireInteraction: config.requireInteraction,
-    silent: false, // Important: let the browser play its notification sound too
+    silent: false, // Let browser play notification sound too
     vibrate: config.vibrate,
     renotify: true,
     actions: [
@@ -246,7 +252,6 @@ self.addEventListener('notificationclick', (event) => {
   if (action === 'dismiss') return;
 
   // Both 'speak' and 'open' and default click should open the app
-  // The app will receive a message to play TTS
   const shouldSpeak = action === 'speak' || data.shouldSpeak === 'true' || !action;
   const targetUrl = data.url || '/';
 
@@ -256,7 +261,7 @@ self.addEventListener('notificationclick', (event) => {
       for (const client of clientList) {
         if (client.url.includes(self.location.origin) && 'focus' in client) {
           client.navigate(targetUrl);
-          // Send message to the client to trigger TTS
+          // Send message to trigger TTS
           if (shouldSpeak) {
             setTimeout(() => {
               client.postMessage({
@@ -268,18 +273,18 @@ self.addEventListener('notificationclick', (event) => {
                 notifType: data.ttsType || data.type || 'system',
                 url: targetUrl,
               });
-            }, 500); // Small delay to let the page load
+            }, 500);
           }
           return client.focus();
         }
       }
-      
-      // No existing window - open a new one
-      // Pass TTS data as URL params so the app can auto-speak on load
-      const ttsParams = shouldSpeak ? 
+
+      // No existing window — open new one with TTS params in URL
+      const ttsParams = shouldSpeak ?
         `&speak=1&st=${encodeURIComponent(data.ttsTitleAr || data.ttsTitle || '')}&sb=${encodeURIComponent(data.ttsBodyAr || data.ttsBody || '')}&stt=${data.ttsType || 'system'}` : '';
-      const fullUrl = targetUrl + (targetUrl.includes('?') ? ttsParams : '?' + ttsParams.replace(/^&/, ''));
-      
+      const separator = targetUrl.includes('?') ? '&' : '?';
+      const fullUrl = targetUrl + (ttsParams ? separator + ttsParams.replace(/^&/, '') : '');
+
       return clients.openWindow(fullUrl);
     })
   );
@@ -290,11 +295,8 @@ self.addEventListener('push', (event) => {
   if (event.data) {
     try {
       const data = event.data.json();
-      // If FCM already handled it via onBackgroundMessage, skip
       if (data.from === 'fcm') return;
-    } catch {
-      // Not JSON, handle raw push
-    }
+    } catch {}
   }
 });
 
@@ -305,6 +307,9 @@ self.addEventListener('push', (event) => {
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();
+  }
+  if (event.data && event.data.type === 'GET_VERSION') {
+    event.ports[0].postMessage({ version: '3.0' });
   }
 });
 
@@ -318,6 +323,9 @@ self.addEventListener('fetch', (event) => {
 
   if (request.method !== 'GET') return;
   if (!url.protocol.startsWith('http')) return;
+
+  // Skip Chrome extension requests
+  if (url.protocol === 'chrome-extension:') return;
 
   // Network-first strategy for API calls
   if (url.pathname.startsWith('/api/')) {
@@ -350,7 +358,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Network-first for HTML pages
+  // Network-first for HTML pages with offline fallback
   if (request.mode === 'navigate' || request.headers.get('accept')?.includes('text/html')) {
     event.respondWith(networkFirstWithOfflineFallback(request));
     return;
@@ -364,7 +372,7 @@ async function networkFirst(request) {
   try {
     const response = await fetch(request);
     if (response.ok) {
-      const cache = await caches.open(CACHE_NAME);
+      const cache = await caches.open(RUNTIME_CACHE);
       cache.put(request, response.clone());
     }
     return response;
@@ -379,72 +387,22 @@ async function networkFirstWithOfflineFallback(request) {
   try {
     const response = await fetch(request);
     if (response.ok) {
-      const cache = await caches.open(CACHE_NAME);
+      const cache = await caches.open(RUNTIME_CACHE);
       cache.put(request, response.clone());
     }
     return response;
   } catch (error) {
     const cached = await caches.match(request);
     if (cached) return cached;
-    return new Response(
-      `<!DOCTYPE html>
-      <html lang="ar" dir="rtl">
-      <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>عافيتك - غير متصل</title>
-        <style>
-          body {
-            font-family: 'Segoe UI', Tahoma, 'Noto Sans Arabic', Arial, sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            margin: 0;
-            background: #f5f5f5;
-            color: #333;
-            direction: rtl;
-            text-align: center;
-            padding: 2rem;
-          }
-          .container {
-            max-width: 400px;
-            padding: 2rem;
-            background: white;
-            border-radius: 16px;
-            box-shadow: 0 4px 24px rgba(0,0,0,0.1);
-          }
-          .icon { font-size: 4rem; margin-bottom: 1rem; }
-          h1 { color: #e11d48; margin-bottom: 0.5rem; font-size: 1.5rem; }
-          p { color: #666; line-height: 1.6; }
-          button {
-            margin-top: 1.5rem;
-            padding: 0.75rem 2rem;
-            background: #e11d48;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            font-size: 1rem;
-            cursor: pointer;
-            font-family: inherit;
-          }
-          button:hover { background: #be123c; }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="icon">📡</div>
-          <h1>غير متصل بالإنترنت</h1>
-          <p>يبدو أنك غير متصل بالإنترنت. يرجى التحقق من اتصالك والمحاولة مرة أخرى.</p>
-          <button onclick="window.location.reload()">إعادة المحاولة</button>
-        </div>
-      </body>
-      </html>`,
-      {
+
+    // Return offline page
+    return caches.match('/').then((cachedIndex) => {
+      if (cachedIndex) return cachedIndex;
+      return new Response(getOfflinePage(), {
         status: 503,
         headers: { 'Content-Type': 'text/html; charset=utf-8' },
-      }
-    );
+      });
+    });
   }
 }
 
@@ -454,7 +412,7 @@ async function cacheFirst(request) {
   try {
     const response = await fetch(request);
     if (response.ok) {
-      const cache = await caches.open(CACHE_NAME);
+      const cache = await caches.open(RUNTIME_CACHE);
       cache.put(request, response.clone());
     }
     return response;
@@ -464,7 +422,7 @@ async function cacheFirst(request) {
 }
 
 async function staleWhileRevalidate(request) {
-  const cache = await caches.open(CACHE_NAME);
+  const cache = await caches.open(RUNTIME_CACHE);
   const cached = await cache.match(request);
   const fetchPromise = fetch(request).then((response) => {
     if (response.ok) {
@@ -474,4 +432,63 @@ async function staleWhileRevalidate(request) {
   }).catch(() => cached);
 
   return cached || fetchPromise;
+}
+
+function getOfflinePage() {
+  return `<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>عافيتك - غير متصل</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, 'Noto Sans Arabic', Arial, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      margin: 0;
+      background: linear-gradient(135deg, #f5f5f5, #fce4ec);
+      color: #333;
+      direction: rtl;
+      text-align: center;
+      padding: 2rem;
+    }
+    .container {
+      max-width: 400px;
+      padding: 2.5rem;
+      background: white;
+      border-radius: 20px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+    }
+    .icon { font-size: 4rem; margin-bottom: 1rem; }
+    h1 { color: #e11d48; margin-bottom: 0.5rem; font-size: 1.5rem; }
+    p { color: #666; line-height: 1.8; font-size: 0.95rem; }
+    .hint { color: #999; font-size: 0.8rem; margin-top: 1rem; }
+    button {
+      margin-top: 1.5rem;
+      padding: 0.75rem 2rem;
+      background: #e11d48;
+      color: white;
+      border: none;
+      border-radius: 12px;
+      font-size: 1rem;
+      cursor: pointer;
+      font-family: inherit;
+      transition: background 0.2s;
+    }
+    button:hover { background: #be123c; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="icon">📡</div>
+    <h1>غير متصل بالإنترنت</h1>
+    <p>يبدو أنك غير متصل بالإنترنت. يرجى التحقق من اتصالك والمحاولة مرة أخرى.</p>
+    <p class="hint">الإشعارات الصوتية ستستمر بالعمل عند عودة الاتصال</p>
+    <button onclick="window.location.reload()">إعادة المحاولة</button>
+  </div>
+</body>
+</html>`;
 }

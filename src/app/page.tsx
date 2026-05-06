@@ -10,6 +10,7 @@ import ErrorBoundary from '@/components/ErrorBoundary'
 import { usePushNotifications } from '@/hooks/use-notifications'
 import { speakNotification, createVoiceNotification, initTTS, isTTSEnabled } from '@/lib/voice-manager'
 import { resumeAudioContext } from '@/lib/sound-manager'
+import PWAInstallPrompt from '@/components/PWAInstallPrompt'
 
 // ─── Dynamic imports for heavy dashboard components ───
 // Prevents "Cannot access 'O' before initialization" by avoiding
@@ -215,6 +216,8 @@ export default function Home() {
           </motion.div>
         </AnimatePresence>
       </PullToRefresh>
+      {/* PWA Install Prompt — shows when browser supports installation */}
+      <PWAInstallPrompt />
     </ErrorBoundary>
   )
 }
