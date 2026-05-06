@@ -15,12 +15,22 @@ import androidx.annotation.NonNull;
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationManagerCompat;
 
-import com.google.firebase.messaging.FirebaseMessagingService;
+import com.capacitorjs.plugins.pushnotifications.MessagingService;
 import com.google.firebase.messaging.RemoteMessage;
 
 import java.util.Map;
 
-public class AafiatakFirebaseMessagingService extends FirebaseMessagingService {
+/**
+ * Custom FCM Service that EXTENDS Capacitor's MessagingService.
+ * 
+ * This is critical: By extending Capacitor's service and calling super.onMessageReceived(),
+ * we ensure that Capacitor's PushNotificationsPlugin.sendRemoteMessage() is called,
+ * which fires the 'pushNotificationReceived' event to the JavaScript/WebView layer.
+ * 
+ * We ALSO show native notifications with our custom channels when the app is in background,
+ * ensuring sounds play even when the WebView isn't active.
+ */
+public class AafiatakFirebaseMessagingService extends MessagingService {
 
     private static final String TAG = "AafiatakFCM";
 
@@ -39,14 +49,17 @@ public class AafiatakFirebaseMessagingService extends FirebaseMessagingService {
 
     @Override
     public void onNewToken(@NonNull String token) {
+        // Let Capacitor handle token forwarding to JS (fires 'registration' event)
         super.onNewToken(token);
         Log.d(TAG, "New FCM token: " + token);
-        // Token will be sent to server by the web app via Capacitor
     }
 
     @Override
     public void onMessageReceived(@NonNull RemoteMessage remoteMessage) {
+        // ─── CRITICAL: Call super so Capacitor fires pushNotificationReceived to JS ───
+        // This is what makes the WebView aware of incoming push notifications.
         super.onMessageReceived(remoteMessage);
+
         Log.d(TAG, "Message received from: " + remoteMessage.getFrom());
 
         String title = "عافيتك";
@@ -54,8 +67,7 @@ public class AafiatakFirebaseMessagingService extends FirebaseMessagingService {
         String type = "system";
         String url = "/";
 
-        // ─── Handle DATA-ONLY messages (our server sends data-only for Android) ───
-        // Data payload contains all notification info
+        // Extract data payload
         Map<String, String> data = remoteMessage.getData();
         if (data != null && !data.isEmpty()) {
             if (data.containsKey("title")) title = data.get("title");
@@ -64,10 +76,9 @@ public class AafiatakFirebaseMessagingService extends FirebaseMessagingService {
             if (data.containsKey("url")) url = data.get("url");
         }
 
-        // Also check notification payload (for backward compat / web messages)
+        // Also check notification payload (backward compat)
         RemoteMessage.Notification notification = remoteMessage.getNotification();
         if (notification != null) {
-            // Notification payload exists — use data values if available, else notification values
             if (title.equals("عافيتك") && notification.getTitle() != null) {
                 title = notification.getTitle();
             }
@@ -82,19 +93,23 @@ public class AafiatakFirebaseMessagingService extends FirebaseMessagingService {
             return;
         }
 
-        // Ensure channels exist before showing notification
-        createNotificationChannels();
-
-        // Show notification with sound
-        showNotification(title, body, type, url, data);
+        // ─── Show native notification ONLY when app is in background ───
+        // When app is in foreground: Capacitor fires pushNotificationReceived
+        // and the WebView plays sound. No need for native notification.
+        // When app is in background: WebView is not active, so we show
+        // a native notification with our custom channel + sound.
+        if (!MainActivity.isAppInForeground) {
+            createNotificationChannels();
+            showNotification(title, body, type, url, data);
+        } else {
+            Log.d(TAG, "App in foreground — Capacitor will handle notification display");
+        }
     }
 
     private void showNotification(String title, String body, String type, String url, Map<String, String> data) {
-        // Get the appropriate channel
         String channelId = getChannelForType(type);
         int priority = getPriorityForType(type);
 
-        // Create intent for notification click
         Intent intent = new Intent(this, MainActivity.class);
         intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
         if (!url.equals("/")) {
@@ -112,8 +127,7 @@ public class AafiatakFirebaseMessagingService extends FirebaseMessagingService {
             PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT
         );
 
-        // Build notification with sound
-        Uri soundUri = getSoundForType(type);
+        Uri soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
 
         NotificationCompat.Builder builder = new NotificationCompat.Builder(this, channelId)
             .setSmallIcon(R.mipmap.ic_launcher)
@@ -126,19 +140,15 @@ public class AafiatakFirebaseMessagingService extends FirebaseMessagingService {
             .setStyle(new NotificationCompat.BigTextStyle().bigText(body))
             .setDefaults(Notification.DEFAULT_VIBRATE | Notification.DEFAULT_LIGHTS);
 
-        // Emergency notifications are more persistent
         if ("emergency".equals(type)) {
-            builder.setOngoing(false)
-                   .setAutoCancel(true)
-                   .setTimeoutAfter(30000);
+            builder.setTimeoutAfter(30000);
         }
 
-        // Show the notification
         int notificationId = (int) (System.currentTimeMillis() % Integer.MAX_VALUE);
         try {
             NotificationManagerCompat notificationManager = NotificationManagerCompat.from(this);
             notificationManager.notify(notificationId, builder.build());
-            Log.d(TAG, "Notification shown [" + type + "]: " + title + " - " + body);
+            Log.d(TAG, "Native notification shown [" + type + "]: " + title);
         } catch (SecurityException e) {
             Log.e(TAG, "No notification permission: " + e.getMessage());
         }
@@ -146,43 +156,27 @@ public class AafiatakFirebaseMessagingService extends FirebaseMessagingService {
 
     private String getChannelForType(String type) {
         switch (type) {
-            case "emergency":
-                return CHANNEL_EMERGENCY;
-            case "assignment":
-                return CHANNEL_ASSIGNMENT;
-            case "chat":
-                return CHANNEL_CHAT;
-            case "payment":
-                return CHANNEL_PAYMENT;
-            default:
-                return CHANNEL_DEFAULT;
+            case "emergency": return CHANNEL_EMERGENCY;
+            case "assignment": return CHANNEL_ASSIGNMENT;
+            case "chat": return CHANNEL_CHAT;
+            case "payment": return CHANNEL_PAYMENT;
+            default: return CHANNEL_DEFAULT;
         }
     }
 
     private int getPriorityForType(String type) {
         switch (type) {
-            case "emergency":
-                return NotificationCompat.PRIORITY_MAX;
-            case "assignment":
-                return NotificationCompat.PRIORITY_HIGH;
-            case "chat":
-                return NotificationCompat.PRIORITY_DEFAULT;
-            case "payment":
-                return NotificationCompat.PRIORITY_HIGH;
-            default:
-                return NotificationCompat.PRIORITY_DEFAULT;
+            case "emergency": return NotificationCompat.PRIORITY_MAX;
+            case "assignment": return NotificationCompat.PRIORITY_HIGH;
+            case "payment": return NotificationCompat.PRIORITY_HIGH;
+            case "chat": return NotificationCompat.PRIORITY_DEFAULT;
+            default: return NotificationCompat.PRIORITY_DEFAULT;
         }
     }
 
-    private Uri getSoundForType(String type) {
-        // Use default notification sound for all types
-        // Android will use the channel's sound setting
-        return RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
-    }
-
     /**
-     * Create notification channels. This is called from both this service and
-     * MainActivity to ensure channels exist BEFORE any notification arrives.
+     * Create notification channels. Called from both this service and MainActivity
+     * to ensure channels exist BEFORE any notification arrives.
      */
     public static void createNotificationChannelsStatic(android.content.Context context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

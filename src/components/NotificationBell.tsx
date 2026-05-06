@@ -168,19 +168,20 @@ export default function NotificationBell({ gradientFrom, gradientTo, userType }:
       })
 
       // Listen for push notification received while app is in foreground
-      // IMPORTANT: On Android, the native FCM service already plays sound and shows
-      // the notification. We do NOT play sound here to prevent duplicates.
+      // Play sound with cooldown — the native FCM service does NOT show notifications
+      // when the app is in foreground (it checks MainActivity.isAppInForeground),
+      // so this is the ONLY sound source when the user is actively using the app.
       pushPlugin.addListener('pushNotificationReceived', (notification: any) => {
         console.log('📱 Push received in foreground:', notification)
-        // On Android native: DO NOT play sound — AafiatakFirebaseMessagingService
-        // already handles notification display and sound natively.
-        // Playing sound here would cause duplicate sounds.
-        // Just add the notification data ID to known set to prevent polling re-trigger
+        // Play sound with cooldown protection (prevents duplicate if native also fires)
+        const type = notification?.data?.type || 'system'
+        playSoundSafely(type)
+        // Add notification ID to known set to prevent polling re-trigger
         const notifId = notification?.data?.id || notification?.data?.requestId
         if (notifId) {
           knownNotificationIds.current.add(notifId)
         }
-        // Refresh the notification list (silently)
+        // Refresh the notification list
         fetchNotifications()
       })
 

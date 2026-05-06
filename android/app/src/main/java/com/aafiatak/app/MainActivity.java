@@ -21,6 +21,10 @@ import java.util.List;
 public class MainActivity extends BridgeActivity {
 
     private static final String TAG = "AafiatakMain";
+    
+    // Static flag so AafiatakFirebaseMessagingService can check foreground status
+    public static boolean isAppInForeground = false;
+    
     private WebAppInterface webAppInterface;
     private ActivityResultLauncher<String[]> permissionLauncher;
 
@@ -93,6 +97,7 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onResume() {
         super.onResume();
+        isAppInForeground = true;
         // Re-add JavaScript interface in case WebView was reloaded
         try {
             if (getBridge() != null && getBridge().getWebView() != null) {
@@ -102,6 +107,18 @@ public class MainActivity extends BridgeActivity {
         } catch (Exception e) {
             Log.e(TAG, "Failed to re-add JavaScript interface", e);
         }
+    }
+
+    @Override
+    public void onPause() {
+        super.onPause();
+        isAppInForeground = false;
+    }
+
+    @Override
+    public void onStop() {
+        super.onStop();
+        isAppInForeground = false;
     }
 
     private void requestAllPermissions() {

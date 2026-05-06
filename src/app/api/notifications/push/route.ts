@@ -59,22 +59,27 @@ async function sendFCMNotification(
     for (const tokenDoc of tokens) {
       const token = tokenDoc.token
       try {
-        // ─── IMPORTANT: Send DATA-ONLY messages for Android ───
-        // When FCM messages contain a "notification" payload, Android auto-displays
-        // the notification when the app is in the background, BYPASSING our custom
-        // AafiatakFirebaseMessagingService. This means our notification channels
-        // (with custom sounds/vibrations) are NOT used.
+        // ─── Send HYBRID message: data + notification payload ───
         //
-        // By sending data-only messages (no "notification" key at top level),
-        // onMessageReceived() is ALWAYS called, regardless of foreground/background.
-        // Our custom service then shows the notification with the correct channel + sound.
+        // DATA payload: Always delivered to onMessageReceived() regardless of
+        // foreground/background state. Our custom AafiatakFirebaseMessagingService
+        // (which extends Capacitor's MessagingService) processes this.
         //
-        // For web (webpush), we still include the notification payload since
-        // browsers need it to display push notifications.
+        // NOTIFICATION payload: Used by Android as a FALLBACK when the app is
+        // in the background and the data-only delivery fails for any reason.
+        // The channelId ensures Android uses our custom notification channel
+        // (with proper sound/vibration) even for auto-displayed notifications.
+        //
+        // Flow:
+        // - Foreground: onMessageReceived() → Capacitor fires pushNotificationReceived → JS plays sound
+        // - Background: onMessageReceived() → shows native notification with channel sound
+        //   OR Android auto-displays with our channelId (fallback)
         const message: admin.messaging.Message = {
-          data: {
+          notification: {
             title,
             body,
+          },
+          data: {
             type,
             userType,
             url: data?.url || '/',
@@ -106,9 +111,14 @@ async function sendFCMNotification(
             },
           },
           android: {
-            // Data-only: no "notification" key here.
-            // onMessageReceived() will always be called.
-            // Our AafiatakFirebaseMessagingService handles display + sound + channel.
+            notification: {
+              title,
+              body,
+              icon: 'ic_launcher',
+              sound: 'default',
+              tag: `aafiatak-${type}`,
+              channelId,
+            },
             priority: 'high' as const,
           },
         }
