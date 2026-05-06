@@ -2,6 +2,9 @@
  * عافيتك — Notification Helper
  * Central utility to send push notifications from any part of the app
  * Works even when the app is closed (via FCM + Service Worker)
+ *
+ * IMPORTANT: Admin notifications use sendToAllOfType: true
+ * because we need to notify ALL admins, not a single admin ID.
  */
 
 // ─── Send notification via API ───
@@ -14,6 +17,21 @@ async function sendNotification(params: {
   data?: Record<string, string>
 }) {
   try {
+    // If userId is empty and userType is admin, use sendToAllOfType
+    if (!params.userId && params.userType === 'admin') {
+      return sendToAllAdmins({
+        title: params.title,
+        message: params.message,
+        type: params.type,
+        data: params.data,
+      })
+    }
+
+    if (!params.userId) {
+      console.warn('Notification skipped: no userId provided')
+      return
+    }
+
     await fetch('/api/notifications/push', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -41,6 +59,28 @@ async function sendBulkNotification(params: {
     })
   } catch (error) {
     console.error('Failed to send bulk notification:', error)
+  }
+}
+
+// ─── Send to ALL admins (server will look up all admin users) ───
+async function sendToAllAdmins(params: {
+  title: string
+  message: string
+  type: 'appointment' | 'assignment' | 'system' | 'emergency' | 'payment'
+  data?: Record<string, string>
+}) {
+  try {
+    await fetch('/api/notifications/push', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...params,
+        userType: 'admin',
+        sendToAllOfType: true,
+      }),
+    })
+  } catch (error) {
+    console.error('Failed to notify admins:', error)
   }
 }
 
@@ -189,86 +229,52 @@ export const notifyNurse = {
 }
 
 // ─── Admin Notifications ───
+// All admin notifications use sendToAllOfType: true to notify ALL admins
 export const notifyAdmin = {
-  newOrder: (adminId: string, beneficiaryName: string, serviceName: string, orderId: string) =>
-    sendNotification({
-      userId: adminId,
-      userType: 'admin',
+  newOrder: (_adminId: string, beneficiaryName: string, serviceName: string, orderId: string) =>
+    sendToAllAdmins({
       title: 'طلب جديد! 📥',
       message: `${beneficiaryName} طلب ${serviceName}`,
       type: 'appointment',
       data: { requestId: orderId, url: '/?tab=requests' },
     }),
 
-  newRegistration: (adminId: string, name: string, role: string) =>
-    sendNotification({
-      userId: adminId,
-      userType: 'admin',
+  newRegistration: (_adminId: string, name: string, role: string) =>
+    sendToAllAdmins({
       title: 'تسجيل جديد 👤',
       message: `${name} سجّل كـ${role}`,
       type: 'system',
     }),
 
-  emergencyRequest: (adminId: string, beneficiaryName: string, orderId: string) =>
-    sendNotification({
-      userId: adminId,
-      userType: 'admin',
+  emergencyRequest: (_adminId: string, beneficiaryName: string, orderId: string) =>
+    sendToAllAdmins({
       title: '🚨 طلب طوارئ!',
       message: `${beneficiaryName} يحتاج مساعدة طارئة`,
       type: 'emergency',
       data: { requestId: orderId, url: '/?tab=emergency' },
     }),
 
-  paymentProof: (adminId: string, beneficiaryName: string, amount: string) =>
-    sendNotification({
-      userId: adminId,
-      userType: 'admin',
+  paymentProof: (_adminId: string, beneficiaryName: string, amount: string) =>
+    sendToAllAdmins({
       title: 'إثبات دفع جديد 💳',
       message: `${beneficiaryName} أرسل إثبات دفع بمبلغ ${amount}`,
       type: 'payment',
     }),
 
-  nurseRejectedTask: (adminId: string, nurseName: string, reason: string) =>
-    sendNotification({
-      userId: adminId,
-      userType: 'admin',
+  nurseRejectedTask: (_adminId: string, nurseName: string, reason: string) =>
+    sendToAllAdmins({
       title: `رفض مهمة من ${nurseName} ⚠️`,
       message: `السبب: ${reason}`,
       type: 'assignment',
     }),
 
-  newComplaint: (adminId: string, fromName: string) =>
-    sendNotification({
-      userId: adminId,
-      userType: 'admin',
+  newComplaint: (_adminId: string, fromName: string) =>
+    sendToAllAdmins({
       title: 'شكوى جديدة 📝',
       message: `شكوى من ${fromName}`,
       type: 'system',
     }),
 }
 
-// ─── Notify ALL admins ───
-export async function notifyAllAdmins(params: {
-  title: string
-  message: string
-  type: 'appointment' | 'assignment' | 'system' | 'emergency' | 'payment'
-  data?: Record<string, string>
-}) {
-  try {
-    // Get all admin IDs from Firestore
-    const res = await fetch('/api/admin/nurses') // Reuse existing pattern
-    // Actually, we'll do it server-side by passing admin role
-    await fetch('/api/notifications/push', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        ...params,
-        userType: 'admin',
-        // Server will look up all admin IDs
-        sendToAllOfType: true,
-      }),
-    })
-  } catch (error) {
-    console.error('Failed to notify admins:', error)
-  }
-}
+// ─── Re-export for direct use ───
+export { sendToAllAdmins as notifyAllAdmins }

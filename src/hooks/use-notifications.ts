@@ -1,7 +1,8 @@
 /**
  * عافيتك — Push Notification Hook
- * Manages FCM token, permission, foreground messages, and sound alerts
- * Requests notification permission with sound explicitly on Android & Web
+ * Manages FCM token, permission, foreground messages
+ * Does NOT play sounds directly — NotificationBell handles that
+ * to prevent duplicate sounds from multiple listeners.
  */
 
 'use client'
@@ -9,28 +10,14 @@
 import { useEffect, useRef, useCallback, useState } from 'react'
 import { requestNotificationPermission, onForegroundMessage } from '@/lib/firebase-client'
 import { useAppStore } from '@/lib/store'
-import { useToast } from '@/hooks/use-toast'
-import { playNotificationSound, preloadSounds, isSoundEnabled } from '@/lib/sound-manager'
-
-function getNotificationUrl(data: Record<string, any>): string {
-  const userType = data?.userType
-  const type = data?.type
-  const requestId = data?.requestId
-  if (type === 'chat' && requestId) return `/?chat=${requestId}`
-  if (type === 'assignment' && userType === 'nurse') return '/?tab=assignments'
-  if (type === 'emergency') return '/?tab=emergency'
-  return '/'
-}
 
 function isCapacitorAndroid(): boolean {
   if (typeof window === 'undefined') return false
-  return !!(window as any).Capacitor?.isNativePlatform?.() ||
-         !!(window as any).Capacitor?.Platforms?.isAndroid?.()
+  return !!(window as any).Capacitor?.isNativePlatform?.()
 }
 
 export function usePushNotifications() {
   const { user, userType } = useAppStore()
-  const { toast } = useToast()
   const [permissionStatus, setPermissionStatus] = useState<NotificationPermission | 'default'>('default')
   const [fcmToken, setFcmToken] = useState<string | null>(null)
   const initialized = useRef(false)
@@ -49,8 +36,6 @@ export function usePushNotifications() {
   }, [user, userType])
 
   const requestPermissionWithSound = useCallback(async () => {
-    preloadSounds()
-
     if (!('Notification' in window)) {
       console.warn('Notifications not supported')
       return null
@@ -71,11 +56,6 @@ export function usePushNotifications() {
     }
 
     if (currentPermission === 'denied') {
-      toast({
-        title: 'الإشعارات معطلة',
-        description: 'يرجى تفعيل الإشعارات من إعدادات الجهاز لتلقي التنبيهات الصوتية',
-        duration: 7000,
-      })
       return null
     }
 
@@ -84,11 +64,11 @@ export function usePushNotifications() {
         try {
           const { PushNotifications } = await import('@capacitor/push-notifications')
           const result = await PushNotifications.requestPermissions()
-          
+
           if (result.receive === 'granted') {
             await PushNotifications.register()
             setPermissionStatus('granted')
-            
+
             PushNotifications.addListener('registration', async (token: any) => {
               setFcmToken(token.value)
               await saveTokenToServer(token.value)
@@ -98,23 +78,8 @@ export function usePushNotifications() {
               console.error('FCM registration error:', error)
             })
 
-            PushNotifications.addListener('pushNotificationReceived', (notification: any) => {
-              const type = notification.data?.type || 'system'
-              playNotificationSound(type as string)
-              toast({
-                title: notification.title || 'عافيتك',
-                description: notification.body || '',
-                duration: type === 'emergency' ? 10000 : 5000,
-              })
-            })
-
-            PushNotifications.addListener('pushNotificationActionPerformed', (action: any) => {
-              const data = action.notification.data
-              const url = getNotificationUrl(data || {})
-              window.location.href = url
-            })
-
-            setTimeout(() => playNotificationSound('system'), 1000)
+            // NOTE: Do NOT add pushNotificationReceived listener here.
+            // NotificationBell.tsx handles that to avoid duplicate sounds.
             return 'android-granted'
           } else {
             setPermissionStatus('denied')
@@ -134,44 +99,32 @@ export function usePushNotifications() {
           setFcmToken(token)
           await saveTokenToServer(token)
         }
-        setTimeout(() => playNotificationSound('system'), 1000)
         return token
       } else {
-        toast({
-          title: 'الإشعارات معطلة',
-          description: 'لن تتمكن من تلقي الإشعارات الصوتية',
-          duration: 5000,
-        })
         return null
       }
     } catch (error) {
       console.error('Notification permission error:', error)
       return null
     }
-  }, [user, userType, saveTokenToServer, toast])
+  }, [user, userType, saveTokenToServer])
 
+  // Listen for foreground messages (web only, not Capacitor)
+  // Does NOT play sounds - NotificationBell handles sound
   useEffect(() => {
     if (!user || isCapacitorAndroid()) return
     let unsubscribe: (() => void) | undefined
     const setupForegroundListener = async () => {
       unsubscribe = await onForegroundMessage((payload) => {
-        const { notification, data } = payload
-        const title = notification?.title || 'عافيتك'
-        const body = notification?.body || ''
-        const type = data?.type || 'system'
-        playNotificationSound(type)
-        toast({ title, description: body, duration: type === 'emergency' ? 10000 : 5000 })
-        if ('Notification' in window && Notification.permission === 'granted') {
-          try {
-            new Notification(title, { body, icon: '/logo.png', tag: `fg-${Date.now()}`, dir: 'rtl', lang: 'ar', silent: true })
-          } catch {}
-        }
+        // Just log - NotificationBell will handle sound via polling
+        console.log('📩 Foreground message received:', payload.notification?.title)
       })
     }
     setupForegroundListener()
     return () => { if (unsubscribe) unsubscribe() }
-  }, [user, toast])
+  }, [user])
 
+  // Auto-request permission on login
   useEffect(() => {
     if (!user) { initialized.current = false; return }
     if (initialized.current) return
@@ -184,7 +137,5 @@ export function usePushNotifications() {
 
   useEffect(() => { return () => { initialized.current = false } }, [])
 
-  return { permissionStatus, fcmToken, requestPermission: requestPermissionWithSound, playSound: playNotificationSound, isSoundEnabled }
+  return { permissionStatus, fcmToken, requestPermission: requestPermissionWithSound }
 }
-
-export { playNotificationSound }

@@ -6,6 +6,9 @@
  * 1. Capacitor Android → Capacitor.Plugins.PushNotifications (native dialog via bridge)
  * 2. Fallback AndroidApp → window.AndroidApp.requestNotificationPermission()
  * 3. Web browser → Notification.requestPermission()
+ *
+ * Sound deduplication: Uses knownNotificationIds set to prevent duplicate sounds
+ * from both polling and push notification listeners firing for the same notification.
  */
 
 'use client'
@@ -74,8 +77,6 @@ function isCapacitorNative(): boolean {
 }
 
 // ─── Get Capacitor PushNotifications plugin via global ───
-// This works without importing the npm package - Capacitor injects the runtime
-// into the WebView when loading remote URLs
 function getCapacitorPushPlugin(): any {
   if (typeof window === 'undefined') return null
   try {
@@ -83,7 +84,6 @@ function getCapacitorPushPlugin(): any {
     if (cap && cap.Plugins && cap.Plugins.PushNotifications) {
       return cap.Plugins.PushNotifications
     }
-    // Also try the registered plugin pattern
     if (cap && cap.registerPlugin) {
       return cap.registerPlugin('PushNotifications')
     }
@@ -102,15 +102,33 @@ export default function NotificationBell({ gradientFrom, gradientTo, userType }:
   const [isOpen, setIsOpen] = useState(false)
   const [notifications, setNotifications] = useState<NotifItem[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
-  const [loading, setLoading] = useState(false)
   const [permissionStatus, setPermissionStatus] = useState<NotificationPermission | 'default'>('default')
   const [soundEnabled, setSoundEnabled] = useState(true)
   const [showPermissionDialog, setShowPermissionDialog] = useState(false)
   const [isRequestingPermission, setIsRequestingPermission] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
   const bellRef = useRef<HTMLButtonElement>(null)
-  const prevUnreadRef = useRef(0)
   const capacitorListenersSetup = useRef(false)
+  const initialFetchDone = useRef(false)
+
+  // ─── Track known notification IDs to prevent duplicate sounds ───
+  // When a new notification arrives via push, we add its ID here.
+  // When the polling fetch detects new unread items, we only play sound
+  // for IDs not already in this set. This prevents double-playing.
+  const knownNotificationIds = useRef<Set<string>>(new Set())
+  const soundCooldown = useRef<number>(0) // timestamp of last sound play
+
+  // ─── Play sound with cooldown to prevent duplicates ───
+  const playSoundSafely = useCallback((type: string = 'system') => {
+    const now = Date.now()
+    // Don't play sound if one was played within the last 3 seconds
+    if (now - soundCooldown.current < 3000) {
+      console.log('🔔 Sound cooldown active, skipping duplicate')
+      return
+    }
+    soundCooldown.current = now
+    playNotificationSound(type)
+  }, [])
 
   // ─── Send FCM token to server ───
   const sendTokenToServer = useCallback(async (token: string) => {
@@ -140,27 +158,26 @@ export default function NotificationBell({ gradientFrom, gradientTo, userType }:
     }
 
     try {
-      // Listen for FCM token registration
       pushPlugin.addListener('registration', (token: any) => {
         console.log('📱 FCM token received:', token.value)
         sendTokenToServer(token.value)
       })
 
-      // Listen for registration error
       pushPlugin.addListener('registrationError', (error: any) => {
         console.error('📱 FCM registration error:', error)
       })
 
       // Listen for push notification received while app is in foreground
+      // This plays the sound ONCE when the push arrives natively
       pushPlugin.addListener('pushNotificationReceived', (notification: any) => {
         console.log('📱 Push received in foreground:', notification)
-        if (soundEnabled) {
-          playNotificationSound('system')
-        }
+        // Play sound with cooldown protection
+        const type = notification?.data?.type || 'system'
+        playSoundSafely(type)
+        // Refresh the notification list
         fetchNotifications()
       })
 
-      // Listen for notification tap
       pushPlugin.addListener('pushNotificationActionPerformed', (action: any) => {
         console.log('📱 Push notification tapped:', action)
       })
@@ -177,7 +194,7 @@ export default function NotificationBell({ gradientFrom, gradientTo, userType }:
         }
       } catch {}
     }
-  }, [sendTokenToServer, soundEnabled])
+  }, [sendTokenToServer, playSoundSafely])
 
   // Fetch notifications
   const fetchNotifications = useCallback(async () => {
@@ -188,25 +205,50 @@ export default function NotificationBell({ gradientFrom, gradientTo, userType }:
         const data = await res.json()
         const notifs = (data.notifications || []).map((n: any) => ({
           id: n.id, title: n.title || '', message: n.message || '',
-          type: n.type || 'system', isRead: n.isRead || false,
+          type: n.type || 'system', isRead: n.isRead || n.read || false,
           createdAt: n.createdAt, data: n.data,
         }))
         setNotifications(notifs)
+
+        // Find truly NEW unread notifications (not in our known set)
+        const newUnreadNotifs = notifs.filter((n: NotifItem) =>
+          !n.isRead && !knownNotificationIds.current.has(n.id)
+        )
+
+        // Add all current notification IDs to the known set
+        notifs.forEach((n: NotifItem) => {
+          knownNotificationIds.current.add(n.id)
+        })
+
+        // Clean up old IDs from the set (keep only last 200)
+        if (knownNotificationIds.current.size > 200) {
+          const idsArray = Array.from(knownNotificationIds.current)
+          knownNotificationIds.current = new Set(idsArray.slice(-200))
+        }
+
         const unread = notifs.filter((n: NotifItem) => !n.isRead).length
         setUnreadCount(unread)
-        if (unread > prevUnreadRef.current && prevUnreadRef.current >= 0 && soundEnabled) {
-          playNotificationSound('system')
+
+        // Only play sound for genuinely NEW unread notifications
+        // AND skip on the very first fetch (app load) to avoid playing old notifications
+        if (newUnreadNotifs.length > 0 && initialFetchDone.current && soundEnabled) {
+          // Determine sound type from the notification type
+          const notifType = newUnreadNotifs[0].type || 'system'
+          playSoundSafely(notifType)
         }
-        prevUnreadRef.current = unread
+
+        // Mark initial fetch as done after first successful fetch
+        if (!initialFetchDone.current) {
+          initialFetchDone.current = true
+        }
       }
     } catch {}
-  }, [user, userType, soundEnabled])
+  }, [user, userType, soundEnabled, playSoundSafely])
 
   useEffect(() => { fetchNotifications(); const i = setInterval(fetchNotifications, 15000); return () => clearInterval(i) }, [fetchNotifications])
 
   // ─── Check permission status ───
   const checkPermissionStatus = useCallback(async () => {
-    // ── CAPACITOR ANDROID PATH ──
     if (isCapacitorNative()) {
       try {
         const pushPlugin = getCapacitorPushPlugin()
@@ -227,7 +269,6 @@ export default function NotificationBell({ gradientFrom, gradientTo, userType }:
       }
     }
 
-    // ── ANDROID APP BRIDGE PATH (fallback) ──
     if (isAndroidApp()) {
       try {
         const android = (window as any).AndroidApp
@@ -237,7 +278,6 @@ export default function NotificationBell({ gradientFrom, gradientTo, userType }:
       } catch {}
     }
 
-    // ── WEB BROWSER PATH ──
     if (typeof window !== 'undefined' && 'Notification' in window) {
       setPermissionStatus(Notification.permission)
     }
@@ -255,7 +295,6 @@ export default function NotificationBell({ gradientFrom, gradientTo, userType }:
       checkPermissionStatus()
       if (result.granted || result['android.permission.POST_NOTIFICATIONS']) {
         setPermissionStatus('granted')
-        setTimeout(() => playNotificationSound('system'), 500)
       }
     }
     return () => { delete (window as any).onAndroidPermissionResult }
@@ -277,59 +316,39 @@ export default function NotificationBell({ gradientFrom, gradientTo, userType }:
     setIsRequestingPermission(true)
 
     try {
-      // ══════════════════════════════════════════
-      // CAPACITOR ANDROID PATH (Primary for APK)
-      // ══════════════════════════════════════════
+      // CAPACITOR ANDROID PATH
       if (isCapacitorNative()) {
-        console.log('📱 Requesting permission via Capacitor PushNotifications plugin')
         const pushPlugin = getCapacitorPushPlugin()
         if (pushPlugin && pushPlugin.requestPermissions) {
           try {
-            // This triggers the native Android permission dialog!
             const permResult = await pushPlugin.requestPermissions()
-            console.log('📱 Capacitor permission result:', permResult)
-
             if (permResult.receive === 'granted') {
               setPermissionStatus('granted')
               setShowPermissionDialog(false)
-
-              // Register for push notifications to get FCM token
               try {
                 await pushPlugin.register()
-                console.log('📱 PushNotifications.register() called successfully')
               } catch (regErr) {
                 console.error('📱 PushNotifications.register() failed:', regErr)
               }
-
-              // Play confirmation sound
-              setTimeout(() => playNotificationSound('system'), 500)
             } else if (permResult.receive === 'denied') {
               setPermissionStatus('denied')
               setShowPermissionDialog(false)
             } else {
-              // User dismissed the dialog without choosing
               setPermissionStatus('default')
             }
           } catch (err) {
             console.error('📱 Capacitor permission request failed:', err)
           }
-
           setIsRequestingPermission(false)
           return
         }
-        // If Capacitor plugin not available, fall through to AndroidApp bridge
-        console.warn('📱 Capacitor PushNotifications plugin not found, falling back to AndroidApp bridge')
       }
 
-      // ══════════════════════════════════════════
-      // ANDROID APP BRIDGE PATH (Fallback for APK)
-      // ══════════════════════════════════════════
+      // ANDROID APP BRIDGE PATH (Fallback)
       if (isAndroidApp()) {
-        console.log('📱 Requesting permission via AndroidApp bridge')
         try {
           const android = (window as any).AndroidApp
           android.requestNotificationPermission()
-          // Result will come via onAndroidPermissionResult callback
           setTimeout(() => {
             setIsRequestingPermission(false)
             checkPermissionStatus()
@@ -340,9 +359,7 @@ export default function NotificationBell({ gradientFrom, gradientTo, userType }:
         }
       }
 
-      // ══════════════════════════════════════════
       // WEB BROWSER PATH
-      // ══════════════════════════════════════════
       if (typeof window !== 'undefined' && 'Notification' in window) {
         const permission = await Notification.requestPermission()
         setPermissionStatus(permission)
@@ -354,7 +371,6 @@ export default function NotificationBell({ gradientFrom, gradientTo, userType }:
             if (token && user) {
               await sendTokenToServer(token)
             }
-            setTimeout(() => playNotificationSound('system'), 500)
           } catch {}
         }
       }
@@ -387,27 +403,59 @@ export default function NotificationBell({ gradientFrom, gradientTo, userType }:
   }, [])
 
   const markAsRead = useCallback(async (notifId: string) => {
+    // Update local state immediately
     setNotifications(prev => prev.map(n => n.id === notifId ? { ...n, isRead: true } : n))
     setUnreadCount(prev => Math.max(0, prev - 1))
-    try { await fetch('/api/notifications/list', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ notificationId: notifId, isRead: true }) }) } catch {}
+    // Also update the known set so polling doesn't re-trigger sound
+    knownNotificationIds.current.add(notifId)
+
+    try {
+      await fetch('/api/notifications/list', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notificationId: notifId, isRead: true })
+      })
+    } catch {}
   }, [])
 
   const markAllAsRead = useCallback(async () => {
+    const unreadIds = notifications.filter(n => !n.isRead).map(n => n.id)
+
+    // Update local state immediately
     setNotifications(prev => prev.map(n => ({ ...n, isRead: true })))
     setUnreadCount(0)
-    for (const id of notifications.filter(n => !n.isRead).map(n => n.id)) {
-      fetch('/api/notifications/list', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ notificationId: id, isRead: true }) }).catch(() => {})
-    }
-  }, [notifications])
+
+    // Add all IDs to known set
+    unreadIds.forEach(id => knownNotificationIds.current.add(id))
+
+    // Send to server - use bulk markAll if user info available
+    try {
+      if (user && userType) {
+        await fetch('/api/notifications/list', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: (user as any).id,
+            userType,
+            markAll: true
+          })
+        })
+      } else {
+        // Fallback: mark individually
+        for (const id of unreadIds) {
+          await fetch('/api/notifications/list', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ notificationId: id, isRead: true })
+          })
+        }
+      }
+    } catch {}
+  }, [notifications, user, userType])
 
   const toggleSound = useCallback(() => {
     const v = !soundEnabled; setSoundEnabled(v); setSoundEnabled(v)
     if (v) testNotificationSound('system')
-    // Also test native sound on Android
-    if (v && isCapacitorNative()) {
-      try { playNotificationSound('system') } catch {}
-    }
-    if (v && isAndroidApp()) { try { (window as any).AndroidApp.playNotificationSound() } catch {} }
   }, [soundEnabled])
 
   useEffect(() => { setSoundEnabled(isSoundEnabled()) }, [])

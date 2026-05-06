@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getNotificationsByUser, getUnreadNotificationCount } from '@/lib/firestore'
+import { getNotificationsByUser, markNotificationAsRead, markAllNotificationsAsRead } from '@/lib/firestore'
 
 export async function GET(request: NextRequest) {
   try {
@@ -40,6 +40,31 @@ export async function GET(request: NextRequest) {
     })
   } catch (error: any) {
     console.error('Get notifications list error:', error.message)
+    return NextResponse.json({ error: 'حدث خطأ في الخادم' }, { status: 500 })
+  }
+}
+
+// ─── PATCH: Mark notification(s) as read ───
+export async function PATCH(request: NextRequest) {
+  try {
+    const body = await request.json()
+    const { notificationId, userId, userType, markAll } = body
+
+    if (markAll && userId && userType) {
+      // Mark ALL notifications as read for this user
+      await markAllNotificationsAsRead(userId, userType)
+      return NextResponse.json({ success: true, action: 'markAllRead' })
+    }
+
+    if (notificationId) {
+      // Mark a single notification as read
+      await markNotificationAsRead(notificationId)
+      return NextResponse.json({ success: true, action: 'markRead' })
+    }
+
+    return NextResponse.json({ error: 'notificationId أو (userId + userType + markAll) مطلوب' }, { status: 400 })
+  } catch (error: any) {
+    console.error('Mark notification read error:', error.message)
     return NextResponse.json({ error: 'حدث خطأ في الخادم' }, { status: 500 })
   }
 }
