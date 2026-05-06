@@ -56,6 +56,11 @@ async function sendFCMToUser(
             url: data?.url || '/',
             requestId: data?.requestId || '',
             clickAction: data?.url || '/',
+            // TTS data for Service Worker to pass to the app on notification click
+            titleAr: title,
+            bodyAr: body,
+            titleEn: title,
+            bodyEn: body,
             ...Object.fromEntries(
               Object.entries(data || {}).filter(([_, v]) => typeof v === 'string')
             ),

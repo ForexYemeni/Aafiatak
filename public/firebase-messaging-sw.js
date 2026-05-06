@@ -1,14 +1,19 @@
 /* ========================================================
-   عافيتك — Unified Service Worker
-   Combines FCM push notifications + caching strategies
-   Handles notifications when app is in background/closed
+   عافيتك — Unified Service Worker v2.0
+   FCM push notifications + caching + VOICE notification support
+   
+   KEY CHANGES v2.0:
+   - Plays notification sound when background message arrives
+   - Adds "استمع" (Listen) action button on notifications
+   - When user clicks notification → opens app and triggers TTS
+   - Communicates with the app via postMessage to auto-speak
    ======================================================== */
 
 // ─── Firebase Cloud Messaging ───
 importScripts('https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js');
 
-// Initialize Firebase in the service worker with REAL config
+// Initialize Firebase in the service worker
 firebase.initializeApp({
   apiKey: "AIzaSyA_WgNDBnSt3fvPDz3IfGeb5GCwjlgp5fA",
   authDomain: "aafiatak-26439.firebaseapp.com",
@@ -22,28 +27,41 @@ firebase.initializeApp({
 const messaging = firebase.messaging();
 
 // ─── Cache Configuration ───
-const CACHE_NAME = 'afiyatak-v2';
+const CACHE_NAME = 'afiyatak-v3';
 const STATIC_ASSETS = [
   '/',
-  '/manifest.json',
   '/logo.png',
+  '/sounds/emergency.wav',
+  '/sounds/assignment.wav',
+  '/sounds/chat.wav',
+  '/sounds/payment.wav',
+  '/sounds/reminder.wav',
+  '/sounds/status_change.wav',
+  '/sounds/system.wav',
+  '/sounds/rating.wav',
+  '/sounds/appointment.wav',
 ];
 
 // ═══════════════════════════════════════════════════════
-//  SERVICE WORKER LIFECYCLE
+//  PRE-CACHE SOUNDS DURING INSTALL
 // ═══════════════════════════════════════════════════════
 
-// Install: cache static assets
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(STATIC_ASSETS);
+      // Cache static assets - don't block on sound files if they fail
+      return Promise.allSettled(
+        STATIC_ASSETS.map(url => 
+          cache.add(url).catch(err => {
+            console.warn('SW: Failed to cache', url, err);
+          })
+        )
+      );
     })
   );
   self.skipWaiting();
 });
 
-// Activate: clean up old caches
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((cacheNames) => {
@@ -58,46 +76,160 @@ self.addEventListener('activate', (event) => {
 });
 
 // ═══════════════════════════════════════════════════════
+//  NOTIFICATION SOUND IN SERVICE WORKER
+// ═══════════════════════════════════════════════════════
+
+// Map notification types to sound files
+const SOUND_MAP = {
+  assignment: '/sounds/assignment.wav',
+  chat: '/sounds/chat.wav',
+  emergency: '/sounds/emergency.wav',
+  payment: '/sounds/payment.wav',
+  rating: '/sounds/rating.wav',
+  status_change: '/sounds/status_change.wav',
+  system: '/sounds/system.wav',
+  reminder: '/sounds/reminder.wav',
+  appointment: '/sounds/appointment.wav',
+};
+
+/**
+ * Play a notification sound in the Service Worker context.
+ * Uses the AudioContext API available in Service Workers (Chrome/Edge).
+ * Falls back to the browser's default notification sound.
+ */
+async function playServiceWorkerSound(type) {
+  try {
+    // Try to use the Service Worker's AudioContext (available in some browsers)
+    if (typeof AudioContext !== 'undefined' || typeof webkitAudioContext !== 'undefined') {
+      const AC = AudioContext || webkitAudioContext;
+      const ctx = new AC();
+      
+      // Different tones for different notification types
+      const tones = {
+        emergency:    { freq: 1200, dur: 250, repeat: 3, gap: 150, wave: 'sawtooth' },
+        assignment:   { freq: 880,  dur: 180, repeat: 2, gap: 120, wave: 'sine' },
+        chat:         { freq: 660,  dur: 120, repeat: 3, gap: 60,  wave: 'triangle' },
+        payment:      { freq: 523,  dur: 200, repeat: 2, gap: 100, wave: 'sine' },
+        rating:       { freq: 784,  dur: 120, repeat: 2, gap: 80,  wave: 'sine' },
+        status_change:{ freq: 440,  dur: 250, repeat: 1, gap: 0,   wave: 'sine' },
+        system:       { freq: 600,  dur: 150, repeat: 2, gap: 100, wave: 'triangle' },
+        reminder:     { freq: 700,  dur: 180, repeat: 2, gap: 120, wave: 'sine' },
+        appointment:  { freq: 932,  dur: 150, repeat: 2, gap: 80,  wave: 'sine' },
+      };
+
+      const t = tones[type] || tones.system;
+
+      // Resume context if suspended
+      if (ctx.state === 'suspended') {
+        await ctx.resume();
+      }
+
+      for (let i = 0; i < t.repeat; i++) {
+        const start = ctx.currentTime + (i * (t.dur + t.gap)) / 1000;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.frequency.value = t.freq;
+        osc.type = t.wave;
+
+        // Smooth envelope
+        gain.gain.setValueAtTime(0.001, start);
+        gain.gain.exponentialRampToValueAtTime(0.6, start + 0.01);
+        gain.gain.setValueAtTime(0.6, start + t.dur / 1000 - 0.03);
+        gain.gain.exponentialRampToValueAtTime(0.001, start + t.dur / 1000);
+
+        osc.start(start);
+        osc.stop(start + t.dur / 1000 + 0.01);
+      }
+
+      console.log('🔊 [SW] Played tone for:', type);
+      return;
+    }
+  } catch (e) {
+    console.warn('🔊 [SW] AudioContext tone failed:', e.message);
+  }
+
+  // Fallback: Try to play the actual WAV file via a client window
+  try {
+    const clientList = await clients.matchAll({ type: 'window', includeUncontrolled: true });
+    if (clientList.length > 0) {
+      // There's an open window - ask it to play the sound
+      clientList[0].postMessage({
+        type: 'PLAY_NOTIFICATION_SOUND',
+        notifType: type,
+      });
+    }
+  } catch (e) {
+    console.warn('🔊 [SW] Sound fallback failed:', e.message);
+  }
+}
+
+// ═══════════════════════════════════════════════════════
 //  PUSH NOTIFICATIONS (FCM Background Messages)
 // ═══════════════════════════════════════════════════════
 
-// Background message handler (app closed/minimized)
 messaging.onBackgroundMessage((payload) => {
   const { title, body, icon } = payload.notification || {};
-  const { type, url, sound } = payload.data || {};
+  const { type, url, sound, titleAr, bodyAr, titleEn, bodyEn } = payload.data || {};
+
+  const notifType = type || 'system';
 
   // Notification type configuration
   const typeConfig = {
-    assignment: { icon: '/logo.png', badge: '/logo.png', tag: 'assignment', vibrate: [200, 50, 200] },
-    chat: { icon: '/logo.png', badge: '/logo.png', tag: 'chat', vibrate: [100] },
-    payment: { icon: '/logo.png', badge: '/logo.png', tag: 'payment', vibrate: [150, 50, 150] },
-    emergency: { icon: '/logo.png', badge: '/logo.png', tag: 'emergency', vibrate: [200, 100, 200, 100, 200, 100, 200] },
-    status_change: { icon: '/logo.png', badge: '/logo.png', tag: 'status', vibrate: [100] },
-    rating: { icon: '/logo.png', badge: '/logo.png', tag: 'rating', vibrate: [150, 50, 150] },
-    system: { icon: '/logo.png', badge: '/logo.png', tag: 'system', vibrate: [100] },
-    reminder: { icon: '/logo.png', badge: '/logo.png', tag: 'reminder', vibrate: [150, 80, 150] },
-    appointment: { icon: '/logo.png', badge: '/logo.png', tag: 'appointment', vibrate: [200, 50, 200] },
+    assignment:    { icon: '/logo.png', badge: '/logo.png', tag: 'assignment', vibrate: [200, 50, 200], requireInteraction: true },
+    chat:          { icon: '/logo.png', badge: '/logo.png', tag: 'chat', vibrate: [100], requireInteraction: false },
+    payment:       { icon: '/logo.png', badge: '/logo.png', tag: 'payment', vibrate: [150, 50, 150], requireInteraction: false },
+    emergency:     { icon: '/logo.png', badge: '/logo.png', tag: 'emergency', vibrate: [200, 100, 200, 100, 200, 100, 200], requireInteraction: true },
+    status_change: { icon: '/logo.png', badge: '/logo.png', tag: 'status', vibrate: [100], requireInteraction: false },
+    rating:        { icon: '/logo.png', badge: '/logo.png', tag: 'rating', vibrate: [150, 50, 150], requireInteraction: false },
+    system:        { icon: '/logo.png', badge: '/logo.png', tag: 'system', vibrate: [100], requireInteraction: false },
+    reminder:      { icon: '/logo.png', badge: '/logo.png', tag: 'reminder', vibrate: [150, 80, 150], requireInteraction: false },
+    appointment:   { icon: '/logo.png', badge: '/logo.png', tag: 'appointment', vibrate: [200, 50, 200], requireInteraction: false },
   };
 
-  const config = typeConfig[type] || typeConfig.system;
+  const config = typeConfig[notifType] || typeConfig.system;
+
+  // Play the notification sound
+  playServiceWorkerSound(notifType);
+
+  // Build notification data for TTS
+  const ttsData = {
+    titleAr: titleAr || title || 'إشعار جديد',
+    bodyAr: bodyAr || body || '',
+    titleEn: titleEn || title || 'New Notification',
+    bodyEn: bodyEn || body || '',
+    notifType: notifType,
+  };
 
   const notificationOptions = {
     body: body || '',
     icon: config.icon,
     badge: config.badge,
-    tag: `aafiatak-${config.tag}`,
-    data: { url: url || '/', type: type || 'system', ...payload.data },
+    tag: `aafiatak-${config.tag}-${Date.now()}`,
+    data: {
+      url: url || '/',
+      type: notifType,
+      // Store TTS data so we can speak when the user clicks
+      ttsTitle: title || '',
+      ttsBody: body || '',
+      ttsTitleAr: ttsData.titleAr,
+      ttsBodyAr: ttsData.bodyAr,
+      ttsType: notifType,
+      shouldSpeak: 'true', // Flag to trigger TTS on click
+      ...payload.data,
+    },
     dir: 'rtl',
     lang: 'ar',
-    requireInteraction: type === 'emergency' || type === 'assignment',
-    silent: false,
+    requireInteraction: config.requireInteraction,
+    silent: false, // Important: let the browser play its notification sound too
     vibrate: config.vibrate,
-    actions: type === 'assignment' || type === 'emergency'
-      ? [
-          { action: 'open', title: 'فتح التطبيق' },
-          { action: 'dismiss', title: 'تجاهل' }
-        ]
-      : undefined,
+    renotify: true,
+    actions: [
+      { action: 'speak', title: '🔊 استمع' },
+      { action: 'open', title: '📂 فتح التطبيق' },
+      { action: 'dismiss', title: '✕ إغلاق' },
+    ],
   };
 
   return self.registration.showNotification(title || 'عافيتك', notificationOptions);
@@ -110,21 +242,45 @@ self.addEventListener('notificationclick', (event) => {
   const action = event.action;
   const data = event.notification.data || {};
 
+  // Dismiss action - just close
   if (action === 'dismiss') return;
 
+  // Both 'speak' and 'open' and default click should open the app
+  // The app will receive a message to play TTS
+  const shouldSpeak = action === 'speak' || data.shouldSpeak === 'true' || !action;
   const targetUrl = data.url || '/';
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-      // Focus existing window if available
+      // Try to find an existing window
       for (const client of clientList) {
         if (client.url.includes(self.location.origin) && 'focus' in client) {
           client.navigate(targetUrl);
+          // Send message to the client to trigger TTS
+          if (shouldSpeak) {
+            setTimeout(() => {
+              client.postMessage({
+                type: 'NOTIFICATION_CLICKED_SPEAK',
+                title: data.ttsTitle || data.title || '',
+                body: data.ttsBody || data.body || data.message || '',
+                titleAr: data.ttsTitleAr || data.titleAr || data.title || '',
+                bodyAr: data.ttsBodyAr || data.bodyAr || data.body || data.message || '',
+                notifType: data.ttsType || data.type || 'system',
+                url: targetUrl,
+              });
+            }, 500); // Small delay to let the page load
+          }
           return client.focus();
         }
       }
-      // Open new window
-      return clients.openWindow(targetUrl);
+      
+      // No existing window - open a new one
+      // Pass TTS data as URL params so the app can auto-speak on load
+      const ttsParams = shouldSpeak ? 
+        `&speak=1&st=${encodeURIComponent(data.ttsTitleAr || data.ttsTitle || '')}&sb=${encodeURIComponent(data.ttsBodyAr || data.ttsBody || '')}&stt=${data.ttsType || 'system'}` : '';
+      const fullUrl = targetUrl + (targetUrl.includes('?') ? ttsParams : '?' + ttsParams.replace(/^&/, ''));
+      
+      return clients.openWindow(fullUrl);
     })
   );
 });
@@ -143,18 +299,24 @@ self.addEventListener('push', (event) => {
 });
 
 // ═══════════════════════════════════════════════════════
+//  MESSAGE HANDLER (from the web app)
+// ═══════════════════════════════════════════════════════
+
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+});
+
+// ═══════════════════════════════════════════════════════
 //  CACHING STRATEGIES
 // ═══════════════════════════════════════════════════════
 
-// Fetch: strategy based on request type
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
-  // Skip non-GET requests
   if (request.method !== 'GET') return;
-
-  // Skip chrome-extension and other non-http(s) requests
   if (!url.protocol.startsWith('http')) return;
 
   // Network-first strategy for API calls
@@ -173,6 +335,12 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Cache sound files aggressively
+  if (url.pathname.startsWith('/sounds/')) {
+    event.respondWith(cacheFirst(request));
+    return;
+  }
+
   // Stale-while-revalidate for static assets (JS, CSS)
   if (
     url.pathname.match(/\.(js|css)$/) ||
@@ -182,13 +350,12 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Network-first for HTML pages (navigation)
+  // Network-first for HTML pages
   if (request.mode === 'navigate' || request.headers.get('accept')?.includes('text/html')) {
     event.respondWith(networkFirstWithOfflineFallback(request));
     return;
   }
 
-  // Default: network-first
   event.respondWith(networkFirst(request));
 });
 
@@ -208,7 +375,6 @@ async function networkFirst(request) {
   }
 }
 
-// Network-first with offline fallback page
 async function networkFirstWithOfflineFallback(request) {
   try {
     const response = await fetch(request);
@@ -282,7 +448,6 @@ async function networkFirstWithOfflineFallback(request) {
   }
 }
 
-// Cache-first: try cache, fall back to network
 async function cacheFirst(request) {
   const cached = await caches.match(request);
   if (cached) return cached;
@@ -298,7 +463,6 @@ async function cacheFirst(request) {
   }
 }
 
-// Stale-while-revalidate: return cache immediately, update in background
 async function staleWhileRevalidate(request) {
   const cache = await caches.open(CACHE_NAME);
   const cached = await cache.match(request);

@@ -115,6 +115,53 @@ let globalCurrentUserId: string | null = null
 let globalCurrentUserType: string | null = null
 let globalFcmCleanup: (() => void) | null = null
 let globalSoundSystemInitialized = false
+let globalSwMessageListenerSetup = false
+
+// ─── Service Worker Message Listener ───
+// Listens for messages from the Service Worker when the user clicks
+// a background notification. This triggers TTS automatically.
+function singletonInitSWMessageListener() {
+  if (globalSwMessageListenerSetup) return
+  if (typeof window === 'undefined' || !navigator.serviceWorker) return
+  globalSwMessageListenerSetup = true
+
+  // Listen for messages from the Service Worker
+  navigator.serviceWorker.addEventListener('message', (event) => {
+    const data = event.data
+    if (!data) return
+
+    // Handle notification click → auto-speak
+    if (data.type === 'NOTIFICATION_CLICKED_SPEAK') {
+      console.log('🗣️ [SW Message] Notification clicked, will speak:', data.titleAr || data.title)
+
+      // Resume AudioContext so TTS can work
+      resumeAudioContext()
+
+      // Small delay to ensure the app is fully loaded
+      setTimeout(() => {
+        const voiceNotif = createVoiceNotification(
+          data.notifType || 'system',
+          data.titleAr || data.title || '',
+          data.bodyAr || data.body || '',
+          undefined,
+          undefined,
+          data.notifType === 'emergency' ? 'urgent' : 'normal'
+        )
+        speakNotification(voiceNotif)
+        console.log('🗣️ [SW Message] TTS triggered for:', data.titleAr || data.title)
+      }, 1000)
+    }
+
+    // Handle sound play request from SW
+    if (data.type === 'PLAY_NOTIFICATION_SOUND') {
+      console.log('🔊 [SW Message] Play sound request:', data.notifType)
+      resumeAudioContext()
+      playNotificationSound(data.notifType || 'system')
+    }
+  })
+
+  console.log('🗣️ [SW Message] Service Worker message listener initialized')
+}
 
 // Subscriber pattern
 type NotifSubscriber = (notifs: NotifItem[], unreadCount: number) => void
@@ -428,6 +475,7 @@ function singletonRegisterUser(userId: string, userType: string) {
 
   singletonInitFcmListener()
   singletonInitCapacitorListener()
+  singletonInitSWMessageListener()
   singletonStartPolling()
   autoRequestNotificationPermission(userId, userType)
 }

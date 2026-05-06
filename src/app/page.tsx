@@ -8,6 +8,8 @@ import dynamic from 'next/dynamic'
 import LandingPage from '@/components/LandingPage'
 import ErrorBoundary from '@/components/ErrorBoundary'
 import { usePushNotifications } from '@/hooks/use-notifications'
+import { speakNotification, createVoiceNotification, initTTS, isTTSEnabled } from '@/lib/voice-manager'
+import { resumeAudioContext } from '@/lib/sound-manager'
 
 // ─── Dynamic imports for heavy dashboard components ───
 // Prevents "Cannot access 'O' before initialization" by avoiding
@@ -134,6 +136,58 @@ export default function Home() {
 
   // ─── Initialize push notifications (works even when app is closed) ───
   usePushNotifications()
+
+  // ─── Handle notification click from Service Worker (app opened from background notification) ───
+  // When the app was closed and the user taps a notification, the SW opens
+  // the app with TTS data in URL params. We detect this and auto-speak.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const params = new URLSearchParams(window.location.search)
+    const shouldSpeak = params.get('speak')
+
+    if (shouldSpeak === '1') {
+      const title = params.get('st') || ''
+      const body = params.get('sb') || ''
+      const notifType = params.get('stt') || 'system'
+
+      console.log('🗣️ [Page] Notification click detected, will speak:', title)
+
+      // Initialize TTS if not already
+      initTTS()
+
+      // Resume AudioContext on this user gesture context
+      resumeAudioContext()
+
+      // Small delay to let the app fully initialize
+      const timer = setTimeout(() => {
+        if (isTTSEnabled()) {
+          const voiceNotif = createVoiceNotification(
+            notifType,
+            title,
+            body,
+            undefined,
+            undefined,
+            notifType === 'emergency' ? 'urgent' : 'normal'
+          )
+          speakNotification(voiceNotif)
+          console.log('🗣️ [Page] TTS triggered from notification click')
+        }
+      }, 2000)
+
+      // Clean up URL params after processing
+      try {
+        const cleanUrl = new URL(window.location.href)
+        cleanUrl.searchParams.delete('speak')
+        cleanUrl.searchParams.delete('st')
+        cleanUrl.searchParams.delete('sb')
+        cleanUrl.searchParams.delete('stt')
+        window.history.replaceState({}, '', cleanUrl.toString())
+      } catch {}
+
+      return () => clearTimeout(timer)
+    }
+  }, [])
 
   // Listen for refresh events
   useEffect(() => {
