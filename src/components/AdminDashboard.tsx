@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   LayoutDashboard, Wrench, Users, ClipboardList, CreditCard,
   LogOut, Plus, Pencil, Trash2, CheckCircle, XCircle, UserPlus,
-  Loader2, Shield, Heart, Menu, X, UserCog,
+  Loader2, Shield, Heart, Menu, X, UserCog, KeyRound,
   FileText, Activity, Search, Filter, BarChart3,
   TrendingUp, Tag, Sparkles, Star, Phone, Mail, Gift,
   Ban, Unlock, Eye, AlertTriangle, UsersRound, Settings,
@@ -118,6 +118,13 @@ export default function AdminDashboard() {
   const [editName, setEditName] = useState('')
   const [editPhone, setEditPhone] = useState('')
   const [editEmail, setEditEmail] = useState('')
+
+  // ─── Change password dialog ────────────────────────────────
+  const [changePasswordDialog, setChangePasswordDialog] = useState(false)
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmNewPassword, setConfirmNewPassword] = useState('')
+  const [changePasswordLoading, setChangePasswordLoading] = useState(false)
 
   const [nurseSearch, setNurseSearch] = useState('')
   const [nurseFilter, setNurseFilter] = useState<string>('all')
@@ -349,6 +356,53 @@ export default function AdminDashboard() {
   useEffect(() => { fetchData() }, [fetchData])
 
   const handleLogout = () => { logout(); setView('landing') }
+
+  // ─── Change password handler ──────────────────────────────────
+  const handleChangePassword = async () => {
+    if (!currentPassword || !newPassword || !confirmNewPassword) {
+      toast({ title: 'خطأ', description: 'يرجى ملء جميع الحقول', variant: 'destructive' })
+      return
+    }
+    if (newPassword.length < 6) {
+      toast({ title: 'خطأ', description: 'كلمة المرور الجديدة يجب أن تكون 6 أحرف على الأقل', variant: 'destructive' })
+      return
+    }
+    if (newPassword !== confirmNewPassword) {
+      toast({ title: 'خطأ', description: 'كلمة المرور الجديدة وتأكيدها غير متطابقتين', variant: 'destructive' })
+      return
+    }
+    if (currentPassword === newPassword) {
+      toast({ title: 'خطأ', description: 'كلمة المرور الجديدة يجب أن تكون مختلفة عن الحالية', variant: 'destructive' })
+      return
+    }
+    setChangePasswordLoading(true)
+    try {
+      const res = await fetch('/api/admin/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          adminId: (user as any)?.id,
+          currentPassword,
+          newPassword,
+          userType: isSubAdmin ? 'sub-admin' : 'admin',
+        }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        toast({ title: 'تم تغيير كلمة المرور بنجاح', description: 'يمكنك المتابعة باستخدام كلمة المرور الجديدة' })
+        setChangePasswordDialog(false)
+        setCurrentPassword('')
+        setNewPassword('')
+        setConfirmNewPassword('')
+      } else {
+        toast({ title: 'خطأ', description: data.error, variant: 'destructive' })
+      }
+    } catch {
+      toast({ title: 'خطأ', description: 'حدث خطأ في الاتصال بالخادم', variant: 'destructive' })
+    } finally {
+      setChangePasswordLoading(false)
+    }
+  }
 
   // ─── Show map preview helper ──────────────────────────────────
   const showMapPreview = (location: string, label?: string) => {
@@ -1054,6 +1108,7 @@ export default function AdminDashboard() {
             <div className="flex-1" />
             <NotificationBell gradientFrom="from-amber-500" gradientTo="to-rose-500" userType="admin" />
           </div>
+          <Button variant="ghost" className="w-full justify-start text-amber-600 hover:text-amber-700 hover:bg-amber-50 rounded-xl" onClick={() => { setChangePasswordDialog(true); setCurrentPassword(''); setNewPassword(''); setConfirmNewPassword('') }}><KeyRound className="w-4 h-4 ml-2" />تغيير كلمة المرور</Button>
           <Button variant="ghost" className="w-full justify-start text-red-500 hover:text-red-600 hover:bg-red-50 rounded-xl" onClick={handleLogout}><LogOut className="w-4 h-4 ml-2" />تسجيل الخروج</Button>
         </div>
       </aside>
@@ -1080,6 +1135,7 @@ export default function AdminDashboard() {
             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center"><Shield className="w-4 h-4 text-white" /></div>
             <div><p className="font-medium text-sm">{(user as any)?.name || 'المدير'}</p><p className="text-gray-400 text-xs">مدير النظام</p></div>
           </div>
+          <Button variant="ghost" className="w-full justify-start text-amber-600 hover:bg-amber-50" onClick={() => { setChangePasswordDialog(true); setMobileMenuOpen(false); setCurrentPassword(''); setNewPassword(''); setConfirmNewPassword('') }}><KeyRound className="w-4 h-4 ml-2" />تغيير كلمة المرور</Button>
           <Button variant="ghost" className="w-full justify-start text-red-500 hover:bg-red-50" onClick={handleLogout}><LogOut className="w-4 h-4 ml-2" />تسجيل الخروج</Button>
         </div>
       </div>
@@ -1095,6 +1151,7 @@ export default function AdminDashboard() {
           {emergencyRequests.filter((e: any) => e.status === 'pending').length > 0 && (
             <Button variant="ghost" size="sm" className="relative" onClick={() => setActiveTab('emergency')}><AlertTriangle className="w-4 h-4 text-red-500" /><span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center">{emergencyRequests.filter((e: any) => e.status === 'pending').length}</span></Button>
           )}
+          <Button variant="ghost" size="sm" onClick={() => { setChangePasswordDialog(true); setCurrentPassword(''); setNewPassword(''); setConfirmNewPassword('') }}><KeyRound className="w-4 h-4 text-amber-600" /></Button>
           <Button variant="ghost" size="sm" onClick={handleLogout}><LogOut className="w-4 h-4 text-red-500" /></Button>
           <Button variant="ghost" size="sm" onClick={() => setMobileMenuOpen(true)}><Menu className="w-5 h-5" /></Button>
         </div>
@@ -2819,6 +2876,36 @@ export default function AdminDashboard() {
             <div><Label>البريد الإلكتروني</Label><Input type="email" value={editEmail} onChange={e => setEditEmail(e.target.value)} placeholder="البريد الإلكتروني" className="border-amber-200 mt-1" /></div>
           </div>
           <DialogFooter><Button variant="outline" onClick={() => setEditNameDialog(false)}>إلغاء</Button><Button className="bg-gradient-to-l from-amber-500 via-orange-500 to-rose-500 text-white" onClick={handleUpdateProfile}>حفظ</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Change Password Dialog */}
+      <Dialog open={changePasswordDialog} onOpenChange={setChangePasswordDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><KeyRound className="w-5 h-5 text-amber-600" />تغيير كلمة المرور</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div>
+              <Label>كلمة المرور الحالية</Label>
+              <Input type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} placeholder="أدخل كلمة المرور الحالية" className="border-amber-200 mt-1" />
+            </div>
+            <div>
+              <Label>كلمة المرور الجديدة</Label>
+              <Input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="6 أحرف على الأقل" className="border-amber-200 mt-1" />
+            </div>
+            <div>
+              <Label>تأكيد كلمة المرور الجديدة</Label>
+              <Input type="password" value={confirmNewPassword} onChange={e => setConfirmNewPassword(e.target.value)} placeholder="أعد كتابة كلمة المرور الجديدة" className="border-amber-200 mt-1" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setChangePasswordDialog(false)}>إلغاء</Button>
+            <Button className="bg-gradient-to-l from-amber-500 via-orange-500 to-rose-500 text-white" onClick={handleChangePassword} disabled={changePasswordLoading}>
+              {changePasswordLoading ? <Loader2 className="w-4 h-4 animate-spin ml-1" /> : <KeyRound className="w-4 h-4 ml-1" />}
+              تغيير كلمة المرور
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
