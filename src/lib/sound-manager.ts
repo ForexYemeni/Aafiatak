@@ -1,21 +1,23 @@
 /**
- * عافيتك — Sound Manager v4 (Professional Grade)
+ * عافيتك — Sound Manager v5 (Professional Grade)
  * 
- * ROOT CAUSE OF ALL PREVIOUS FAILURES:
- * Web Audio API requires a "running" AudioContext, which can ONLY be activated
- * by a user gesture. When the polling detects a new notification automatically
- * (not from a user gesture), the AudioContext is "suspended" and ALL sounds fail.
+ * ROOT CAUSE OF v4 FAILURE:
+ * When Browser Notification succeeded, it returned true and SKIPPED Web Audio.
+ * But Browser Notification's OS sound is extremely quiet on most devices,
+ * especially on mobile. The Web Audio API plays a LOUD, CUSTOM tone which
+ * is what the user actually needs. They must work IN PARALLEL, not as alternatives.
  * 
- * SOLUTION: Use the Browser Notification API as the PRIMARY method.
- * Browser Notifications play the OS notification sound AUTOMATICALLY, without
- * needing AudioContext. This is the ONLY reliable way to play sound without
- * user interaction in web browsers.
+ * SOLUTION: Play Browser Notification (visual) AND Web Audio (audible) simultaneously.
+ * - Browser Notification = visual alert + subtle OS sound (backup)
+ * - Web Audio API = loud, clear custom notification tone (primary)
  * 
- * Priority order:
- * 1. Android APK: Native bridge (always works, no WebView limitations)
- * 2. Browser: Browser Notification API (plays OS sound, no AudioContext needed)
- * 3. Fallback: Web Audio API (only works after user interaction)
- * 4. Fallback: HTML Audio element (may be blocked by autoplay policy)
+ * Priority for RECEIVED notifications (polling/push):
+ * 1. Android APK: Native bridge → done
+ * 2. Browser: Web Audio (LOUD sound) + Browser Notification (visual) IN PARALLEL
+ * 
+ * Priority for LOCAL action sounds (button clicks):
+ * 1. Android APK: Native bridge → done
+ * 2. Browser: Web Audio (always works because user gesture unlocks AudioContext)
  */
 
 // ═══════════════════════════════════════════════════════════════
@@ -71,7 +73,7 @@ export function setSoundEnabled(enabled: boolean): void {
 }
 
 // ═══════════════════════════════════════════════════════════════
-//  METHOD 1: Native Android Bridge (APK only)
+//  METHOD 1: Native Android Bridge (APK only — ALWAYS WORKS)
 // ═══════════════════════════════════════════════════════════════
 
 function playNativeSound(type: string): boolean {
@@ -95,61 +97,9 @@ function playNativeSound(type: string): boolean {
 }
 
 // ═══════════════════════════════════════════════════════════════
-//  METHOD 2: Browser Notification API (PRIMARY for web)
-//  This plays the OS notification sound AUTOMATICALLY.
-//  No AudioContext needed, no user gesture needed.
-//  Only requires notification permission to be granted.
-// ═══════════════════════════════════════════════════════════════
-
-function playBrowserNotificationSound(title: string, body: string, type: string): boolean {
-  // Skip if notification permission not granted
-  if (typeof Notification === 'undefined') return false
-  if (Notification.permission !== 'granted') {
-    console.log('🔊 Browser Notification skipped: permission not granted')
-    return false
-  }
-
-  // In APK, native bridge is preferred (browser notifications are weird in WebView)
-  if (isCapacitorNative() || isAndroidApp()) return false
-
-  try {
-    // Determine appropriate icon and tag
-    const tag = `aafiatak-${type}-${Date.now()}`
-    
-    const notification = new Notification(title, {
-      body,
-      icon: '/logo.png',
-      badge: '/logo.png',
-      dir: 'rtl',
-      lang: 'ar',
-      tag,
-      silent: false, // IMPORTANT: This ensures the OS plays a sound
-      requireInteraction: type === 'emergency' || type === 'assignment',
-    })
-
-    // Auto-close after 5 seconds (don't clutter notification center)
-    setTimeout(() => {
-      try { notification.close() } catch {}
-    }, 5000)
-
-    // Click handler - focus the window
-    notification.onclick = () => {
-      try {
-        window.focus()
-        notification.close()
-      } catch {}
-    }
-
-    console.log('🔊 ✅ Browser Notification shown with sound [' + type + ']')
-    return true
-  } catch (e) {
-    console.warn('🔊 Browser Notification failed:', e)
-    return false
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════
-//  METHOD 3: Web Audio API (fallback, needs user interaction)
+//  METHOD 2: Web Audio API (LOUD custom tones)
+//  This is the PRIMARY audible method for browsers.
+//  Works when AudioContext is "running" (after user interaction).
 // ═══════════════════════════════════════════════════════════════
 
 let _ctx: AudioContext | null = null
@@ -160,16 +110,23 @@ async function getRunningContext(): Promise<AudioContext | null> {
       const AC = window.AudioContext || (window as any).webkitAudioContext
       if (!AC) return null
       _ctx = new AC()
+      console.log('🔊 AudioContext created, state:', _ctx.state)
     } catch { return null }
   }
 
   if (_ctx.state === 'running') return _ctx
 
+  // Try to resume — may fail if no user gesture
   if (_ctx.state === 'suspended') {
     try {
       await _ctx.resume()
-      if (_ctx.state === 'running') return _ctx
-    } catch {}
+      if (_ctx.state === 'running') {
+        console.log('🔊 AudioContext resumed successfully')
+        return _ctx
+      }
+    } catch {
+      console.log('🔊 AudioContext resume failed (needs user interaction)')
+    }
   }
 
   return null
@@ -178,7 +135,10 @@ async function getRunningContext(): Promise<AudioContext | null> {
 async function playWebAudio(type: string): Promise<boolean> {
   try {
     const ctx = await getRunningContext()
-    if (!ctx || ctx.state !== 'running') return false
+    if (!ctx || ctx.state !== 'running') {
+      console.log('🔊 Web Audio: AudioContext not running, state:', _ctx?.state || 'null')
+      return false
+    }
 
     const t = TONES[type] || TONES.system
 
@@ -193,9 +153,10 @@ async function playWebAudio(type: string): Promise<boolean> {
       osc.frequency.value = t.freq
       osc.type = t.wave
 
+      // Loud, clear tone with smooth envelope
       gain.gain.setValueAtTime(0.001, start)
-      gain.gain.exponentialRampToValueAtTime(0.35, start + 0.01)
-      gain.gain.setValueAtTime(0.35, start + t.dur / 1000 - 0.03)
+      gain.gain.exponentialRampToValueAtTime(0.5, start + 0.01)  // 0.5 = loud
+      gain.gain.setValueAtTime(0.5, start + t.dur / 1000 - 0.03)
       gain.gain.exponentialRampToValueAtTime(0.001, start + t.dur / 1000)
 
       osc.start(start)
@@ -204,7 +165,52 @@ async function playWebAudio(type: string): Promise<boolean> {
 
     console.log('🔊 ✅ Web Audio played [' + type + ']')
     return true
-  } catch {
+  } catch (e) {
+    console.warn('🔊 Web Audio failed:', e)
+    return false
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  METHOD 3: Browser Notification API (VISUAL alert + OS sound)
+//  This shows a system notification AND plays the OS notification sound.
+//  Works WITHOUT AudioContext. Used IN PARALLEL with Web Audio.
+// ═══════════════════════════════════════════════════════════════
+
+function showBrowserNotification(title: string, body: string, type: string): boolean {
+  if (typeof Notification === 'undefined') return false
+  if (Notification.permission !== 'granted') return false
+  // Skip in APK (native bridge handles it)
+  if (isCapacitorNative() || isAndroidApp()) return false
+
+  try {
+    const tag = `aafiatak-${type}-${Date.now()}`
+    
+    const notification = new Notification(title, {
+      body,
+      icon: '/logo.png',
+      badge: '/logo.png',
+      dir: 'rtl',
+      lang: 'ar',
+      tag,
+      silent: false,      // Play OS notification sound
+      renotify: true,      // Force sound even if tag exists
+      requireInteraction: type === 'emergency' || type === 'assignment',
+    })
+
+    // Auto-close after 6 seconds
+    setTimeout(() => {
+      try { notification.close() } catch {}
+    }, 6000)
+
+    notification.onclick = () => {
+      try { window.focus(); notification.close() } catch {}
+    }
+
+    console.log('🔊 ✅ Browser Notification shown [' + type + ']')
+    return true
+  } catch (e) {
+    console.warn('🔊 Browser Notification failed:', e)
     return false
   }
 }
@@ -216,8 +222,10 @@ async function playWebAudio(type: string): Promise<boolean> {
 function playFileAudio(type: string): boolean {
   try {
     const audio = new Audio(`/sounds/${type}.wav`)
-    audio.volume = 0.6
-    audio.play().catch(() => {})
+    audio.volume = 0.7
+    audio.play().then(() => {
+      console.log('🔊 ✅ File audio played [' + type + ']')
+    }).catch(() => {})
     return true
   } catch {
     return false
@@ -229,14 +237,13 @@ function playFileAudio(type: string): boolean {
 // ═══════════════════════════════════════════════════════════════
 
 /**
- * Play a notification sound. Tries methods in order of reliability.
+ * Play a notification sound for RECEIVED notifications.
+ * This is called when polling detects a new notification or when
+ * a push notification arrives.
  * 
- * On Android APK: Native bridge → Web Audio → File audio
- * On browser: Browser Notification (OS sound) → Web Audio → File audio
- * 
- * @param type Notification type (determines sound tone)
- * @param title Title for browser notification (used by Method 2)
- * @param body Body for browser notification (used by Method 2)
+ * CRITICAL: Browser Notification + Web Audio run IN PARALLEL.
+ * - Browser Notification = visual alert + OS sound (backup)
+ * - Web Audio = loud, clear custom tone (primary audible alert)
  */
 export async function playNotificationSound(
   type: string = 'system',
@@ -245,61 +252,66 @@ export async function playNotificationSound(
 ): Promise<void> {
   console.log('🔊 playNotificationSound called [' + type + ']')
 
-  // Check preference
   if (!isSoundEnabled()) {
-    console.log('🔊 SKIPPED: sound disabled by user')
+    console.log('🔊 SKIPPED: sound disabled')
     return
   }
 
-  // Cooldown
   const now = Date.now()
   if (now - lastPlayTime < COOLDOWN_MS) {
-    console.log('🔊 SKIPPED: cooldown')
+    console.log('🔊 SKIPPED: cooldown (' + (COOLDOWN_MS - (now - lastPlayTime)) + 'ms)')
     return
   }
   lastPlayTime = now
 
-  // Method 1: Native Android (synchronous, always works in APK)
+  // ─── APK: Native bridge only (always works) ───
   if (playNativeSound(type)) return
 
-  // Method 2: Browser Notification API (plays OS sound automatically)
+  // ─── Browser: Play BOTH Web Audio AND Browser Notification ───
+  // They serve DIFFERENT purposes and must work IN PARALLEL:
+  // - Web Audio = loud, clear, custom notification tone (PRIMARY)
+  // - Browser Notification = visual popup + OS sound (BACKUP)
+
   const notifTitle = title || getDefaultTitle(type)
   const notifBody = body || getDefaultBody(type)
-  if (playBrowserNotificationSound(notifTitle, notifBody, type)) return
 
-  // Method 3: Web Audio API (async, needs AudioContext running)
-  if (await playWebAudio(type)) return
+  // Start Browser Notification (don't await - fire and forget)
+  showBrowserNotification(notifTitle, notifBody, type)
 
-  // Method 4: File audio (may be blocked by autoplay)
-  if (playFileAudio(type)) return
+  // Try Web Audio (PRIMARY audible method)
+  const webAudioOk = await playWebAudio(type)
+  if (webAudioOk) return  // Best case: loud custom tone played
 
-  console.warn('🔊 ⚠️ ALL sound methods failed for [' + type + '] — this is OK if no user interaction yet')
+  // If Web Audio failed (AudioContext suspended), try file audio
+  const fileAudioOk = playFileAudio(type)
+  if (fileAudioOk) return
+
+  // If all audio methods failed, the Browser Notification (if shown)
+  // will at least play the OS notification sound as a last resort
+  if (Notification.permission === 'granted' && !isCapacitorNative() && !isAndroidApp()) {
+    console.log('🔊 ⚠️ Web Audio failed but Browser Notification may have OS sound')
+  } else {
+    console.warn('🔊 ❌ ALL sound methods failed for [' + type + ']')
+  }
 }
 
 /**
  * Play a LOCAL action sound. Called during user gestures (button clicks).
- * This DOES work because the user gesture unlocks the AudioContext.
- * Use this for immediate feedback when the user performs an action.
+ * This always works because the user gesture unlocks AudioContext.
  */
 export async function playLocalActionSound(type: string = 'system'): Promise<void> {
   console.log('🔊 playLocalActionSound called [' + type + ']')
 
-  // Always try to play, even if global sound check would fail
-  // Local actions should always give feedback
-
   // Native bridge for APK
   if (playNativeSound(type)) return
 
-  // For browser: Try Web Audio first (user gesture unlocks AudioContext)
+  // Web Audio first (user gesture = AudioContext unlocked)
   if (await playWebAudio(type)) return
 
   // Fallback: file audio
   if (playFileAudio(type)) return
 
-  // Last resort: try browser notification
-  const notifTitle = getDefaultTitle(type)
-  const notifBody = getDefaultBody(type)
-  playBrowserNotificationSound(notifTitle, notifBody, type)
+  console.warn('🔊 ❌ Local action sound failed [' + type + ']')
 }
 
 /**
@@ -323,16 +335,21 @@ export async function testNotificationSound(type: string = 'system'): Promise<vo
 }
 
 /**
- * Initialize sound system. MUST be called on app mount.
- * Sets up a one-time click handler to unlock AudioContext.
+ * Initialize sound system. Called on app mount.
+ * Sets up event listeners to unlock AudioContext on first user interaction.
  */
 export function initSoundSystem(): void {
   console.log('🔊 initSoundSystem() called')
 
+  let unlocked = false
+
   const unlock = async () => {
+    if (unlocked) return
     const ctx = await getRunningContext()
-    if (ctx) {
-      console.log('🔊 AudioContext unlocked! state:', ctx.state)
+    if (ctx && ctx.state === 'running') {
+      unlocked = true
+      console.log('🔊 AudioContext unlocked! Sound notifications will work.')
+      // Play a nearly-silent tone to fully activate the context
       try {
         const osc = ctx.createOscillator()
         const gain = ctx.createGain()
@@ -342,11 +359,12 @@ export function initSoundSystem(): void {
         osc.start(ctx.currentTime)
         osc.stop(ctx.currentTime + 0.01)
       } catch {}
+      // Remove listeners after unlock
+      document.removeEventListener('click', unlock)
+      document.removeEventListener('touchstart', unlock)
+      document.removeEventListener('touchend', unlock)
+      document.removeEventListener('keydown', unlock)
     }
-    document.removeEventListener('click', unlock)
-    document.removeEventListener('touchstart', unlock)
-    document.removeEventListener('touchend', unlock)
-    document.removeEventListener('keydown', unlock)
   }
 
   if (typeof document !== 'undefined') {
@@ -356,10 +374,14 @@ export function initSoundSystem(): void {
     document.addEventListener('keydown', unlock)
   }
 
-  // Try to resume immediately (might work if there was prior interaction)
+  // Try to resume immediately
   getRunningContext().then(ctx => {
-    if (ctx) console.log('🔊 AudioContext ready on init')
-    else console.log('🔊 AudioContext needs user interaction')
+    if (ctx) {
+      unlocked = true
+      console.log('🔊 AudioContext ready on init, state:', ctx.state)
+    } else {
+      console.log('🔊 AudioContext needs user interaction to unlock - will auto-unlock on first click/touch')
+    }
   })
 }
 
@@ -372,7 +394,7 @@ export function getAudioContextState(): string {
 }
 
 // ═══════════════════════════════════════════════════════════════
-//  DEFAULT NOTIFICATION TEXT (for Browser Notification API)
+//  DEFAULT NOTIFICATION TEXT
 // ═══════════════════════════════════════════════════════════════
 
 const TITLES: Record<string, string> = {

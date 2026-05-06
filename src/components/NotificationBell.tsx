@@ -18,6 +18,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Bell, BellOff, BellRing, CheckCheck, Volume2, VolumeX, Shield, Sparkles, Settings } from 'lucide-react'
 import { useAppStore } from '@/lib/store'
 import { playNotificationSound, playLocalActionSound, isSoundEnabled, setSoundEnabled as setSoundStorage, testNotificationSound, initSoundSystem } from '@/lib/sound-manager'
+import { onForegroundMessage } from '@/lib/firebase-client'
 
 interface NotifItem {
   id: string
@@ -121,6 +122,38 @@ export default function NotificationBell({ gradientFrom, gradientTo, userType }:
   useEffect(() => {
     initSoundSystem()
   }, [])
+
+  // ─── Listen for FCM foreground messages (instant delivery in browser) ───
+  // This provides FASTER notification than polling (15s delay)
+  // When the user is in the browser, FCM messages arrive instantly
+  const fcmListenerSetup = useRef(false)
+  useEffect(() => {
+    if (isCapacitorNative() || isAndroidApp()) return // APK uses Capacitor listeners
+    if (fcmListenerSetup.current) return
+    fcmListenerSetup.current = true
+
+    let cleanup: (() => void) | null = null
+    onForegroundMessage((payload: any) => {
+      console.log('📱 FCM foreground message received:', payload)
+      const type = payload?.data?.type || 'system'
+      const title = payload?.notification?.title || payload?.data?.title || ''
+      const body = payload?.notification?.body || payload?.data?.body || payload?.data?.message || ''
+      const notifId = payload?.data?.id || payload?.data?.requestId || ''
+      
+      // Play sound immediately (no polling delay!)
+      playNotificationSound(type, title, body)
+      
+      // Track the notification ID to prevent polling from re-playing sound
+      if (notifId) {
+        knownNotificationIds.current.add(String(notifId))
+      }
+      
+      // Refresh notification list immediately
+      fetchNotifications()
+    }).then(fn => { cleanup = fn })
+
+    return () => { if (cleanup) cleanup() }
+  }, [playNotificationSound, fetchNotifications])
 
   // ─── Send FCM token to server ───
   const sendTokenToServer = useCallback(async (token: string) => {
