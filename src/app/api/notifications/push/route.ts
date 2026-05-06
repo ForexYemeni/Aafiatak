@@ -59,13 +59,22 @@ async function sendFCMNotification(
     for (const tokenDoc of tokens) {
       const token = tokenDoc.token
       try {
+        // ─── IMPORTANT: Send DATA-ONLY messages for Android ───
+        // When FCM messages contain a "notification" payload, Android auto-displays
+        // the notification when the app is in the background, BYPASSING our custom
+        // AafiatakFirebaseMessagingService. This means our notification channels
+        // (with custom sounds/vibrations) are NOT used.
+        //
+        // By sending data-only messages (no "notification" key at top level),
+        // onMessageReceived() is ALWAYS called, regardless of foreground/background.
+        // Our custom service then shows the notification with the correct channel + sound.
+        //
+        // For web (webpush), we still include the notification payload since
+        // browsers need it to display push notifications.
         const message: admin.messaging.Message = {
-          token,
-          notification: {
+          data: {
             title,
             body,
-          },
-          data: {
             type,
             userType,
             url: data?.url || '/',
@@ -97,14 +106,10 @@ async function sendFCMNotification(
             },
           },
           android: {
-            notification: {
-              title,
-              body,
-              icon: 'ic_launcher',
-              sound: 'default',
-              tag: `aafiatak-${type}`,
-              channelId,
-            },
+            // Data-only: no "notification" key here.
+            // onMessageReceived() will always be called.
+            // Our AafiatakFirebaseMessagingService handles display + sound + channel.
+            priority: 'high' as const,
           },
         }
 

@@ -28,6 +28,10 @@ public class MainActivity extends BridgeActivity {
     protected void onCreate(android.os.Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+        // Create notification channels early — before any FCM message arrives.
+        // This ensures channels exist so our custom sounds and importance levels work.
+        AafiatakFirebaseMessagingService.createNotificationChannelsStatic(this);
+
         // Create and register the JavaScript interface
         webAppInterface = new WebAppInterface(this);
 

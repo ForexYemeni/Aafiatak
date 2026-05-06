@@ -54,14 +54,8 @@ public class AafiatakFirebaseMessagingService extends FirebaseMessagingService {
         String type = "system";
         String url = "/";
 
-        // Extract notification payload
-        RemoteMessage.Notification notification = remoteMessage.getNotification();
-        if (notification != null) {
-            title = notification.getTitle() != null ? notification.getTitle() : title;
-            body = notification.getBody() != null ? notification.getBody() : body;
-        }
-
-        // Extract data payload (takes priority)
+        // ─── Handle DATA-ONLY messages (our server sends data-only for Android) ───
+        // Data payload contains all notification info
         Map<String, String> data = remoteMessage.getData();
         if (data != null && !data.isEmpty()) {
             if (data.containsKey("title")) title = data.get("title");
@@ -69,6 +63,27 @@ public class AafiatakFirebaseMessagingService extends FirebaseMessagingService {
             if (data.containsKey("type")) type = data.get("type");
             if (data.containsKey("url")) url = data.get("url");
         }
+
+        // Also check notification payload (for backward compat / web messages)
+        RemoteMessage.Notification notification = remoteMessage.getNotification();
+        if (notification != null) {
+            // Notification payload exists — use data values if available, else notification values
+            if (title.equals("عافيتك") && notification.getTitle() != null) {
+                title = notification.getTitle();
+            }
+            if (body.isEmpty() && notification.getBody() != null) {
+                body = notification.getBody();
+            }
+        }
+
+        // Skip empty notifications
+        if (body.isEmpty() && title.equals("عافيتك")) {
+            Log.d(TAG, "Skipping empty notification");
+            return;
+        }
+
+        // Ensure channels exist before showing notification
+        createNotificationChannels();
 
         // Show notification with sound
         showNotification(title, body, type, url, data);
@@ -123,7 +138,7 @@ public class AafiatakFirebaseMessagingService extends FirebaseMessagingService {
         try {
             NotificationManagerCompat notificationManager = NotificationManagerCompat.from(this);
             notificationManager.notify(notificationId, builder.build());
-            Log.d(TAG, "Notification shown: " + title + " - " + body);
+            Log.d(TAG, "Notification shown [" + type + "]: " + title + " - " + body);
         } catch (SecurityException e) {
             Log.e(TAG, "No notification permission: " + e.getMessage());
         }
@@ -165,9 +180,13 @@ public class AafiatakFirebaseMessagingService extends FirebaseMessagingService {
         return RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
     }
 
-    private void createNotificationChannels() {
+    /**
+     * Create notification channels. This is called from both this service and
+     * MainActivity to ensure channels exist BEFORE any notification arrives.
+     */
+    public static void createNotificationChannelsStatic(android.content.Context context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            NotificationManager manager = getSystemService(NotificationManager.class);
+            NotificationManager manager = (NotificationManager) context.getSystemService(NotificationManager.class);
             if (manager == null) return;
 
             AudioAttributes audioAttributes = new AudioAttributes.Builder()
@@ -239,7 +258,11 @@ public class AafiatakFirebaseMessagingService extends FirebaseMessagingService {
             paymentChannel.setSound(defaultSound, audioAttributes);
             manager.createNotificationChannel(paymentChannel);
 
-            Log.d(TAG, "Notification channels created successfully");
+            Log.d("AafiatakFCM", "Notification channels created successfully");
         }
+    }
+
+    private void createNotificationChannels() {
+        createNotificationChannelsStatic(this);
     }
 }

@@ -168,13 +168,19 @@ export default function NotificationBell({ gradientFrom, gradientTo, userType }:
       })
 
       // Listen for push notification received while app is in foreground
-      // This plays the sound ONCE when the push arrives natively
+      // IMPORTANT: On Android, the native FCM service already plays sound and shows
+      // the notification. We do NOT play sound here to prevent duplicates.
       pushPlugin.addListener('pushNotificationReceived', (notification: any) => {
         console.log('📱 Push received in foreground:', notification)
-        // Play sound with cooldown protection
-        const type = notification?.data?.type || 'system'
-        playSoundSafely(type)
-        // Refresh the notification list
+        // On Android native: DO NOT play sound — AafiatakFirebaseMessagingService
+        // already handles notification display and sound natively.
+        // Playing sound here would cause duplicate sounds.
+        // Just add the notification data ID to known set to prevent polling re-trigger
+        const notifId = notification?.data?.id || notification?.data?.requestId
+        if (notifId) {
+          knownNotificationIds.current.add(notifId)
+        }
+        // Refresh the notification list (silently)
         fetchNotifications()
       })
 
@@ -231,7 +237,10 @@ export default function NotificationBell({ gradientFrom, gradientTo, userType }:
 
         // Only play sound for genuinely NEW unread notifications
         // AND skip on the very first fetch (app load) to avoid playing old notifications
-        if (newUnreadNotifs.length > 0 && initialFetchDone.current && soundEnabled) {
+        // On Android/Capacitor: skip sound entirely — the native FCM service handles sounds.
+        // This prevents duplicate sounds and sound replay after marking as read.
+        const isNative = isCapacitorNative() || isAndroidApp()
+        if (newUnreadNotifs.length > 0 && initialFetchDone.current && soundEnabled && !isNative) {
           // Determine sound type from the notification type
           const notifType = newUnreadNotifs[0].type || 'system'
           playSoundSafely(notifType)
