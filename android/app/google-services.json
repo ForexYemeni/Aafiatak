@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "880926880101",
+    "project_id": "aafiatak-26439",
+    "storage_bucket": "aafiatak-26439.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:880926880101:android:efe1be2de1aed6fbeb318c",
+        "android_client_info": {
+          "package_name": "com.aafiatak.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "880926880101-7hkbe1bjqj3g1cldq4krl5fj3lqb3b6f.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA_WgNDBnSt3fvPDz3IfGeb5GCwjlgp5fA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "880926880101-7hkbe1bjqj3g1cldq4krl5fj3lqb3b6f.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

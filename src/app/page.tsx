@@ -11,7 +11,7 @@ import FirebaseSetup from '@/components/FirebaseSetup'
 import NurseDashboard from '@/components/NurseDashboard'
 import BeneficiaryDashboard from '@/components/BeneficiaryDashboard'
 import ErrorBoundary from '@/components/ErrorBoundary'
-import { usePushNotifications } from '@/hooks/use-push-notifications'
+import { usePushNotifications } from '@/hooks/use-notifications'
 
 const viewComponents: Record<AppView, React.ComponentType> = {
   landing: LandingPage,
