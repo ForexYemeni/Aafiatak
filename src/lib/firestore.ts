@@ -1481,20 +1481,26 @@ export async function addNurseReplyToRating(ratingId: string, nurseId: string, r
 
 export async function getAdminSettings(subAdminId?: string) {
   await connectToDatabase()
-  const docId = subAdminId ? `sub-admin-${subAdminId}` : 'admin'
-  const doc = await AppSetting.findById(docId).lean()
+  const settingKey = subAdminId ? `sub-admin-${subAdminId}` : 'admin'
+  const doc = await AppSetting.findOne({ key: settingKey }).lean()
   if (!doc) return null
   return convertTimestamps(docToObject(doc))
 }
 
 export async function updateAdminSettings(data: Record<string, any>, subAdminId?: string) {
   await connectToDatabase()
-  const docId = subAdminId ? `sub-admin-${subAdminId}` : 'admin'
-  await AppSetting.findByIdAndUpdate(docId, {
-    ...data,
-    updatedAt: new Date(),
-  }, { upsert: true, new: true, setDefaultsOnInsert: true })
-  const doc = await AppSetting.findById(docId).lean()
+  const settingKey = subAdminId ? `sub-admin-${subAdminId}` : 'admin'
+  const doc = await AppSetting.findOneAndUpdate(
+    { key: settingKey },
+    {
+      $set: {
+        ...data,
+        key: settingKey,
+        updatedAt: new Date(),
+      },
+    },
+    { upsert: true, new: true, setDefaultsOnInsert: true }
+  ).lean()
   if (!doc) return null
   return convertTimestamps(docToObject(doc))
 }
