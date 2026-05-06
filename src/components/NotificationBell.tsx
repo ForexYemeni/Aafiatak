@@ -12,7 +12,7 @@ import { Bell, BellOff, BellRing, Check, CheckCheck, Trash2, X, Volume2, VolumeX
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { useAppStore } from '@/lib/store'
-import { playNotificationSound } from '@/hooks/use-push-notifications'
+import { playNotificationSound, isSoundEnabled, setSoundEnabled, testNotificationSound } from '@/lib/sound-manager'
 
 interface NotifItem {
   id: string
@@ -213,21 +213,23 @@ export default function NotificationBell({ gradientFrom, gradientTo, userType }:
 
   // ─── Toggle sound ───
   const toggleSound = useCallback(() => {
-    setSoundEnabled(prev => {
-      const newVal = !prev
-      if (typeof localStorage !== 'undefined') {
-        localStorage.setItem('aafiatak-sound-enabled', String(newVal))
-      }
-      return newVal
-    })
+    const newVal = !soundEnabled
+    setSoundEnabled(newVal)
+    setSoundEnabledState(newVal)
+    // Play test sound when enabling
+    if (newVal) {
+      testNotificationSound('system')
+    }
+  }, [soundEnabled])
+
+  // Helper to update React state
+  const setSoundEnabledState = useCallback((val: boolean) => {
+    setSoundEnabled(val)
   }, [])
 
   // Load sound preference
   useEffect(() => {
-    if (typeof localStorage !== 'undefined') {
-      const saved = localStorage.getItem('aafiatak-sound-enabled')
-      if (saved !== null) setSoundEnabled(saved === 'true')
-    }
+    setSoundEnabled(isSoundEnabled())
   }, [])
 
   const isGranted = permissionStatus === 'granted'

@@ -25,7 +25,7 @@ import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/
 import { useToast } from '@/hooks/use-toast'
 import ChatSystem from '@/components/ChatSystem'
 import Image from 'next/image'
-import { notifyBeneficiary } from '@/lib/notifications'
+import { notifyBeneficiary, notifyAdmin } from '@/lib/notifications'
 import NotificationBell from '@/components/NotificationBell'
 
 // ==================== Date Helpers ====================
@@ -561,6 +561,9 @@ export default function NurseDashboard() {
           title: 'تم رفض المهمة',
           description: 'تم إبلاغ الإدارة وسيتم تعيين ممرض آخر',
         })
+        // Notify admin that nurse rejected the task
+        const assignment = assignments.find(a => a.id === rejectAssignmentId)
+        notifyAdmin.nurseRejectedTask('', nurseName, rejectReason.trim()).catch(() => {})
         setRejectDialogOpen(false)
         setRejectAssignmentId(null)
         setRejectReason('')
@@ -785,6 +788,17 @@ export default function NurseDashboard() {
             try {
               await fetch(`/api/chat?requestId=${assignment.requestId}`, { method: 'DELETE' })
             } catch { /* صامت - ليس حرجاً */ }
+            // Notify beneficiary that the service is completed
+            if (assignment?.request?.beneficiary?.id) {
+              notifyBeneficiary.orderCompleted(assignment.request.beneficiary.id, assignment.requestId).catch(() => {})
+            }
+          }
+        }
+        // Notify beneficiary when nurse starts working
+        if (status === 'in_progress') {
+          const assignment = assignments.find(a => a.id === assignmentId)
+          if (assignment?.request?.beneficiary?.id && assignment?.request?.service?.name) {
+            notifyBeneficiary.nurseEnRoute(assignment.request.beneficiary.id, nurseName, 'قريباً').catch(() => {})
           }
         }
         toast({
@@ -825,6 +839,10 @@ export default function NurseDashboard() {
           try {
             await fetch(`/api/chat?requestId=${requestId}`, { method: 'DELETE' })
           } catch { /* صامت - ليس حرجاً */ }
+        }
+        // Notify beneficiary that the service is completed
+        if (selectedAssignment?.request?.beneficiary?.id) {
+          notifyBeneficiary.orderCompleted(selectedAssignment.request.beneficiary.id, requestId).catch(() => {})
         }
         toast({ title: 'تم إكمال المهمة بنجاح', description: 'شكراً لجهودك في إنجاز هذه المهمة' })
         fetchAssignments()

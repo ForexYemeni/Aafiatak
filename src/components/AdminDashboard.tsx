@@ -495,7 +495,14 @@ export default function AdminDashboard() {
       const res = await fetch(`/api/admin/nurses/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) })
       if (res.ok) {
         const labels: Record<string, string> = { approved: 'تم قبول الممرض', blocked: 'تم حظر الممرض' }
-        toast({ title: labels[status] || 'تم التحديث' }); fetchData()
+        toast({ title: labels[status] || 'تم التحديث' })
+        // Send notification to nurse about account approval
+        if (status === 'approved') {
+          const nurse = nurses.find((n: any) => n.id === id)
+          notifyNurse.accountApproved(id).catch(() => {})
+          logActivity('nurse_approve', `تم قبول ممرض: ${nurse?.firstName || ''} ${nurse?.lastName || ''}`)
+        }
+        fetchData()
       } else {
         const data = await res.json().catch(() => ({}))
         toast({ title: 'خطأ', description: data.error || 'فشل التحديث', variant: 'destructive' })
@@ -620,7 +627,17 @@ export default function AdminDashboard() {
     if (status === 'approved') { const req = requests.find((r: any) => r.id === id); if (req) handleOpenApproveDialog(req); return }
     try {
       const res = await fetch(`/api/admin/requests/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) })
-      if (res.ok) { toast({ title: 'تم التحديث' }); fetchData() }
+      if (res.ok) {
+        toast({ title: 'تم التحديث' })
+        // Notify beneficiary about status change
+        const req = requests.find((r: any) => r.id === id)
+        if (req?.beneficiary?.id) {
+          if (status === 'approved') {
+            notifyBeneficiary.orderApproved(req.beneficiary.id, id).catch(() => {})
+          }
+        }
+        fetchData()
+      }
     } catch { toast({ title: 'خطأ', description: 'حدث خطأ', variant: 'destructive' }) }
   }
 
@@ -628,7 +645,20 @@ export default function AdminDashboard() {
     try {
       const url = rejectType === 'nurse' ? `/api/admin/nurses/${rejectingId}` : `/api/admin/requests/${rejectingId}`
       const res = await fetch(url, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'rejected', adminNotes }) })
-      if (res.ok) { toast({ title: 'تم الرفض' }); logActivity(`${rejectType}_reject`, `تم رفض ${rejectType === 'nurse' ? 'ممرض' : 'طلب'}`, { id: rejectingId }); setRejectDialog(false); fetchData() }
+      if (res.ok) {
+        toast({ title: 'تم الرفض' })
+        logActivity(`${rejectType}_reject`, `تم رفض ${rejectType === 'nurse' ? 'ممرض' : 'طلب'}`, { id: rejectingId })
+        // Send notification about rejection
+        if (rejectType === 'nurse') {
+          notifyNurse.accountRejected(rejectingId, adminNotes || '').catch(() => {})
+        } else if (rejectType === 'request') {
+          const req = requests.find((r: any) => r.id === rejectingId)
+          if (req?.beneficiary?.id) {
+            notifyBeneficiary.orderRejected(req.beneficiary.id, adminNotes || 'لم يتم تحديد السبب').catch(() => {})
+          }
+        }
+        setRejectDialog(false); fetchData()
+      }
     } catch { toast({ title: 'خطأ', description: 'حدث خطأ', variant: 'destructive' }) }
   }
 
@@ -698,6 +728,11 @@ export default function AdminDashboard() {
       })
       if (res.ok) {
         toast({ title: 'تم تأكيد الدفع', description: 'يمكن الآن تنفيذ الطلب وتعيين ممرض' })
+        // Notify beneficiary about payment confirmation
+        const transaction = transactions.find((t: any) => t.id === transactionId)
+        if (transaction?.beneficiaryId) {
+          notifyBeneficiary.paymentConfirmed(transaction.beneficiaryId, transaction.requestId || '').catch(() => {})
+        }
         fetchData()
       } else {
         const data = await res.json()
@@ -718,6 +753,11 @@ export default function AdminDashboard() {
       })
       if (res.ok) {
         toast({ title: 'تم تأكيد الدفع', description: 'تم تأكيد استلام الدفع، يمكن الآن قبول الطلب وتعيين ممرض' })
+        // Notify beneficiary about payment confirmation
+        const req = requests.find((r: any) => r.id === requestId)
+        if (req?.beneficiary?.id) {
+          notifyBeneficiary.paymentConfirmed(req.beneficiary.id, requestId).catch(() => {})
+        }
         fetchData()
       } else {
         const data = await res.json()

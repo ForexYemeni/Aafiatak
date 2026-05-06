@@ -28,7 +28,7 @@ import ChatSystem from '@/components/ChatSystem'
 import dynamic from 'next/dynamic'
 const TrackingMap = dynamic(() => import('@/components/TrackingMap'), { ssr: false })
 import Image from 'next/image'
-import { notifyAdmin } from '@/lib/notifications'
+import { notifyAdmin, notifyNurse } from '@/lib/notifications'
 import NotificationBell from '@/components/NotificationBell'
 
 // ===== Date Formatting Helpers =====
@@ -1012,6 +1012,10 @@ export default function BeneficiaryDashboard() {
         setRatingDialog(false)
         setRatingValue(0)
         setRatingComment('')
+        // Notify nurse about the new rating
+        if (ratingNurseId) {
+          notifyNurse.newRating(ratingNurseId, ratingValue).catch(() => {})
+        }
       } else {
         const data = await res.json()
         toast({ title: 'خطأ', description: data.error, variant: 'destructive' })
@@ -1097,6 +1101,8 @@ export default function BeneficiaryDashboard() {
         toast({ title: 'تم إرسال البلاغ بنجاح', description: 'سيتم مراجعته من قبل الإدارة' })
         setReportDialog(false)
         setReportForm({ type: '', requestId: '', description: '' })
+        // Notify admin about new complaint
+        notifyAdmin.newComplaint('', beneficiaryUser?.name || 'مستفيد').catch(() => {})
         fetchData()
       } else {
         const data = await res.json()
@@ -1222,6 +1228,8 @@ export default function BeneficiaryDashboard() {
         } else {
           toast({ title: 'تم إرسال الطلب بنجاح', description: 'تم إثبات الدفع وسيتم مراجعة طلبك من قبل الإدارة' })
         }
+        // Notify admin about payment proof
+        notifyAdmin.paymentProof('', beneficiaryUser?.name || '', String(paymentAmount || dynamicPricing?.totalPrice || 0)).catch(() => {})
         setPaymentDialog(false)
         setIsEmergencyPaymentFlow(false)
         setPaymentForm({ method: '', paymentMethodId: '', transactionRef: '', senderName: '', senderPhone: '', exchangeName: '', walletType: '' })

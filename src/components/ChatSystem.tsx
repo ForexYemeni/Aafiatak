@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card } from '@/components/ui/card'
 import { useToast } from '@/hooks/use-toast'
+import { playNotificationSound } from '@/lib/sound-manager'
 
 /* ──────────────────────────── Types ──────────────────────────── */
 
@@ -81,32 +82,7 @@ function extractImageSrc(text: string): string {
   return text.slice(7, -1)
 }
 
-/** Play a subtle notification beep via Web Audio API */
-function playNotificationSound() {
-  try {
-    const ctx = new AudioContext()
-    const oscillator = ctx.createOscillator()
-    const gain = ctx.createGain()
 
-    oscillator.connect(gain)
-    gain.connect(ctx.destination)
-
-    oscillator.type = 'sine'
-    oscillator.frequency.setValueAtTime(880, ctx.currentTime)
-    oscillator.frequency.exponentialRampToValueAtTime(660, ctx.currentTime + 0.1)
-
-    gain.gain.setValueAtTime(0.15, ctx.currentTime)
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25)
-
-    oscillator.start(ctx.currentTime)
-    oscillator.stop(ctx.currentTime + 0.25)
-
-    // Clean up
-    setTimeout(() => ctx.close(), 500)
-  } catch {
-    // Web Audio not available – silently ignore
-  }
-}
 
 /* ──────────────────────────── Quick Replies ──────────────────────────── */
 
@@ -175,7 +151,7 @@ export default function ChatSystem({
         if (!isOpen && data.length > prevLength) {
           setUnreadCount(unread)
           // Play notification sound for new messages from others
-          if (unread > 0) playNotificationSound()
+          if (unread > 0) playNotificationSound('chat')
         }
 
         // Simulate typing indicator when new messages arrive from other party

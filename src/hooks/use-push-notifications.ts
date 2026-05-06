@@ -7,71 +7,10 @@
 'use client'
 
 import { useEffect, useRef, useCallback, useState } from 'react'
-import { requestNotificationPermission, onForegroundMessage, getMessagingInstance } from '@/lib/firebase-client'
+import { requestNotificationPermission, onForegroundMessage } from '@/lib/firebase-client'
 import { useAppStore } from '@/lib/store'
 import { useToast } from '@/hooks/use-toast'
-
-// ─── Sound System using Web Audio API ───
-// Each type has a unique pattern so users can distinguish notifications
-const SOUND_TYPES: Record<string, { frequency: number; duration: number; repeat: number; gap: number; type: OscillatorType }> = {
-  assignment:  { frequency: 880, duration: 180, repeat: 2, gap: 120, type: 'sine' },      // Double high beep - new task
-  chat:        { frequency: 660, duration: 120, repeat: 3, gap: 60,  type: 'triangle' },   // Triple soft beep - message
-  emergency:   { frequency: 1200, duration: 250, repeat: 3, gap: 150, type: 'sawtooth' },  // Triple urgent - emergency
-  payment:     { frequency: 523, duration: 200, repeat: 2, gap: 100, type: 'sine' },       // Double low beep - payment
-  rating:      { frequency: 784, duration: 120, repeat: 2, gap: 80,  type: 'sine' },       // Double medium-high - rating
-  status_change: { frequency: 440, duration: 250, repeat: 1, gap: 0, type: 'sine' },       // Single low-long - status
-  system:      { frequency: 600, duration: 150, repeat: 2, gap: 100, type: 'triangle' },   // Double medium - system
-  reminder:    { frequency: 700, duration: 180, repeat: 2, gap: 120, type: 'sine' },       // Double medium - reminder
-  appointment: { frequency: 932, duration: 150, repeat: 2, gap: 80,  type: 'sine' },       // Double high - appointment
-}
-
-function playNotificationSound(type: string = 'system') {
-  try {
-    // Check if sound is enabled
-    if (typeof localStorage !== 'undefined') {
-      const soundEnabled = localStorage.getItem('aafiatak-sound-enabled')
-      if (soundEnabled === 'false') return
-    }
-
-    const config = SOUND_TYPES[type] || SOUND_TYPES.system
-    const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)()
-
-    // Resume context if suspended (browser autoplay policy)
-    if (audioCtx.state === 'suspended') {
-      audioCtx.resume()
-    }
-
-    for (let i = 0; i < config.repeat; i++) {
-      const startTime = audioCtx.currentTime + (i * (config.duration + config.gap)) / 1000
-
-      const oscillator = audioCtx.createOscillator()
-      const gainNode = audioCtx.createGain()
-
-      oscillator.connect(gainNode)
-      gainNode.connect(audioCtx.destination)
-
-      oscillator.frequency.value = config.frequency
-      oscillator.type = config.type
-
-      // Volume envelope: fade in, sustain, fade out
-      gainNode.gain.setValueAtTime(0.001, startTime)
-      gainNode.gain.exponentialRampToValueAtTime(0.25, startTime + 0.01)
-      gainNode.gain.setValueAtTime(0.25, startTime + config.duration / 1000 - 0.03)
-      gainNode.gain.exponentialRampToValueAtTime(0.001, startTime + config.duration / 1000)
-
-      oscillator.start(startTime)
-      oscillator.stop(startTime + config.duration / 1000 + 0.01)
-    }
-
-    // Auto-close context after sounds finish
-    const totalDuration = config.repeat * (config.duration + config.gap) + 500
-    setTimeout(() => {
-      try { audioCtx.close() } catch {}
-    }, totalDuration)
-  } catch {
-    // Silently fail — sound is optional
-  }
-}
+import { playNotificationSound, preloadSounds, isSoundEnabled } from '@/lib/sound-manager'
 
 // ─── Role-based notification click URLs ───
 function getNotificationUrl(data: Record<string, any>): string {
@@ -134,6 +73,9 @@ export function usePushNotifications() {
     if (!user || initialized.current) return
     initialized.current = true
 
+    // Preload sound files on first user interaction
+    preloadSounds()
+
     // Check current permission status
     if ('Notification' in window) {
       setPermissionStatus(Notification.permission)
@@ -166,7 +108,7 @@ export function usePushNotifications() {
         const body = notification?.body || ''
         const type = data?.type || 'system'
 
-        // Play sound notification
+        // Play sound notification (uses unified sound manager)
         playNotificationSound(type)
 
         // Show in-app toast
@@ -228,6 +170,7 @@ export function usePushNotifications() {
     fcmToken,
     requestPermission: initNotifications,
     playSound: playNotificationSound,
+    isSoundEnabled,
   }
 }
 
