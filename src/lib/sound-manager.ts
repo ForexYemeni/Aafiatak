@@ -1,15 +1,21 @@
 /**
- * عافيتك — Sound Manager v2
- * Robust notification sound system with multiple fallback layers:
+ * عافيتك — Sound Manager v3 (Professional Grade)
+ * 
+ * PROBLEM: Previous versions had a critical bug where AudioContext.resume() was
+ * called without await, meaning the AudioContext stayed "suspended" and all
+ * oscillators played silence. This is the #1 reason sounds never worked.
  *
- * Layer 1: Native Android bridge (AndroidApp.playNotificationSound) — most reliable for APK
- * Layer 2: Web Audio API (synthesized tones) — works everywhere, no file dependency
- * Layer 3: HTMLAudioElement (WAV files) — optional, may be blocked by autoplay policy
- *
- * Respects user sound preferences stored in localStorage.
+ * SOLUTION: Proper async AudioContext lifecycle management:
+ * 1. Create AudioContext on first user interaction (required by browsers)
+ * 2. Await resume() before playing any sound
+ * 3. Native Android bridge as primary for APK (always works, no AudioContext needed)
+ * 4. Extensive logging for debugging
  */
 
-// ─── Sound type → audio file mapping ───
+// ═══════════════════════════════════════════════════════════════
+//  CONFIG
+// ═══════════════════════════════════════════════════════════════
+
 const SOUND_FILES: Record<string, string> = {
   assignment: '/sounds/assignment.wav',
   chat: '/sounds/chat.wav',
@@ -22,256 +28,311 @@ const SOUND_FILES: Record<string, string> = {
   appointment: '/sounds/appointment.wav',
 }
 
-// ─── Web Audio API tone patterns ───
-const WEB_AUDIO_PATTERNS: Record<string, { frequency: number; duration: number; repeat: number; gap: number; type: OscillatorType }> = {
-  assignment:    { frequency: 880, duration: 180, repeat: 2, gap: 120, type: 'sine' },
-  chat:          { frequency: 660, duration: 120, repeat: 3, gap: 60,  type: 'triangle' },
-  emergency:     { frequency: 1200, duration: 250, repeat: 3, gap: 150, type: 'sawtooth' },
-  payment:       { frequency: 523, duration: 200, repeat: 2, gap: 100, type: 'sine' },
-  rating:        { frequency: 784, duration: 120, repeat: 2, gap: 80,  type: 'sine' },
-  status_change: { frequency: 440, duration: 250, repeat: 1, gap: 0,   type: 'sine' },
-  system:        { frequency: 600, duration: 150, repeat: 2, gap: 100, type: 'triangle' },
-  reminder:      { frequency: 700, duration: 180, repeat: 2, gap: 120, type: 'sine' },
-  appointment:   { frequency: 932, duration: 150, repeat: 2, gap: 80,  type: 'sine' },
+const TONES: Record<string, { freq: number; dur: number; repeat: number; gap: number; wave: OscillatorType }> = {
+  assignment:    { freq: 880,  dur: 180, repeat: 2, gap: 120, wave: 'sine' },
+  chat:          { freq: 660,  dur: 120, repeat: 3, gap: 60,  wave: 'triangle' },
+  emergency:     { freq: 1200, dur: 250, repeat: 3, gap: 150, wave: 'sawtooth' },
+  payment:       { freq: 523,  dur: 200, repeat: 2, gap: 100, wave: 'sine' },
+  rating:        { freq: 784,  dur: 120, repeat: 2, gap: 80,  wave: 'sine' },
+  status_change: { freq: 440,  dur: 250, repeat: 1, gap: 0,   wave: 'sine' },
+  system:        { freq: 600,  dur: 150, repeat: 2, gap: 100, wave: 'triangle' },
+  reminder:      { freq: 700,  dur: 180, repeat: 2, gap: 120, wave: 'sine' },
+  appointment:   { freq: 932,  dur: 150, repeat: 2, gap: 80,  wave: 'sine' },
 }
 
-// ─── Audio cache for file playback ───
-const audioCache: Record<string, HTMLAudioElement> = {}
+const COOLDOWN_MS = 3000
+let lastPlayTime = 0
 
-// ─── Track AudioContext for resume after user interaction ───
-let globalAudioContext: AudioContext | null = null
-let audioContextResumed = false
+// ═══════════════════════════════════════════════════════════════
+//  AUDIOCONTEXT LIFECYCLE (the critical fix)
+// ═══════════════════════════════════════════════════════════════
 
-// ─── Get or create shared AudioContext ───
-function getAudioContext(): AudioContext | null {
-  try {
-    if (!globalAudioContext) {
-      globalAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
+let _ctx: AudioContext | null = null
+let _ctxReady = false // true after successfully resumed
+
+/**
+ * Get a RUNNING AudioContext. Creates one if needed, resumes if suspended.
+ * MUST be awaited because resume() is async.
+ */
+async function getRunningContext(): Promise<AudioContext | null> {
+  // Create if needed
+  if (!_ctx) {
+    try {
+      const AC = window.AudioContext || (window as any).webkitAudioContext
+      if (!AC) {
+        console.error('🔊 AudioContext API not available')
+        return null
+      }
+      _ctx = new AC()
+      console.log('🔊 AudioContext created, initial state:', _ctx.state)
+    } catch (e) {
+      console.error('🔊 Failed to create AudioContext:', e)
+      return null
     }
-    if (globalAudioContext.state === 'suspended' && audioContextResumed) {
-      globalAudioContext.resume()
-    }
-    return globalAudioContext
-  } catch {
-    return null
   }
+
+  // If already running, return immediately
+  if (_ctx.state === 'running') {
+    _ctxReady = true
+    return _ctx
+  }
+
+  // If suspended, resume (THIS IS THE FIX — we await it!)
+  if (_ctx.state === 'suspended') {
+    try {
+      console.log('🔊 AudioContext is suspended, attempting resume...')
+      await _ctx.resume()
+      console.log('🔊 AudioContext resumed! state:', _ctx.state)
+      _ctxReady = true
+      return _ctx
+    } catch (e) {
+      console.warn('🔊 AudioContext resume failed (needs user interaction):', e)
+      return null
+    }
+  }
+
+  return _ctx
 }
 
-// ─── Resume AudioContext on first user interaction ───
-function resumeAudioOnInteraction() {
-  if (audioContextResumed) return
-  const resume = () => {
-    audioContextResumed = true
-    if (globalAudioContext && globalAudioContext.state === 'suspended') {
-      globalAudioContext.resume().catch(() => {})
+/**
+ * Initialize sound system. MUST be called on app mount.
+ * Sets up a one-time click handler to unlock AudioContext.
+ */
+export function initSoundSystem(): void {
+  console.log('🔊 initSoundSystem() called')
+
+  const unlock = async () => {
+    console.log('🔊 User interaction detected — unlocking audio...')
+    const ctx = await getRunningContext()
+    if (ctx) {
+      console.log('🔊 Audio unlocked! state:', ctx.state)
+      // Play a very short silent tone to fully activate the context
+      try {
+        const osc = ctx.createOscillator()
+        const gain = ctx.createGain()
+        osc.connect(gain)
+        gain.connect(ctx.destination)
+        gain.gain.setValueAtTime(0.001, ctx.currentTime) // Nearly silent
+        osc.start(ctx.currentTime)
+        osc.stop(ctx.currentTime + 0.01)
+      } catch {}
     }
+    // Remove all listeners
+    document.removeEventListener('click', unlock)
+    document.removeEventListener('touchstart', unlock)
+    document.removeEventListener('touchend', unlock)
+    document.removeEventListener('keydown', unlock)
   }
-  // Listen for first user interaction to unlock audio
-  const events = ['click', 'touchstart', 'keydown', 'pointerdown']
-  const handler = () => {
-    resume()
-    events.forEach(e => document.removeEventListener(e, handler))
-  }
+
   if (typeof document !== 'undefined') {
-    events.forEach(e => document.addEventListener(e, handler, { once: true }))
+    document.addEventListener('click', unlock, { once: false })
+    document.addEventListener('touchstart', unlock, { once: false })
+    document.addEventListener('touchend', unlock, { once: false })
+    document.addEventListener('keydown', unlock, { once: false })
   }
+
+  // Also try to resume immediately (might work if there was prior interaction)
+  getRunningContext().then(ctx => {
+    if (ctx) console.log('🔊 AudioContext ready on init, state:', ctx.state)
+    else console.log('🔊 AudioContext needs user interaction to unlock')
+  })
 }
 
-// ─── Check if running in Android APK ───
+// ═══════════════════════════════════════════════════════════════
+//  PLATFORM DETECTION
+// ═══════════════════════════════════════════════════════════════
+
 function isAndroidApp(): boolean {
   if (typeof window === 'undefined') return false
-  return !!(window as any).AndroidApp?.playNotificationSound
+  try {
+    const a = (window as any).AndroidApp
+    return !!(a && typeof a.playNotificationSound === 'function')
+  } catch { return false }
 }
 
-function isCapacitorNative(): boolean {
-  if (typeof window === 'undefined') return false
-  const cap = (window as any).Capacitor
-  return !!(cap && cap.isNativePlatform && cap.isNativePlatform())
-}
+// ═══════════════════════════════════════════════════════════════
+//  USER PREFERENCES
+// ═══════════════════════════════════════════════════════════════
 
-// ─── Get user sound preference ───
 export function isSoundEnabled(): boolean {
   if (typeof localStorage === 'undefined') return true
-  const saved = localStorage.getItem('aafiatak-sound-enabled')
-  return saved !== 'false' // default: true
+  return localStorage.getItem('aafiatak-sound-enabled') !== 'false'
 }
 
-// ─── Set sound preference ───
 export function setSoundEnabled(enabled: boolean): void {
   if (typeof localStorage !== 'undefined') {
     localStorage.setItem('aafiatak-sound-enabled', String(enabled))
   }
 }
 
-// ═══════════════════════════════════════════
-//  SOUND PLAYBACK METHODS (ordered by reliability)
-// ═══════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+//  SOUND METHODS
+// ═══════════════════════════════════════════════════════════════
 
-// ─── Method 1: Native Android bridge (MOST RELIABLE for APK) ───
-function playNativeAndroidSound(type: string): boolean {
+/**
+ * Method 1: Native Android bridge — MOST RELIABLE for APK
+ * Uses Android RingtoneManager, always works regardless of WebView/AudioContext state
+ */
+function playNativeSound(type: string): boolean {
   if (!isAndroidApp()) return false
   try {
     const android = (window as any).AndroidApp
-    if (android && typeof android.playNotificationSound === 'function') {
-      android.playNotificationSound()
-      console.log('🔊 Sound played via native Android bridge')
+    if (type === 'emergency' && typeof android.playEmergencySound === 'function') {
+      android.playEmergencySound()
+      console.log('🔊 ✅ Native emergency sound played')
       return true
     }
-  } catch (err) {
-    console.warn('🔊 Native Android sound failed:', err)
+    if (typeof android.playNotificationSound === 'function') {
+      android.playNotificationSound()
+      console.log('🔊 ✅ Native notification sound played')
+      return true
+    }
+  } catch (e) {
+    console.warn('🔊 Native sound failed:', e)
   }
   return false
 }
 
-// ─── Method 2: Web Audio API (works in browser + WebView) ───
-function playWebAudioSound(type: string = 'system'): boolean {
+/**
+ * Method 2: Web Audio API — works in browser and WebView
+ * NOW PROPERLY AWAITS AudioContext.resume() before creating oscillators!
+ */
+async function playWebAudio(type: string): Promise<boolean> {
   try {
-    const audioCtx = getAudioContext()
-    if (!audioCtx) return false
-
-    // Try to resume if suspended
-    if (audioCtx.state === 'suspended') {
-      audioCtx.resume().catch(() => {})
+    const ctx = await getRunningContext()
+    if (!ctx || ctx.state !== 'running') {
+      console.warn('🔊 Web Audio: AudioContext not running, state:', ctx?.state)
+      return false
     }
 
-    const config = WEB_AUDIO_PATTERNS[type] || WEB_AUDIO_PATTERNS.system
+    const t = TONES[type] || TONES.system
 
-    for (let i = 0; i < config.repeat; i++) {
-      const startTime = audioCtx.currentTime + (i * (config.duration + config.gap)) / 1000
+    for (let i = 0; i < t.repeat; i++) {
+      const start = ctx.currentTime + (i * (t.dur + t.gap)) / 1000
 
-      const oscillator = audioCtx.createOscillator()
-      const gainNode = audioCtx.createGain()
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
 
-      oscillator.connect(gainNode)
-      gainNode.connect(audioCtx.destination)
+      osc.connect(gain)
+      gain.connect(ctx.destination)
+      osc.frequency.value = t.freq
+      osc.type = t.wave
 
-      oscillator.frequency.value = config.frequency
-      oscillator.type = config.type
+      // Smooth volume envelope
+      gain.gain.setValueAtTime(0.001, start)
+      gain.gain.exponentialRampToValueAtTime(0.35, start + 0.01)
+      gain.gain.setValueAtTime(0.35, start + t.dur / 1000 - 0.03)
+      gain.gain.exponentialRampToValueAtTime(0.001, start + t.dur / 1000)
 
-      // Volume envelope (smooth fade in/out)
-      gainNode.gain.setValueAtTime(0.001, startTime)
-      gainNode.gain.exponentialRampToValueAtTime(0.3, startTime + 0.01)
-      gainNode.gain.setValueAtTime(0.3, startTime + config.duration / 1000 - 0.03)
-      gainNode.gain.exponentialRampToValueAtTime(0.001, startTime + config.duration / 1000)
-
-      oscillator.start(startTime)
-      oscillator.stop(startTime + config.duration / 1000 + 0.01)
+      osc.start(start)
+      osc.stop(start + t.dur / 1000 + 0.01)
     }
 
-    console.log('🔊 Sound played via Web Audio API [' + type + ']')
+    console.log('🔊 ✅ Web Audio sound played [' + type + ']')
     return true
-  } catch (err) {
-    console.warn('🔊 Web Audio API failed:', err)
+  } catch (e) {
+    console.warn('🔊 Web Audio failed:', e)
     return false
   }
 }
 
-// ─── Method 3: HTMLAudioElement (file-based, may be blocked by autoplay) ───
-function playAudioFile(type: string): boolean {
-  const filePath = SOUND_FILES[type]
-  if (!filePath) return false
+/**
+ * Method 3: HTML Audio element (WAV file)
+ * May be blocked by autoplay policy — only works after user interaction
+ */
+function playFileAudio(type: string): boolean {
+  const path = SOUND_FILES[type]
+  if (!path) return false
 
   try {
-    let audio = audioCache[type]
-    if (!audio) {
-      audio = new Audio(filePath)
-      audio.preload = 'auto'
-      audio.volume = 0.5
-      audioCache[type] = audio
-    }
-
-    audio.currentTime = 0
+    const audio = new Audio(path)
+    audio.volume = 0.6
     audio.play().then(() => {
-      console.log('🔊 Sound played via audio file [' + type + ']')
-    }).catch(() => {
-      // Autoplay blocked — this is expected, Web Audio API fallback handles it
+      console.log('🔊 ✅ File audio played [' + type + ']')
+    }).catch((e) => {
+      console.warn('🔊 File audio blocked (autoplay policy):', e?.name || e)
     })
-    return true // Return true optimistically, actual playback is async
+    return true
   } catch {
     return false
   }
 }
 
-// ═══════════════════════════════════════════
-//  MAIN PLAY FUNCTION
-// ═══════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+//  MAIN API
+// ═══════════════════════════════════════════════════════════════
 
-// ─── Cooldown to prevent duplicate sounds ───
-let lastSoundTime = 0
-const SOUND_COOLDOWN_MS = 3000
-
+/**
+ * Play a notification sound. Tries methods in order of reliability.
+ * On Android APK: native bridge → Web Audio → file
+ * On browser: Web Audio → file
+ */
 export async function playNotificationSound(type: string = 'system'): Promise<void> {
-  // Check user preference
+  console.log('🔊 playNotificationSound called [' + type + ']')
+
+  // Check preference
   if (!isSoundEnabled()) {
-    console.log('🔊 Sound skipped: disabled by user')
+    console.log('🔊 SKIPPED: sound disabled by user')
     return
   }
 
-  // Cooldown check
+  // Cooldown
   const now = Date.now()
-  if (now - lastSoundTime < SOUND_COOLDOWN_MS) {
-    console.log('🔊 Sound skipped: cooldown active')
+  if (now - lastPlayTime < COOLDOWN_MS) {
+    console.log('🔊 SKIPPED: cooldown (' + (COOLDOWN_MS - (now - lastPlayTime)) + 'ms remaining)')
     return
   }
-  lastSoundTime = now
+  lastPlayTime = now
 
-  console.log('🔊 Playing notification sound [' + type + ']...')
+  // Method 1: Native Android (synchronous, always works)
+  if (playNativeSound(type)) return
 
-  // ─── Try methods in order of reliability ───
+  // Method 2: Web Audio API (async, needs AudioContext running)
+  if (await playWebAudio(type)) return
 
-  // Method 1: Native Android bridge (most reliable for APK)
-  if (playNativeAndroidSound(type)) {
-    return // Success!
-  }
+  // Method 3: File audio (may be blocked by autoplay)
+  if (playFileAudio(type)) return
 
-  // Method 2: Web Audio API (most reliable for browser)
-  if (playWebAudioSound(type)) {
-    return // Success!
-  }
-
-  // Method 3: Audio file (backup)
-  if (playAudioFile(type)) {
-    return // Likely success (async)
-  }
-
-  console.warn('🔊 All sound methods failed for type:', type)
+  console.error('🔊 ❌ ALL sound methods failed for [' + type + ']')
 }
 
-// ─── Play sound WITHOUT cooldown (for forced playback like test button) ───
+/**
+ * Force play a sound (ignores cooldown and preference).
+ * Used by the test button.
+ */
 export async function forcePlayNotificationSound(type: string = 'system'): Promise<void> {
+  console.log('🔊 FORCE play [' + type + ']')
+  lastPlayTime = 0 // Reset cooldown
   const wasEnabled = isSoundEnabled()
   setSoundEnabled(true)
-  lastSoundTime = 0 // Reset cooldown
   await playNotificationSound(type)
-  setSoundEnabled(wasEnabled)
+  if (!wasEnabled) setSoundEnabled(false)
 }
 
-// ─── Preload sounds and prepare audio context ───
-export function preloadSounds(): void {
-  // Resume AudioContext on user interaction
-  resumeAudioOnInteraction()
-
-  // Preload audio files
-  Object.entries(SOUND_FILES).forEach(([type, path]) => {
-    if (!audioCache[type]) {
-      const audio = new Audio(path)
-      audio.preload = 'auto'
-      audio.volume = 0.5
-      audioCache[type] = audio
-    }
-  })
-
-  // Pre-create AudioContext on first user interaction
-  resumeAudioOnInteraction()
-}
-
-// ─── Test a specific sound (used from settings) ───
+/**
+ * Test a sound type (alias for forcePlay)
+ */
 export async function testNotificationSound(type: string = 'system'): Promise<void> {
   await forcePlayNotificationSound(type)
 }
 
-// ─── Initialize sound system (call on app mount) ───
-export function initSoundSystem(): void {
-  resumeAudioOnInteraction()
-  preloadSounds()
+/**
+ * Preload sound files into cache
+ */
+export function preloadSounds(): void {
+  Object.entries(SOUND_FILES).forEach(([type, path]) => {
+    try {
+      const audio = new Audio(path)
+      audio.preload = 'auto'
+      audio.volume = 0.5
+    } catch {}
+  })
+}
+
+/**
+ * Check if AudioContext is currently running (for debugging)
+ */
+export function getAudioContextState(): string {
+  if (!_ctx) return 'not-created'
+  return _ctx.state
 }

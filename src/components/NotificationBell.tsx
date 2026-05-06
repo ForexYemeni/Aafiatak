@@ -496,6 +496,9 @@ export default function NotificationBell({ gradientFrom, gradientTo, userType }:
                   {unreadCount > 0 && <span className="bg-white/20 text-white text-[10px] px-2 py-0.5 rounded-full font-bold">{unreadCount} جديد</span>}
                 </div>
                 <div className="flex items-center gap-1">
+                  <button onClick={(e) => { e.stopPropagation(); testNotificationSound('system') }} className="w-7 h-7 rounded-lg bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors" title="اختبار الصوت">
+                    <Volume2 className="w-3.5 h-3.5 text-white" />
+                  </button>
                   <button onClick={toggleSound} className="w-7 h-7 rounded-lg bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors" title={soundEnabled ? 'كتم الصوت' : 'تفعيل الصوت'}>
                     {soundEnabled ? <Volume2 className="w-3.5 h-3.5 text-white" /> : <VolumeX className="w-3.5 h-3.5 text-white/60" />}
                   </button>
