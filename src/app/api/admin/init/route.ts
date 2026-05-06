@@ -34,18 +34,18 @@ export async function POST(request: NextRequest) {
     console.error('Admin init error:', error.message)
     const msg = error.message || 'حدث خطأ في الخادم'
     
-    if (msg.includes('PERMISSION_DENIED') || msg.includes('has not been used') || msg.includes('Cloud Firestore')) {
+    if (msg.includes('MONGODB_URI') || msg.includes('فشل الاتصال بقاعدة البيانات') || msg.includes('MongoServerError')) {
       return NextResponse.json({
-        error: 'يجب تفعيل Firestore Database أولاً من Firebase Console',
-        firebaseError: msg,
-      }, { status: 500 })
+        error: 'فشل الاتصال بقاعدة البيانات. تأكد من إعدادات MONGODB_URI.',
+        details: msg,
+      }, { status: 503 })
     }
     
-    if (msg.includes('Firebase') || msg.includes('غير مهيأ') || msg.includes('credentials')) {
+    if (msg.includes('Authentication failed') || msg.includes('bad auth')) {
       return NextResponse.json({
-        error: 'Firebase غير مهيأ. تأكد من إعداد بيانات الاتصال.',
-        firebaseError: msg,
-      }, { status: 500 })
+        error: 'فشل المصادقة مع قاعدة البيانات. تأكد من صحة بيانات الاتصال.',
+        details: msg,
+      }, { status: 503 })
     }
     
     return NextResponse.json({

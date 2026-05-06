@@ -114,21 +114,21 @@ export async function POST(request: NextRequest) {
     console.error('Admin login error:', error.message)
     const msg = error.message || 'حدث خطأ في الخادم'
 
-    // Check for common Firebase/Firestore errors
-    if (msg.includes('PERMISSION_DENIED') || msg.includes('has not been used') || msg.includes('Cloud Firestore')) {
+    // Check for MongoDB connection errors
+    if (msg.includes('MONGODB_URI') || msg.includes('فشل الاتصال بقاعدة البيانات') || msg.includes('MongoServerError')) {
       return NextResponse.json({
-        error: 'يجب تفعيل Firestore Database أولاً من Firebase Console مع اختيار Test Mode',
+        error: 'فشل الاتصال بقاعدة البيانات. تأكد من إعدادات MONGODB_URI.',
         details: msg,
-        isFirestoreNotCreated: true,
-      }, { status: 500 })
+        isDatabaseError: true,
+      }, { status: 503 })
     }
 
-    if (msg.includes('Firebase') || msg.includes('غير مهيأ') || msg.includes('credentials') || msg.includes('initialize')) {
+    if (msg.includes('Authentication failed') || msg.includes('bad auth') || msg.includes('AuthenticationFailure')) {
       return NextResponse.json({
-        error: 'قاعدة البيانات غير متصلة. تأكد من إعداد متغيرات Firebase البيئية بشكل صحيح.',
+        error: 'فشل المصادقة مع قاعدة البيانات. تأكد من صحة بيانات الاتصال.',
         details: msg,
-        isFirebaseError: true,
-      }, { status: 500 })
+        isDatabaseError: true,
+      }, { status: 503 })
     }
 
     return NextResponse.json({

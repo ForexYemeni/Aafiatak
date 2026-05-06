@@ -186,41 +186,26 @@ export async function POST(request: NextRequest) {
     const msg = error.message || 'حدث خطأ في الخادم'
     const code = error.code || error.codePrefix || ''
 
-    // Check for Firestore quota exceeded (Spark free plan limit)
-    if (
-      msg.includes('RESOURCE_EXHAUSTED') ||
-      msg.includes('Quota exceeded') ||
-      msg.includes('quota') ||
-      code === '8' ||
-      code === 'RESOURCE_EXHAUSTED'
-    ) {
+    // Check for MongoDB connection errors
+    if (msg.includes('MONGODB_URI') || msg.includes('فشل الاتصال بقاعدة البيانات') || msg.includes('MongoServerError')) {
       return NextResponse.json({
-        error: 'تم تجاوز الحصة المجانية لقاعدة البيانات. يرجى الترقية إلى خطة Blaze في Firebase Console أو الانتظار حتى يتم تجديد الحصة.',
+        error: 'فشل الاتصال بقاعدة البيانات. تأكد من إعدادات MONGODB_URI.',
         details: msg,
-        isQuotaExceeded: true,
+        isDatabaseError: true,
       }, { status: 503 })
     }
 
-    // Check for Firestore not created / permission denied
-    if (msg.includes('PERMISSION_DENIED') || msg.includes('has not been used') || msg.includes('Cloud Firestore')) {
+    // Check for authentication errors in MongoDB
+    if (msg.includes('Authentication failed') || msg.includes('bad auth') || msg.includes('AuthenticationFailure')) {
       return NextResponse.json({
-        error: 'يجب تفعيل Firestore Database أولاً من Firebase Console مع اختيار Test Mode',
+        error: 'فشل المصادقة مع قاعدة البيانات. تأكد من صحة اسم المستخدم وكلمة المرور في رابط الاتصال.',
         details: msg,
-        isFirestoreNotCreated: true,
-      }, { status: 500 })
-    }
-
-    // Check for Firebase initialization errors
-    if (msg.includes('Firebase') || msg.includes('غير مهيأ') || msg.includes('credentials') || msg.includes('initialize')) {
-      return NextResponse.json({
-        error: 'قاعدة البيانات غير متصلة. تأكد من إعداد متغيرات Firebase البيئية بشكل صحيح.',
-        details: msg,
-        isFirebaseError: true,
-      }, { status: 500 })
+        isDatabaseError: true,
+      }, { status: 503 })
     }
 
     // Check for network/connection errors
-    if (msg.includes('ENOTFOUND') || msg.includes('ECONNREFUSED') || msg.includes('ETIMEDOUT') || msg.includes('network')) {
+    if (msg.includes('ENOTFOUND') || msg.includes('ECONNREFUSED') || msg.includes('ETIMEDOUT') || msg.includes('network') || msg.includes('serverSelectionTimeout')) {
       return NextResponse.json({
         error: 'فشل الاتصال بقاعدة البيانات. تحقق من اتصال الإنترنت وحاول مرة أخرى.',
         details: msg,
