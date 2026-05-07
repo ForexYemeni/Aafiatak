@@ -110,6 +110,9 @@ const Referral = getModel('Referral', {
 const PushNotification = getModel('PushNotification', {
   userId: String, userType: String, title: String, message: String,
   type: String, data: Object, isRead: Boolean, read: Boolean,
+  voiceText: String,        // النص الصوتي المخصص للإشعار - يُقرأ عبر TTS
+  voicePriority: String,    // أولوية الصوت: low | normal | high | urgent
+  voiceLang: String,        // لغة الصوت: ar | en
   createdAt: Date, updatedAt: Date,
 }, 'pushnotifications')
 

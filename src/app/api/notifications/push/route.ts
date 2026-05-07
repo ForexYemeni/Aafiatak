@@ -177,7 +177,9 @@ export async function POST(request: NextRequest) {
     const PushNotification = mongoose.models.PushNotification
 
     const body = await request.json()
-    const { userId, userType, title, message, type, data, userIds, sendToAllOfType } = body
+    const { userId, userType, title, message, type, data, userIds, sendToAllOfType,
+            voiceText, voicePriority, voiceLang  // ★ حقول الإشعارات الصوتية
+    } = body
 
     if (!title || !type) {
       return NextResponse.json({ error: 'العنوان والنوع مطلوبان' }, { status: 400 })
@@ -188,6 +190,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'نوع الإشعار غير صالح' }, { status: 400 })
     }
 
+    // ★ إنشاء النص الصوتي تلقائياً
+    const autoVoiceText = voiceText || `${title}. ${message || ''}`
+    const autoVoicePriority = voicePriority || (type === 'emergency' ? 'urgent' : type === 'assignment' ? 'high' : 'normal')
+    const autoVoiceLang = voiceLang || 'ar'
+
     // Store notification in MongoDB
     const notificationData: Record<string, any> = {
       title,
@@ -195,6 +202,10 @@ export async function POST(request: NextRequest) {
       type,
       data: data || null,
       isRead: false,
+      // ★ حقول الإشعارات الصوتية - مخزنة في قاعدة البيانات
+      voiceText: autoVoiceText,
+      voicePriority: autoVoicePriority,
+      voiceLang: autoVoiceLang,
       createdAt: new Date(),
       updatedAt: new Date(),
     }

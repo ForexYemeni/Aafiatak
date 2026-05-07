@@ -176,7 +176,7 @@ async function playServiceWorkerSound(type) {
 
 messaging.onBackgroundMessage((payload) => {
   const { title, body, icon } = payload.notification || {};
-  const { type, url, sound, titleAr, bodyAr, titleEn, bodyEn } = payload.data || {};
+  const { type, url, sound, titleAr, bodyAr, titleEn, bodyEn, voiceText, voicePriority } = payload.data || {};
 
   const notifType = type || 'system';
 
@@ -198,13 +198,15 @@ messaging.onBackgroundMessage((payload) => {
   // Play the notification sound in background
   playServiceWorkerSound(notifType);
 
-  // Build TTS data for when user clicks
+  // ★ Build TTS data - voiceText from MongoDB database
+  const ttsText = voiceText || `${title || 'إشعار جديد'}. ${body || ''}`;
   const ttsData = {
     titleAr: titleAr || title || 'إشعار جديد',
-    bodyAr: bodyAr || body || '',
+    bodyAr: voiceText || bodyAr || body || '',  // ★ أولوية لـ voiceText من قاعدة البيانات
     titleEn: titleEn || title || 'New Notification',
-    bodyEn: bodyEn || body || '',
+    bodyEn: voiceText || bodyEn || body || '',
     notifType: notifType,
+    voicePriority: voicePriority || 'normal',
   };
 
   const notificationOptions = {
@@ -215,12 +217,14 @@ messaging.onBackgroundMessage((payload) => {
     data: {
       url: url || '/',
       type: notifType,
-      // TTS data for auto-speak on click
+      // ★ TTS data with voiceText from MongoDB database
       ttsTitle: title || '',
       ttsBody: body || '',
       ttsTitleAr: ttsData.titleAr,
-      ttsBodyAr: ttsData.bodyAr,
+      ttsBodyAr: ttsData.bodyAr,          // ★ voiceText من قاعدة البيانات
       ttsType: notifType,
+      ttsVoiceText: ttsText,               // ★ النص الصوتي الكامل من MongoDB
+      ttsVoicePriority: voicePriority || 'normal',
       shouldSpeak: 'true',
       timestamp: Date.now(),
       ...payload.data,

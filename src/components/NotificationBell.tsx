@@ -23,7 +23,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Bell, BellOff, BellRing, CheckCheck, Volume2, VolumeX, Shield, Sparkles, Settings } from 'lucide-react'
 import { useAppStore } from '@/lib/store'
 import { playNotificationSound, isSoundEnabled, setSoundEnabled as setSoundStorage, testNotificationSound, initSoundSystem, getAudioContextState, resumeAudioContext } from '@/lib/sound-manager'
-import { speakNotification, stopTTS, isTTSSpeaking, testTTS, getTTSSettings, saveTTSSettings, initTTS, isTTSEnabled, setTTSEnabled, createVoiceNotification, type VoiceGender, type VoiceLanguage, type TTSSettings } from '@/lib/voice-manager'
+import { speakNotification, stopTTS, isTTSSpeaking, testTTS, getTTSSettings, saveTTSSettings, initTTS, isTTSEnabled, setTTSEnabled, createVoiceNotification, type VoiceGender, type VoiceLanguage, type TTSSettings, type VoiceNotification } from '@/lib/voice-manager'
 import { onForegroundMessage } from '@/lib/firebase-client'
 
 interface NotifItem {
@@ -34,6 +34,9 @@ interface NotifItem {
   isRead?: boolean
   createdAt?: any
   data?: Record<string, string>
+  voiceText?: string       // ★ النص الصوتي من قاعدة البيانات
+  voicePriority?: string   // ★ أولوية الصوت من قاعدة البيانات
+  voiceLang?: string       // ★ لغة الصوت من قاعدة البيانات
 }
 
 interface NotificationBellProps {
@@ -187,15 +190,32 @@ function singletonInitSWMessageListener() {
       console.log('🗣️ [SW Message] Notification clicked, will speak:', data.titleAr || data.title)
       resumeAudioContext()
       setTimeout(() => {
-        const voiceNotif = createVoiceNotification(
-          data.notifType || 'system',
-          data.titleAr || data.title || '',
-          data.bodyAr || data.body || '',
-          undefined,
-          undefined,
-          data.notifType === 'emergency' ? 'urgent' : 'normal'
-        )
-        speakNotification(voiceNotif)
+        // ★ استخدام voiceText من قاعدة البيانات
+        const swVoiceText = data.ttsVoiceText || data.bodyAr || data.body || ''
+        const swVoicePriority = data.ttsVoicePriority || data.notifType === 'emergency' ? 'urgent' : 'normal'
+        
+        if (swVoiceText) {
+          const voiceNotif: VoiceNotification = {
+            titleAr: data.titleAr || data.title || '',
+            titleEn: data.titleAr || data.title || '',
+            bodyAr: swVoiceText,  // ★ النص الصوتي من MongoDB
+            bodyEn: swVoiceText,
+            type: data.notifType || 'system',
+            priority: swVoicePriority as 'low' | 'normal' | 'high' | 'urgent',
+          }
+          speakNotification(voiceNotif)
+        } else {
+          // Fallback
+          const voiceNotif = createVoiceNotification(
+            data.notifType || 'system',
+            data.titleAr || data.title || '',
+            data.bodyAr || data.body || '',
+            undefined,
+            undefined,
+            data.notifType === 'emergency' ? 'urgent' : 'normal'
+          )
+          speakNotification(voiceNotif)
+        }
       }, 1000)
     }
 
@@ -282,6 +302,10 @@ async function singletonFetchNotifications() {
         id: n.id, title: n.title || '', message: n.message || '',
         type: n.type || 'system', isRead: n.isRead || n.read || false,
         createdAt: n.createdAt, data: n.data,
+        // ★ حقول الإشعارات الصوتية من قاعدة البيانات
+        voiceText: n.voiceText || '',
+        voicePriority: n.voicePriority || 'normal',
+        voiceLang: n.voiceLang || 'ar',
       }))
 
       notifs = deduplicateNotifications(notifs)
@@ -315,7 +339,7 @@ async function singletonFetchNotifications() {
 
       // ═══════════════════════════════════════════════════════
       //  PLAY SOUND + TTS + SHOW BROWSER NOTIFICATION
-      //  This is the KEY fix - shows popup + sound + voice
+      //  ★ voiceText يأتي من قاعدة البيانات - الخادم يتحكم في الصوت
       // ═══════════════════════════════════════════════════════
       if (newUnreadNotifs.length > 0 && globalInitialFetchDone) {
         const firstNew = newUnreadNotifs[0]
@@ -324,27 +348,42 @@ async function singletonFetchNotifications() {
         // Mark sound as played for these IDs
         newUnreadNotifs.forEach(n => globalSoundPlayedIds.add(n.id))
 
-        console.log('🔔 [Singleton] New notification via polling:', firstNew.title, notifType)
+        console.log('🔔 [Singleton] New notification via polling:', firstNew.title, notifType, 'voiceText:', firstNew.voiceText)
 
         // 1. Play notification sound
         if (isSoundEnabled()) {
           playNotificationSound(notifType, firstNew.title, firstNew.message)
         }
 
-        // 2. TTS: Read notification aloud
+        // 2. TTS: ★ استخدام voiceText من قاعدة البيانات
         if (isTTSEnabled()) {
-          const voiceNotif = createVoiceNotification(
-            notifType,
-            firstNew.title,
-            firstNew.message,
-            undefined,
-            undefined,
-            notifType === 'emergency' ? 'urgent' : 'normal'
-          )
-          speakNotification(voiceNotif)
+          const voicePriority = (firstNew.voicePriority || 'normal') as 'low' | 'normal' | 'high' | 'urgent'
+          // ★ إذا كان voiceText موجود في قاعدة البيانات، استخدمه مباشرة
+          if (firstNew.voiceText) {
+            const voiceNotif: VoiceNotification = {
+              titleAr: firstNew.title,
+              titleEn: firstNew.title,
+              bodyAr: firstNew.voiceText,  // ★ النص الصوتي من MongoDB
+              bodyEn: firstNew.voiceText,
+              type: notifType,
+              priority: voicePriority,
+            }
+            speakNotification(voiceNotif)
+          } else {
+            // Fallback: استخدام القوالب المحلية
+            const voiceNotif = createVoiceNotification(
+              notifType,
+              firstNew.title,
+              firstNew.message,
+              undefined,
+              undefined,
+              notifType === 'emergency' ? 'urgent' : 'normal'
+            )
+            speakNotification(voiceNotif)
+          }
         }
 
-        // 3. ✅ NEW: Show browser notification POPUP
+        // 3. Show browser notification POPUP
         showBrowserNotification(
           firstNew.title,
           firstNew.message,
@@ -373,6 +412,9 @@ function singletonInitFcmListener() {
     const title = payload?.notification?.title || payload?.data?.title || ''
     const body = payload?.notification?.body || payload?.data?.body || payload?.data?.message || ''
     const notifId = payload?.data?.id || payload?.data?.requestId || ''
+    // ★ النص الصوتي من FCM - يأتي من قاعدة البيانات
+    const voiceText = payload?.data?.voiceText || ''
+    const voicePriority = payload?.data?.voicePriority || 'normal'
 
     // ADD to known sets FIRST to prevent polling from re-playing sound
     if (notifId) {
@@ -384,17 +426,30 @@ function singletonInitFcmListener() {
     // 1. Play sound
     playNotificationSound(type, title, body)
 
-    // 2. TTS: Read FCM notification aloud
+    // 2. TTS: ★ استخدام voiceText من قاعدة البيانات عبر FCM
     if (isTTSEnabled()) {
-      const voiceNotif = createVoiceNotification(
-        type, title, body, undefined, undefined,
-        type === 'emergency' ? 'urgent' : 'normal'
-      )
-      speakNotification(voiceNotif)
+      if (voiceText) {
+        // ★ النص الصوتي من MongoDB - الخادم يتحكم
+        const voiceNotif: VoiceNotification = {
+          titleAr: title,
+          titleEn: title,
+          bodyAr: voiceText,
+          bodyEn: voiceText,
+          type,
+          priority: (voicePriority || 'normal') as 'low' | 'normal' | 'high' | 'urgent',
+        }
+        speakNotification(voiceNotif)
+      } else {
+        // Fallback: استخدام القوالب المحلية
+        const voiceNotif = createVoiceNotification(
+          type, title, body, undefined, undefined,
+          type === 'emergency' ? 'urgent' : 'normal'
+        )
+        speakNotification(voiceNotif)
+      }
     }
 
-    // 3. ✅ NEW: Show browser notification POPUP for FCM foreground messages
-    // FCM foreground messages do NOT auto-show notifications — we must do it
+    // 3. Show browser notification POPUP for FCM foreground messages
     showBrowserNotification(title, body, type, notifId ? String(notifId) : undefined, payload?.data?.url)
 
     // Refresh list
@@ -752,15 +807,29 @@ export default function NotificationBell({ gradientFrom, gradientTo, userType }:
   }, [ttsEnabled])
 
   const handleSpeakNotif = useCallback((notif: NotifItem) => {
-    const voiceNotif = createVoiceNotification(
-      notif.type,
-      notif.title,
-      notif.message,
-      undefined,
-      undefined,
-      notif.type === 'emergency' ? 'urgent' : 'normal'
-    )
-    speakNotification(voiceNotif)
+    // ★ استخدام voiceText من قاعدة البيانات أولاً
+    if (notif.voiceText) {
+      const voiceNotif: VoiceNotification = {
+        titleAr: notif.title,
+        titleEn: notif.title,
+        bodyAr: notif.voiceText,  // ★ النص الصوتي من MongoDB
+        bodyEn: notif.voiceText,
+        type: notif.type,
+        priority: (notif.voicePriority || 'normal') as 'low' | 'normal' | 'high' | 'urgent',
+      }
+      speakNotification(voiceNotif)
+    } else {
+      // Fallback: القوالب المحلية
+      const voiceNotif = createVoiceNotification(
+        notif.type,
+        notif.title,
+        notif.message,
+        undefined,
+        undefined,
+        notif.type === 'emergency' ? 'urgent' : 'normal'
+      )
+      speakNotification(voiceNotif)
+    }
   }, [])
 
   useEffect(() => {
