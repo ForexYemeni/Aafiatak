@@ -170,7 +170,7 @@ function singletonInitSWMessageListener() {
       setTimeout(() => {
         // ★ استخدام voiceText من قاعدة البيانات
         const swVoiceText = data.ttsVoiceText || data.bodyAr || data.body || ''
-        const swVoicePriority = data.ttsVoicePriority || data.notifType === 'emergency' ? 'urgent' : 'normal'
+        const swVoicePriority = data.ttsVoicePriority || (data.notifType === 'emergency' ? 'urgent' : 'normal')
         
         if (swVoiceText) {
           const voiceNotif: VoiceNotification = {
@@ -373,14 +373,24 @@ function singletonInitFcmListener() {
   globalFcmListenerSetup = true
 
   onForegroundMessage((payload: any) => {
-    console.log('📱 [Singleton] FCM foreground message:', payload)
-    const type = payload?.data?.type || 'system'
-    const title = payload?.notification?.title || payload?.data?.title || ''
-    const body = payload?.notification?.body || payload?.data?.body || payload?.data?.message || ''
-    const notifId = payload?.data?.id || payload?.data?.requestId || ''
+    console.log('📱 [Singleton] FCM foreground message:', JSON.stringify(payload))
+
+    // ★★★ DATA-ONLY FIX: Read title/body from payload.data FIRST ★★★
+    // Previously read from payload.notification, but data-only messages
+    // don't have payload.notification. The server now sends all data
+    // in the data field for both foreground and background handling.
+    const d = payload?.data || {}
+    const n = payload?.notification || {}
+
+    const type = d.type || 'system'
+    const title = n.title || d.title || d.titleAr || ''
+    const body = n.body || d.body || d.bodyAr || d.message || ''
+    const notifId = d.id || d.requestId || ''
     // ★ النص الصوتي من FCM - يأتي من قاعدة البيانات
-    const voiceText = payload?.data?.voiceText || ''
-    const voicePriority = payload?.data?.voicePriority || 'normal'
+    const voiceText = d.voiceText || ''
+    const voicePriority = d.voicePriority || (type === 'emergency' ? 'urgent' : type === 'assignment' ? 'high' : 'normal')
+
+    console.log('📱 [Singleton] Parsed FCM:', { title, body, type, voiceText: voiceText?.substring(0, 50) })
 
     // ADD to known sets FIRST to prevent polling from re-playing sound
     if (notifId) {
@@ -399,7 +409,7 @@ function singletonInitFcmListener() {
       body,
       type,
       notifId ? String(notifId) : undefined,
-      payload?.data?.url,
+      d.url || d.clickAction,
       voiceText,
       voicePriority
     )

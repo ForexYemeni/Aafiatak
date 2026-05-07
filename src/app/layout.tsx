@@ -49,30 +49,44 @@ export default function RootLayout({
         <script
           dangerouslySetInnerHTML={{
             __html: `
-              // ─── Service Worker Registration ───
+              // ─── Service Worker Registration (v4) ───
+              // Always re-register to ensure the latest SW version is active
               if ('serviceWorker' in navigator) {
                 window.addEventListener('load', function() {
                   navigator.serviceWorker.register('/firebase-messaging-sw.js', {
                     scope: '/'
                   }).then(function(registration) {
-                    console.log('✅ Service Worker registered:', registration.scope);
+                    console.log('✅ Service Worker v4 registered:', registration.scope);
 
-                    // Check for SW updates every 30 minutes
+                    // Force update check immediately
+                    registration.update().catch(function() {});
+
+                    // Check for SW updates every 5 minutes (more frequent for dev)
                     setInterval(function() {
                       registration.update().catch(function() {});
-                    }, 1800000);
+                    }, 300000);
 
-                    // Handle updates
+                    // Handle updates - force activate new SW immediately
                     registration.addEventListener('updatefound', function() {
                       var newWorker = registration.installing;
                       newWorker.addEventListener('statechange', function() {
+                        if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                          // New SW available, skip waiting and claim clients
+                          newWorker.postMessage({ type: 'SKIP_WAITING' });
+                          console.log('🔄 New Service Worker installed, activating...');
+                        }
                         if (newWorker.state === 'activated') {
-                          console.log('🔄 Service Worker updated');
+                          console.log('🔄 Service Worker v4 activated');
                         }
                       });
                     });
                   }).catch(function(error) {
                     console.warn('⚠️ Service Worker registration failed:', error);
+                  });
+
+                  // When SW controller changes, reload to use new SW
+                  navigator.serviceWorker.addEventListener('controllerchange', function() {
+                    console.log('🔄 Service Worker controller changed');
                   });
                 });
               }

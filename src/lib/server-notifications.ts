@@ -52,9 +52,15 @@ async function sendFCMToUser(
 
     for (const tokenDoc of tokens) {
       try {
+        // ★★★ CRITICAL FIX: Send DATA-ONLY message (no `notification` field)
+        // When both `notification` and `data` are present, the browser auto-handles
+        // the notification and onBackgroundMessage is NEVER called in the SW.
+        // By sending data-only, the SW always receives the message and can create
+        // the notification with custom options (sound, TTS, actions, etc.)
         const message: admin.messaging.Message = {
-          notification: { title, body },
           data: {
+            title,                        // ★ Title in data for SW to use
+            body,                         // ★ Body in data for SW to use
             type,
             userType,
             url: data?.url || '/',
@@ -66,37 +72,28 @@ async function sendFCMToUser(
             bodyAr: body,
             titleEn: title,
             bodyEn: body,
+            voicePriority: type === 'emergency' ? 'urgent' : type === 'assignment' ? 'high' : 'normal',
+            // ★ Notification display options for SW
+            notifIcon: '/logo-192.png',
+            notifBadge: '/logo-192.png',
+            notifDir: 'rtl',
+            notifLang: 'ar',
+            notifRequireInteraction: (type === 'emergency' || type === 'assignment') ? 'true' : 'false',
+            notifSilent: 'false',
+            notifTag: `aafiatak-${type}-${Date.now()}`,
             ...Object.fromEntries(
               Object.entries(data || {}).filter(([_, v]) => typeof v === 'string')
             ),
           },
-          webpush: {
-            notification: {
-              title, body,
-              icon: '/logo.png',
-              badge: '/logo.png',
-              dir: 'rtl' as const,
-              lang: 'ar',
-              requireInteraction: type === 'emergency' || type === 'assignment',
-              vibrate: type === 'emergency'
-                ? [200, 100, 200, 100, 200, 100, 200]
-                : type === 'assignment'
-                ? [200, 50, 200]
-                : [100],
-              tag: `aafiatak-${type}-${Date.now()}`,
-              silent: false,
-            },
-            fcmOptions: { link: data?.url || '/' },
-          },
           android: {
-            notification: {
-              title, body,
-              icon: 'ic_launcher',
-              sound: 'default',
-              tag: `aafiatak-${type}`,
-              channelId,
-            },
             priority: 'high' as const,
+            data: {
+              title, body,
+              type,
+              channelId,
+              voiceText: voiceText || '',
+              clickAction: data?.url || '/',
+            },
           },
         }
 

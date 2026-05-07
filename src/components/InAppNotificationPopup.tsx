@@ -200,33 +200,43 @@ export default function InAppNotificationPopup() {
       return updated
     })
 
-    // Play notification sound
-    playNotificationSound(notif.type, notif.title, notif.message)
+    // ★ Play notification sound — always try, even if AudioContext is suspended
+    // The sound system will use Web Audio oscillator or vibration as fallback
+    try {
+      resumeAudioContext()
+      playNotificationSound(notif.type, notif.title, notif.message)
+    } catch (e) {
+      console.warn('🔔 [InApp Popup] Sound play failed:', e)
+    }
 
-    // Play TTS if enabled
-    if (isTTSEnabled()) {
-      const voicePriority = (notif.voicePriority || 'normal') as 'low' | 'normal' | 'high' | 'urgent'
-      if (notif.voiceText) {
-        const voiceNotif: VoiceNotification = {
-          titleAr: notif.title,
-          titleEn: notif.title,
-          bodyAr: notif.voiceText,
-          bodyEn: notif.voiceText,
-          type: notif.type,
-          priority: voicePriority,
+    // ★ Play TTS if enabled — with robust fallback
+    try {
+      if (isTTSEnabled()) {
+        const voicePriority = (notif.voicePriority || 'normal') as 'low' | 'normal' | 'high' | 'urgent'
+        if (notif.voiceText) {
+          const voiceNotif: VoiceNotification = {
+            titleAr: notif.title,
+            titleEn: notif.title,
+            bodyAr: notif.voiceText,
+            bodyEn: notif.voiceText,
+            type: notif.type,
+            priority: voicePriority,
+          }
+          speakNotification(voiceNotif)
+        } else {
+          const voiceNotif = createVoiceNotification(
+            notif.type,
+            notif.title,
+            notif.message,
+            undefined,
+            undefined,
+            notif.type === 'emergency' ? 'urgent' : 'normal'
+          )
+          speakNotification(voiceNotif)
         }
-        speakNotification(voiceNotif)
-      } else {
-        const voiceNotif = createVoiceNotification(
-          notif.type,
-          notif.title,
-          notif.message,
-          undefined,
-          undefined,
-          notif.type === 'emergency' ? 'urgent' : 'normal'
-        )
-        speakNotification(voiceNotif)
       }
+    } catch (e) {
+      console.warn('🔔 [InApp Popup] TTS failed:', e)
     }
   }, [])
 

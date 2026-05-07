@@ -1,14 +1,17 @@
 /* ========================================================
-   عافيتك — Unified Service Worker v3.0
+   عافيتك — Unified Service Worker v4.0 (DATA-ONLY FIX)
    FCM push notifications + caching + VOICE notification support
    PWA Install support + Enhanced offline experience
 
-   KEY CHANGES v3.0:
-   - Improved PWA installability with proper caching
-   - Better notification sound in background (Web Audio in SW)
-   - Auto-TTS when notification clicked + app was closed
-   - Offline fallback page with Arabic UI
-   - Precache critical assets for instant load
+   ★★★ CRITICAL FIX v4.0 ★★★
+   Previous versions used `notification` + `data` FCM messages.
+   When BOTH fields are present, the browser auto-handles the
+   notification and onBackgroundMessage is NEVER called.
+   
+   FIX: Now sending DATA-ONLY messages from the server.
+   The SW reads title/body from `payload.data` instead of
+   `payload.notification`, and ALWAYS creates the notification
+   manually with full control over sound, TTS, actions, etc.
    ======================================================== */
 
 // ─── Firebase Cloud Messaging ───
@@ -29,8 +32,8 @@ firebase.initializeApp({
 const messaging = firebase.messaging();
 
 // ─── Cache Configuration ───
-const CACHE_NAME = 'afiyatak-v4';
-const RUNTIME_CACHE = 'afiyatak-runtime-v4';
+const CACHE_NAME = 'afiyatak-v5';
+const RUNTIME_CACHE = 'afiyatak-runtime-v5';
 
 const PRECACHE_URLS = [
   '/',
@@ -54,7 +57,7 @@ const PRECACHE_URLS = [
 // ═══════════════════════════════════════════════════════
 
 self.addEventListener('install', (event) => {
-  console.log('[SW v3] Installing...');
+  console.log('[SW v4] Installing...');
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       return Promise.allSettled(
@@ -71,7 +74,7 @@ self.addEventListener('install', (event) => {
 });
 
 self.addEventListener('activate', (event) => {
-  console.log('[SW v3] Activating...');
+  console.log('[SW v4] Activating...');
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
@@ -141,8 +144,8 @@ async function playServiceWorkerSound(type) {
         osc.type = t.wave;
 
         gain.gain.setValueAtTime(0.001, start);
-        gain.gain.exponentialRampToValueAtTime(0.6, start + 0.01);
-        gain.gain.setValueAtTime(0.6, start + t.dur / 1000 - 0.03);
+        gain.gain.exponentialRampToValueAtTime(0.7, start + 0.01);
+        gain.gain.setValueAtTime(0.7, start + t.dur / 1000 - 0.03);
         gain.gain.exponentialRampToValueAtTime(0.001, start + t.dur / 1000);
 
         osc.start(start);
@@ -172,13 +175,23 @@ async function playServiceWorkerSound(type) {
 
 // ═══════════════════════════════════════════════════════
 //  PUSH NOTIFICATIONS (FCM Background Messages)
+//  ★★★ DATA-ONLY: Always reads from payload.data ★★★
 // ═══════════════════════════════════════════════════════
 
 messaging.onBackgroundMessage((payload) => {
-  const { title, body, icon } = payload.notification || {};
-  const { type, url, sound, titleAr, bodyAr, titleEn, bodyEn, voiceText, voicePriority } = payload.data || {};
+  console.log('[SW v4] Background message received:', JSON.stringify(payload));
 
-  const notifType = type || 'system';
+  // ★★★ DATA-ONLY FIX: Read title/body from payload.data, NOT payload.notification ★★★
+  const d = payload.data || {};
+  const title = d.title || d.titleAr || 'عافيتك';
+  const body = d.body || d.bodyAr || '';
+  const notifType = d.type || 'system';
+  const url = d.url || d.clickAction || '/';
+  const voiceText = d.voiceText || '';
+  const voicePriority = d.voicePriority || (notifType === 'emergency' ? 'urgent' : 'normal');
+  const titleAr = d.titleAr || d.title || 'إشعار جديد';
+  const bodyAr = d.bodyAr || d.body || voiceText || '';
+  const notifId = d.id || d.requestId || '';
 
   // Notification type configuration
   const typeConfig = {
@@ -195,62 +208,63 @@ messaging.onBackgroundMessage((payload) => {
 
   const config = typeConfig[notifType] || typeConfig.system;
 
-  // Play the notification sound in background
+  // ★ Play the notification sound in background (oscillator)
   playServiceWorkerSound(notifType);
 
-  // ★ Also notify any open client windows so they can show in-app popup
+  // ★ Also try to vibrate
   try {
-    const clientList = await clients.matchAll({ type: 'window', includeUncontrolled: true });
-    for (const client of clientList) {
-      client.postMessage({
-        type: 'SHOW_INAPP_NOTIFICATION',
-        title: title || 'إشعار جديد',
-        message: body || '',
-        notifType: notifType,
-        voiceText: voiceText || '',
-        voicePriority: voicePriority || 'normal',
-        url: url || '/',
-      });
+    if (navigator.vibrate) {
+      navigator.vibrate(config.vibrate);
     }
+  } catch (e) {}
+
+  // ★ Notify any open client windows so they can show in-app popup + TTS
+  try {
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        client.postMessage({
+          type: 'SHOW_INAPP_NOTIFICATION',
+          title: title,
+          message: body,
+          notifType: notifType,
+          voiceText: voiceText,
+          voicePriority: voicePriority,
+          url: url,
+          notifId: notifId,
+        });
+      }
+    }).catch(e => console.warn('[SW] Failed to notify clients:', e.message));
   } catch (e) {
     console.warn('[SW] Failed to notify clients:', e.message);
   }
 
   // ★ Build TTS data - voiceText from MongoDB database
-  const ttsText = voiceText || `${title || 'إشعار جديد'}. ${body || ''}`;
-  const ttsData = {
-    titleAr: titleAr || title || 'إشعار جديد',
-    bodyAr: voiceText || bodyAr || body || '',  // ★ أولوية لـ voiceText من قاعدة البيانات
-    titleEn: titleEn || title || 'New Notification',
-    bodyEn: voiceText || bodyEn || body || '',
-    notifType: notifType,
-    voicePriority: voicePriority || 'normal',
-  };
+  const ttsText = voiceText || `${title}. ${body}`;
 
   const notificationOptions = {
-    body: body || '',
+    body: body,
     icon: config.icon,
     badge: config.badge,
     tag: `aafiatak-${config.tag}-${Date.now()}`,
     data: {
-      url: url || '/',
+      url: url,
       type: notifType,
       // ★ TTS data with voiceText from MongoDB database
-      ttsTitle: title || '',
-      ttsBody: body || '',
-      ttsTitleAr: ttsData.titleAr,
-      ttsBodyAr: ttsData.bodyAr,          // ★ voiceText من قاعدة البيانات
+      ttsTitle: title,
+      ttsBody: body,
+      ttsTitleAr: titleAr,
+      ttsBodyAr: voiceText || bodyAr,  // ★ voiceText من قاعدة البيانات
       ttsType: notifType,
-      ttsVoiceText: ttsText,               // ★ النص الصوتي الكامل من MongoDB
-      ttsVoicePriority: voicePriority || 'normal',
+      ttsVoiceText: ttsText,            // ★ النص الصوتي الكامل من MongoDB
+      ttsVoicePriority: voicePriority,
       shouldSpeak: 'true',
       timestamp: Date.now(),
-      ...payload.data,
+      notifId: notifId,
     },
     dir: 'rtl',
     lang: 'ar',
     requireInteraction: config.requireInteraction,
-    silent: false, // Let browser play notification sound too
+    silent: false,  // Let browser play notification sound too
     vibrate: config.vibrate,
     renotify: true,
     actions: [
@@ -260,7 +274,9 @@ messaging.onBackgroundMessage((payload) => {
     ],
   };
 
-  return self.registration.showNotification(title || 'عافيتك', notificationOptions);
+  console.log('[SW v4] Showing notification:', title, body, notifType);
+
+  return self.registration.showNotification(title, notificationOptions);
 });
 
 // ─── Notification click handler ───
@@ -293,6 +309,8 @@ self.addEventListener('notificationclick', (event) => {
                 titleAr: data.ttsTitleAr || data.titleAr || data.title || '',
                 bodyAr: data.ttsBodyAr || data.bodyAr || data.body || data.message || '',
                 notifType: data.ttsType || data.type || 'system',
+                ttsVoiceText: data.ttsVoiceText || '',
+                ttsVoicePriority: data.ttsVoicePriority || 'normal',
                 url: targetUrl,
               });
             }, 500);
@@ -303,7 +321,7 @@ self.addEventListener('notificationclick', (event) => {
 
       // No existing window — open new one with TTS params in URL
       const ttsParams = shouldSpeak ?
-        `&speak=1&st=${encodeURIComponent(data.ttsTitleAr || data.ttsTitle || '')}&sb=${encodeURIComponent(data.ttsBodyAr || data.ttsBody || '')}&stt=${data.ttsType || 'system'}` : '';
+        `&speak=1&st=${encodeURIComponent(data.ttsTitleAr || data.ttsTitle || '')}&sb=${encodeURIComponent(data.ttsBodyAr || data.ttsVoiceText || data.ttsBody || '')}&stt=${data.ttsType || 'system'}` : '';
       const separator = targetUrl.includes('?') ? '&' : '?';
       const fullUrl = targetUrl + (ttsParams ? separator + ttsParams.replace(/^&/, '') : '');
 
@@ -317,8 +335,38 @@ self.addEventListener('push', (event) => {
   if (event.data) {
     try {
       const data = event.data.json();
+      // If this is an FCM message, let onBackgroundMessage handle it
       if (data.from === 'fcm') return;
     } catch {}
+  }
+
+  // Handle non-FCM push events
+  if (event.data) {
+    try {
+      const data = event.data.json();
+      const title = data.title || 'عافيتك';
+      const body = data.body || data.message || '';
+      const type = data.type || 'system';
+      
+      playServiceWorkerSound(type);
+      
+      event.waitUntil(
+        self.registration.showNotification(title, {
+          body,
+          icon: '/logo-192.png',
+          badge: '/logo-192.png',
+          tag: `aafiatak-${type}-${Date.now()}`,
+          dir: 'rtl',
+          lang: 'ar',
+          vibrate: type === 'emergency' ? [200, 100, 200, 100, 200, 100, 200] : [100],
+          data: data,
+          silent: false,
+          renotify: true,
+        })
+      );
+    } catch (e) {
+      console.warn('[SW] Push event parse error:', e);
+    }
   }
 });
 
@@ -331,7 +379,7 @@ self.addEventListener('message', (event) => {
     self.skipWaiting();
   }
   if (event.data && event.data.type === 'GET_VERSION') {
-    event.ports[0].postMessage({ version: '3.0' });
+    event.ports[0].postMessage({ version: '4.0' });
   }
 });
 
