@@ -198,6 +198,24 @@ messaging.onBackgroundMessage((payload) => {
   // Play the notification sound in background
   playServiceWorkerSound(notifType);
 
+  // ★ Also notify any open client windows so they can show in-app popup
+  try {
+    const clientList = await clients.matchAll({ type: 'window', includeUncontrolled: true });
+    for (const client of clientList) {
+      client.postMessage({
+        type: 'SHOW_INAPP_NOTIFICATION',
+        title: title || 'إشعار جديد',
+        message: body || '',
+        notifType: notifType,
+        voiceText: voiceText || '',
+        voicePriority: voicePriority || 'normal',
+        url: url || '/',
+      });
+    }
+  } catch (e) {
+    console.warn('[SW] Failed to notify clients:', e.message);
+  }
+
   // ★ Build TTS data - voiceText from MongoDB database
   const ttsText = voiceText || `${title || 'إشعار جديد'}. ${body || ''}`;
   const ttsData = {

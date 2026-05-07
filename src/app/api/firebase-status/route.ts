@@ -1,35 +1,39 @@
 import { NextResponse } from 'next/server'
-import { isDatabaseConnected, getDatabaseError } from '@/lib/mongodb'
-import { connectToDatabase } from '@/lib/mongodb'
+import { isDatabaseConnected, getDatabaseError, connectToDatabase } from '@/lib/mongodb'
+import { firebaseInitialized, initializationError } from '@/lib/firebase-admin'
 
 export async function GET() {
-  // Check if MongoDB is connected
-  if (!isDatabaseConnected()) {
-    const error = getDatabaseError()
-    // Try to connect once
+  // Check MongoDB
+  let mongoConnected = isDatabaseConnected()
+  let mongoError = getDatabaseError()
+
+  if (!mongoConnected) {
     try {
       await connectToDatabase()
-    } catch {
-      return NextResponse.json({
-        connected: false,
-        error: error || 'قاعدة البيانات غير متصلة. يرجى التحقق من إعدادات MONGODB_URI',
-      })
-    }
+      mongoConnected = isDatabaseConnected()
+    } catch {}
   }
 
-  // Verify the database actually works by reading a document
+  // Verify the database actually works
+  let dbVerified = false
+  let dbError = ''
   try {
     const { mongoose } = await import('@/lib/mongodb')
     const Admin = mongoose.models.Admin
     if (Admin) {
       await Admin.findOne().select('_id').lean()
+      dbVerified = true
     }
-    return NextResponse.json({ connected: true, error: null })
   } catch (error: any) {
-    const msg = error.message || ''
-    return NextResponse.json({
-      connected: false,
-      error: `خطأ في الاتصال بقاعدة البيانات: ${msg.substring(0, 100)}`,
-    })
+    dbError = error.message || ''
   }
+
+  return NextResponse.json({
+    connected: mongoConnected && dbVerified,
+    error: mongoConnected && dbVerified ? null : (dbError || mongoError || 'قاعدة البيانات غير متصلة'),
+    firebaseAdmin: {
+      initialized: firebaseInitialized,
+      error: initializationError,
+    },
+  })
 }

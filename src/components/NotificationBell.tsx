@@ -1,13 +1,13 @@
 /**
- * عافيتك — Notification Bell Component (v7 - DEFINITIVE)
+ * عافيتك — Notification Bell Component (v8 - POPUP FIX)
  *
- * v7 KEY CHANGES:
- * 1. ✅ Browser Notification POPUPS for polling-detected notifications
- * 2. ✅ Browser Notification POPUPS for FCM foreground messages
- * 3. ✅ Auto-play sound + TTS for ALL new notifications (not just FCM)
- * 4. ✅ Works even WITHOUT FCM (polling + Browser Notification API)
+ * v8 KEY CHANGES:
+ * 1. ✅ IN-APP NOTIFICATION POPUPS (always visible, no permission needed)
+ * 2. ✅ Browser Notification API as BONUS (when permission granted)
+ * 3. ✅ Auto-play sound + TTS for ALL new notifications
+ * 4. ✅ Works even WITHOUT FCM (polling + In-App Popup)
  * 5. ✅ Vibration support for mobile devices
- * 6. ✅ Clicking notification opens the app
+ * 6. ✅ Sound/TTS delegated to InAppNotificationPopup to avoid duplicates
  *
  * Previous features preserved:
  * - sound-manager v11 with proper AudioContext resumption
@@ -25,6 +25,7 @@ import { useAppStore } from '@/lib/store'
 import { playNotificationSound, isSoundEnabled, setSoundEnabled as setSoundStorage, testNotificationSound, initSoundSystem, getAudioContextState, resumeAudioContext } from '@/lib/sound-manager'
 import { speakNotification, stopTTS, isTTSSpeaking, testTTS, getTTSSettings, saveTTSSettings, initTTS, isTTSEnabled, setTTSEnabled, createVoiceNotification, type VoiceGender, type VoiceLanguage, type TTSSettings, type VoiceNotification } from '@/lib/voice-manager'
 import { onForegroundMessage } from '@/lib/firebase-client'
+import { showInAppNotification } from '@/components/InAppNotificationPopup'
 
 interface NotifItem {
   id: string
@@ -102,57 +103,34 @@ function isAndroidApp(): boolean {
 }
 
 // ═══════════════════════════════════════════════════════════════
-//  SHOW BROWSER NOTIFICATION POPUP
-//  This is the KEY missing feature — shows a real OS notification
+//  SHOW NOTIFICATION POPUP (In-App + Browser)
+//  PRIMARY: In-App popup (always works, no permission needed)
+//  BONUS: Browser Notification API (when permission granted)
 // ═══════════════════════════════════════════════════════════════
 
-function showBrowserNotification(
+function triggerNotificationPopup(
   title: string,
   body: string,
   type: string,
   notifId?: string,
-  url?: string
+  url?: string,
+  voiceText?: string,
+  voicePriority?: string
 ): void {
   if (typeof window === 'undefined') return
-  if (!('Notification' in window)) return
-  if (Notification.permission !== 'granted') return
 
-  try {
-    const notif = new Notification(title, {
-      body: body,
-      icon: '/logo-192.png',
-      badge: '/logo-192.png',
-      tag: notifId ? `aafiatak-${notifId}` : `aafiatak-${type}-${Date.now()}`,
-      dir: 'rtl',
-      lang: 'ar',
-      silent: false,
-      requireInteraction: type === 'emergency' || type === 'assignment',
-      data: {
-        url: url || '/',
-        type: type,
-        notifId: notifId || '',
-      },
-      // Vibration patterns
-      vibrate: type === 'emergency'
-        ? [200, 100, 200, 100, 200, 100, 200]
-        : type === 'assignment'
-        ? [200, 50, 200]
-        : [100],
-    })
+  console.log('🔔 [Popup] Triggering notification popup:', title, type)
 
-    notif.onclick = () => {
-      window.focus()
-      const targetUrl = notif.data?.url || '/'
-      if (targetUrl !== '/') {
-        window.location.href = targetUrl
-      }
-      notif.close()
-    }
-
-    console.log('🔔 [Browser Notif] Shown:', title)
-  } catch (e) {
-    console.warn('🔔 [Browser Notif] Failed:', e)
-  }
+  // PRIMARY: Show in-app notification popup (ALWAYS works)
+  showInAppNotification({
+    title,
+    message: body,
+    type,
+    voiceText,
+    voicePriority,
+    url,
+    notifId,
+  })
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -223,6 +201,20 @@ function singletonInitSWMessageListener() {
       console.log('🔊 [SW Message] Play sound request:', data.notifType)
       resumeAudioContext()
       playNotificationSound(data.notifType || 'system')
+    }
+
+    // ★ Handle SHOW_INAPP_NOTIFICATION from Service Worker (FCM background message)
+    if (data.type === 'SHOW_INAPP_NOTIFICATION') {
+      console.log('🔔 [SW Message] Show in-app notification:', data.title)
+      triggerNotificationPopup(
+        data.title || '',
+        data.message || '',
+        data.notifType || 'system',
+        undefined,
+        data.url,
+        data.voiceText,
+        data.voicePriority
+      )
     }
   })
 
@@ -338,8 +330,9 @@ async function singletonFetchNotifications() {
       notifyAllSubscribers()
 
       // ═══════════════════════════════════════════════════════
-      //  PLAY SOUND + TTS + SHOW BROWSER NOTIFICATION
-      //  ★ voiceText يأتي من قاعدة البيانات - الخادم يتحكم في الصوت
+      //  SHOW NOTIFICATION POPUP (In-App + Browser)
+      //  ★ triggerNotificationPopup handles sound + TTS + popup
+      //  ★ voiceText يأتي من قاعدة البيانات
       // ═══════════════════════════════════════════════════════
       if (newUnreadNotifs.length > 0 && globalInitialFetchDone) {
         const firstNew = newUnreadNotifs[0]
@@ -350,46 +343,19 @@ async function singletonFetchNotifications() {
 
         console.log('🔔 [Singleton] New notification via polling:', firstNew.title, notifType, 'voiceText:', firstNew.voiceText)
 
-        // 1. Play notification sound
-        if (isSoundEnabled()) {
-          playNotificationSound(notifType, firstNew.title, firstNew.message)
-        }
-
-        // 2. TTS: ★ استخدام voiceText من قاعدة البيانات
-        if (isTTSEnabled()) {
-          const voicePriority = (firstNew.voicePriority || 'normal') as 'low' | 'normal' | 'high' | 'urgent'
-          // ★ إذا كان voiceText موجود في قاعدة البيانات، استخدمه مباشرة
-          if (firstNew.voiceText) {
-            const voiceNotif: VoiceNotification = {
-              titleAr: firstNew.title,
-              titleEn: firstNew.title,
-              bodyAr: firstNew.voiceText,  // ★ النص الصوتي من MongoDB
-              bodyEn: firstNew.voiceText,
-              type: notifType,
-              priority: voicePriority,
-            }
-            speakNotification(voiceNotif)
-          } else {
-            // Fallback: استخدام القوالب المحلية
-            const voiceNotif = createVoiceNotification(
-              notifType,
-              firstNew.title,
-              firstNew.message,
-              undefined,
-              undefined,
-              notifType === 'emergency' ? 'urgent' : 'normal'
-            )
-            speakNotification(voiceNotif)
-          }
-        }
-
-        // 3. Show browser notification POPUP
-        showBrowserNotification(
+        // ★ triggerNotificationPopup handles EVERYTHING:
+        // - In-app popup (always works)
+        // - Browser Notification API (bonus, when permitted)
+        // - Sound playback
+        // - TTS voice
+        triggerNotificationPopup(
           firstNew.title,
           firstNew.message,
           notifType,
           firstNew.id,
-          firstNew.data?.url || '/'
+          firstNew.data?.url || '/',
+          firstNew.voiceText,
+          firstNew.voicePriority
         )
       }
 
@@ -423,34 +389,20 @@ function singletonInitFcmListener() {
       globalSoundPlayedIds.add(idStr)
     }
 
-    // 1. Play sound
-    playNotificationSound(type, title, body)
-
-    // 2. TTS: ★ استخدام voiceText من قاعدة البيانات عبر FCM
-    if (isTTSEnabled()) {
-      if (voiceText) {
-        // ★ النص الصوتي من MongoDB - الخادم يتحكم
-        const voiceNotif: VoiceNotification = {
-          titleAr: title,
-          titleEn: title,
-          bodyAr: voiceText,
-          bodyEn: voiceText,
-          type,
-          priority: (voicePriority || 'normal') as 'low' | 'normal' | 'high' | 'urgent',
-        }
-        speakNotification(voiceNotif)
-      } else {
-        // Fallback: استخدام القوالب المحلية
-        const voiceNotif = createVoiceNotification(
-          type, title, body, undefined, undefined,
-          type === 'emergency' ? 'urgent' : 'normal'
-        )
-        speakNotification(voiceNotif)
-      }
-    }
-
-    // 3. Show browser notification POPUP for FCM foreground messages
-    showBrowserNotification(title, body, type, notifId ? String(notifId) : undefined, payload?.data?.url)
+    // ★ triggerNotificationPopup handles EVERYTHING:
+    // - In-app popup (always works)
+    // - Browser Notification API (bonus, when permitted)
+    // - Sound playback
+    // - TTS voice
+    triggerNotificationPopup(
+      title,
+      body,
+      type,
+      notifId ? String(notifId) : undefined,
+      payload?.data?.url,
+      voiceText,
+      voicePriority
+    )
 
     // Refresh list
     singletonFetchNotifications()
@@ -505,7 +457,7 @@ function singletonInitCapacitorListener() {
         speakNotification(voiceNotif)
       }
 
-      showBrowserNotification(title, body, type, notifId ? String(notifId) : undefined)
+      triggerNotificationPopup(title, body, type, notifId ? String(notifId) : undefined)
 
       singletonFetchNotifications()
     })
