@@ -21,7 +21,8 @@ async function sendFCMNotification(
   title: string,
   body: string,
   type: string,
-  data?: Record<string, any>
+  data?: Record<string, any>,
+  voiceText?: string
 ): Promise<{ sent: number; failed: number }> {
   let sent = 0
   let failed = 0
@@ -59,67 +60,61 @@ async function sendFCMNotification(
     for (const tokenDoc of tokens) {
       const token = tokenDoc.token
       try {
-        // ─── Send HYBRID message: data + notification payload ───
+        // ★★★ CRITICAL: Send DATA-ONLY message (NO `notification` field) ★★★
         //
-        // DATA payload: Always delivered to onMessageReceived() regardless of
-        // foreground/background state. Our custom AafiatakFirebaseMessagingService
-        // (which extends Capacitor's MessagingService) processes this.
+        // When BOTH `notification` AND `data` fields are present, the browser
+        // AUTO-HANDLES the notification and onBackgroundMessage() in the SW
+        // is NEVER called. This means:
+        // - No custom notification with sound/TTS/actions
+        // - No system-level notification popup outside the app
+        // - No voice alert capability
         //
-        // NOTIFICATION payload: Used by Android as a FALLBACK when the app is
-        // in the background and the data-only delivery fails for any reason.
-        // The channelId ensures Android uses our custom notification channel
-        // (with proper sound/vibration) even for auto-displayed notifications.
+        // By sending data-only messages:
+        // - SW always receives onBackgroundMessage → shows proper notification
+        // - Notification appears as system-level popup even when app is closed
+        // - SW can play sound, vibrate, and include TTS data
+        // - Foreground listener (onForegroundMessage) also receives data
         //
-        // Flow:
-        // - Foreground: onMessageReceived() → Capacitor fires pushNotificationReceived → JS plays sound
-        // - Background: onMessageReceived() → shows native notification with channel sound
-        //   OR Android auto-displays with our channelId (fallback)
+        // For Android (Capacitor APK), the data-only format still works because
+        // our AafiatakFirebaseMessagingService processes data messages.
         const message: admin.messaging.Message = {
-          notification: {
-            title,
-            body,
-          },
           data: {
+            title,                        // ★ Title in data for SW to use
+            body,                         // ★ Body in data for SW to use
             type,
             userType,
             url: data?.url || '/',
             requestId: data?.requestId || '',
             clickAction: data?.url || '/',
+            // ★ النص الصوتي - يُرسل مع FCM للإشعارات الخلفية
+            voiceText: voiceText || `${title}. ${body || ''}`,
+            titleAr: title,
+            bodyAr: body,
+            titleEn: title,
+            bodyEn: body,
+            voicePriority: type === 'emergency' ? 'urgent' : type === 'assignment' ? 'high' : 'normal',
+            // ★ Notification display options for SW
+            notifIcon: '/logo-192.png',
+            notifBadge: '/logo-192.png',
+            notifDir: 'rtl',
+            notifLang: 'ar',
+            notifRequireInteraction: (type === 'emergency' || type === 'assignment') ? 'true' : 'false',
+            notifSilent: 'false',
+            notifTag: `aafiatak-${type}-${Date.now()}`,
             ...Object.fromEntries(
               Object.entries(data || {}).filter(([_, v]) => typeof v === 'string')
             ),
           },
-          webpush: {
-            notification: {
-              title,
-              body,
-              icon: '/logo.png',
-              badge: '/logo.png',
-              dir: 'rtl' as const,
-              lang: 'ar',
-              requireInteraction: type === 'emergency' || type === 'assignment',
-              vibrate: type === 'emergency'
-                ? [200, 100, 200, 100, 200, 100, 200]
-                : type === 'assignment'
-                ? [200, 50, 200]
-                : [100],
-              tag: `aafiatak-${type}-${Date.now()}`,
-              silent: false,
-            },
-            fcmOptions: {
-              link: data?.url || '/',
-            },
-          },
           android: {
-            notification: {
+            priority: 'high' as const,
+            data: {
               title,
               body,
-              icon: 'ic_launcher',
-              sound: 'default',
-              tag: `aafiatak-${type}`,
+              type,
               channelId,
+              voiceText: voiceText || `${title}. ${body || ''}`,
+              clickAction: data?.url || '/',
             },
-            priority: 'high' as const,
           },
         }
 
@@ -272,7 +267,7 @@ export async function POST(request: NextRequest) {
         if (notifId) {
           fcmDataWithId.id = notifId
         }
-        const result = await sendFCMNotification(targetUserIds[i], userType, title, message || '', type, fcmDataWithId)
+        const result = await sendFCMNotification(targetUserIds[i], userType, title, message || '', type, fcmDataWithId, autoVoiceText)
         totalSent += result.sent
         totalFailed += result.failed
       }
@@ -311,7 +306,7 @@ export async function POST(request: NextRequest) {
         const fcmDataWithId = { ...(data || {}) }
         const existingId = existing._id?.toString()
         if (existingId) fcmDataWithId.id = existingId
-        fcmResult = await sendFCMNotification(userId, userType, title, message || '', type, fcmDataWithId)
+        fcmResult = await sendFCMNotification(userId, userType, title, message || '', type, fcmDataWithId, autoVoiceText)
         return NextResponse.json({
           success: true,
           stored: 0,
@@ -335,7 +330,7 @@ export async function POST(request: NextRequest) {
       }
 
       // Send FCM push notification
-      fcmResult = await sendFCMNotification(userId, userType, title, message || '', type, fcmDataWithId)
+      fcmResult = await sendFCMNotification(userId, userType, title, message || '', type, fcmDataWithId, autoVoiceText)
     }
 
     // ══════════════════════════════════════════
@@ -360,7 +355,7 @@ export async function POST(request: NextRequest) {
         if (notifId) {
           fcmDataWithId.id = notifId
         }
-        const result = await sendFCMNotification(userIds[i], userType, title, message || '', type, fcmDataWithId)
+        const result = await sendFCMNotification(userIds[i], userType, title, message || '', type, fcmDataWithId, autoVoiceText)
         totalSent += result.sent
         totalFailed += result.failed
       }

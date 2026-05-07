@@ -1,17 +1,14 @@
 /* ========================================================
-   عافيتك — Unified Service Worker v4.0 (DATA-ONLY FIX)
+   عافيتك — Unified Service Worker v5.0 (ROCK-SOLID)
    FCM push notifications + caching + VOICE notification support
    PWA Install support + Enhanced offline experience
 
-   ★★★ CRITICAL FIX v4.0 ★★★
-   Previous versions used `notification` + `data` FCM messages.
-   When BOTH fields are present, the browser auto-handles the
-   notification and onBackgroundMessage is NEVER called.
-   
-   FIX: Now sending DATA-ONLY messages from the server.
-   The SW reads title/body from `payload.data` instead of
-   `payload.notification`, and ALWAYS creates the notification
-   manually with full control over sound, TTS, actions, etc.
+   ★★★ CRITICAL FIX v5.0 ★★★
+   1. DATA-ONLY messages from server → SW always handles
+   2. Robust AudioContext sound in SW (oscillator tones)
+   3. postMessage to any open client for in-app popup + TTS
+   4. Notification click opens app + auto-speaks via URL params
+   5. System-level notification popup even when app is CLOSED
    ======================================================== */
 
 // ─── Firebase Cloud Messaging ───
@@ -32,8 +29,8 @@ firebase.initializeApp({
 const messaging = firebase.messaging();
 
 // ─── Cache Configuration ───
-const CACHE_NAME = 'afiyatak-v5';
-const RUNTIME_CACHE = 'afiyatak-runtime-v5';
+const CACHE_NAME = 'afiyatak-v6';
+const RUNTIME_CACHE = 'afiyatak-runtime-v6';
 
 const PRECACHE_URLS = [
   '/',
@@ -57,7 +54,7 @@ const PRECACHE_URLS = [
 // ═══════════════════════════════════════════════════════
 
 self.addEventListener('install', (event) => {
-  console.log('[SW v4] Installing...');
+  console.log('[SW v5] Installing...');
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       return Promise.allSettled(
@@ -74,7 +71,7 @@ self.addEventListener('install', (event) => {
 });
 
 self.addEventListener('activate', (event) => {
-  console.log('[SW v4] Activating...');
+  console.log('[SW v5] Activating...');
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
@@ -107,11 +104,11 @@ const SOUND_MAP = {
 
 /**
  * Play a notification sound in the Service Worker context.
- * Uses Web Audio API (oscillator) which works in Chrome/Edge SW.
+ * Strategy: Try Web Audio API oscillator first, then ask client to play.
  */
 async function playServiceWorkerSound(type) {
+  // Method 1: Web Audio API oscillator (works in Chrome/Edge SW)
   try {
-    // Try Web Audio API in Service Worker
     if (typeof AudioContext !== 'undefined' || typeof webkitAudioContext !== 'undefined') {
       const AC = AudioContext || webkitAudioContext;
       const ctx = new AC();
@@ -134,32 +131,34 @@ async function playServiceWorkerSound(type) {
         await ctx.resume();
       }
 
-      for (let i = 0; i < t.repeat; i++) {
-        const start = ctx.currentTime + (i * (t.dur + t.gap)) / 1000;
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.frequency.value = t.freq;
-        osc.type = t.wave;
+      if (ctx.state === 'running') {
+        for (let i = 0; i < t.repeat; i++) {
+          const start = ctx.currentTime + (i * (t.dur + t.gap)) / 1000;
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.frequency.value = t.freq;
+          osc.type = t.wave;
 
-        gain.gain.setValueAtTime(0.001, start);
-        gain.gain.exponentialRampToValueAtTime(0.7, start + 0.01);
-        gain.gain.setValueAtTime(0.7, start + t.dur / 1000 - 0.03);
-        gain.gain.exponentialRampToValueAtTime(0.001, start + t.dur / 1000);
+          gain.gain.setValueAtTime(0.001, start);
+          gain.gain.exponentialRampToValueAtTime(0.7, start + 0.01);
+          gain.gain.setValueAtTime(0.7, start + t.dur / 1000 - 0.03);
+          gain.gain.exponentialRampToValueAtTime(0.001, start + t.dur / 1000);
 
-        osc.start(start);
-        osc.stop(start + t.dur / 1000 + 0.01);
+          osc.start(start);
+          osc.stop(start + t.dur / 1000 + 0.01);
+        }
+
+        console.log('[SW v5] Played oscillator tone for:', type);
+        return; // Success, no need for fallback
       }
-
-      console.log('[SW] Played tone for:', type);
-      return;
     }
   } catch (e) {
-    console.warn('[SW] AudioContext tone failed:', e.message);
+    console.warn('[SW v5] Oscillator tone failed:', e.message);
   }
 
-  // Fallback: Ask any open window to play the sound
+  // Method 2: Ask any open window to play the sound
   try {
     const clientList = await clients.matchAll({ type: 'window', includeUncontrolled: true });
     if (clientList.length > 0) {
@@ -167,9 +166,10 @@ async function playServiceWorkerSound(type) {
         type: 'PLAY_NOTIFICATION_SOUND',
         notifType: type,
       });
+      console.log('[SW v5] Asked client to play sound:', type);
     }
   } catch (e) {
-    console.warn('[SW] Sound fallback failed:', e.message);
+    console.warn('[SW v5] Sound fallback failed:', e.message);
   }
 }
 
@@ -179,12 +179,12 @@ async function playServiceWorkerSound(type) {
 // ═══════════════════════════════════════════════════════
 
 messaging.onBackgroundMessage((payload) => {
-  console.log('[SW v4] Background message received:', JSON.stringify(payload));
+  console.log('[SW v5] ★★★ Background message received ★★★', JSON.stringify(payload));
 
-  // ★★★ DATA-ONLY FIX: Read title/body from payload.data, NOT payload.notification ★★★
+  // ★★★ DATA-ONLY: Read title/body from payload.data, NOT payload.notification ★★★
   const d = payload.data || {};
   const title = d.title || d.titleAr || 'عافيتك';
-  const body = d.body || d.bodyAr || '';
+  const body = d.body || d.bodyAr || d.message || '';
   const notifType = d.type || 'system';
   const url = d.url || d.clickAction || '/';
   const voiceText = d.voiceText || '';
@@ -192,6 +192,8 @@ messaging.onBackgroundMessage((payload) => {
   const titleAr = d.titleAr || d.title || 'إشعار جديد';
   const bodyAr = d.bodyAr || d.body || voiceText || '';
   const notifId = d.id || d.requestId || '';
+
+  console.log('[SW v5] Parsed data:', { title, body, notifType, voiceText: voiceText?.substring(0, 50), notifId });
 
   // Notification type configuration
   const typeConfig = {
@@ -227,15 +229,15 @@ messaging.onBackgroundMessage((payload) => {
           title: title,
           message: body,
           notifType: notifType,
-          voiceText: voiceText,
+          voiceText: voiceText || `${title}. ${body}`,
           voicePriority: voicePriority,
           url: url,
           notifId: notifId,
         });
       }
-    }).catch(e => console.warn('[SW] Failed to notify clients:', e.message));
+    }).catch(e => console.warn('[SW v5] Failed to notify clients:', e.message));
   } catch (e) {
-    console.warn('[SW] Failed to notify clients:', e.message);
+    console.warn('[SW v5] Failed to notify clients:', e.message);
   }
 
   // ★ Build TTS data - voiceText from MongoDB database
@@ -274,7 +276,7 @@ messaging.onBackgroundMessage((payload) => {
     ],
   };
 
-  console.log('[SW v4] Showing notification:', title, body, notifType);
+  console.log('[SW v5] ★ Showing SYSTEM notification:', title, body, notifType);
 
   return self.registration.showNotification(title, notificationOptions);
 });
@@ -292,6 +294,8 @@ self.addEventListener('notificationclick', (event) => {
   // Both 'speak' and 'open' and default click should open the app
   const shouldSpeak = action === 'speak' || data.shouldSpeak === 'true' || !action;
   const targetUrl = data.url || '/';
+
+  console.log('[SW v5] Notification clicked, action:', action, 'speak:', shouldSpeak);
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
@@ -321,10 +325,11 @@ self.addEventListener('notificationclick', (event) => {
 
       // No existing window — open new one with TTS params in URL
       const ttsParams = shouldSpeak ?
-        `&speak=1&st=${encodeURIComponent(data.ttsTitleAr || data.ttsTitle || '')}&sb=${encodeURIComponent(data.ttsBodyAr || data.ttsVoiceText || data.ttsBody || '')}&stt=${data.ttsType || 'system'}` : '';
+        `speak=1&st=${encodeURIComponent(data.ttsTitleAr || data.ttsTitle || '')}&sb=${encodeURIComponent(data.ttsBodyAr || data.ttsVoiceText || data.ttsBody || '')}&stt=${data.ttsType || 'system'}` : '';
       const separator = targetUrl.includes('?') ? '&' : '?';
-      const fullUrl = targetUrl + (ttsParams ? separator + ttsParams.replace(/^&/, '') : '');
+      const fullUrl = targetUrl + (ttsParams ? separator + ttsParams : '');
 
+      console.log('[SW v5] Opening new window:', fullUrl);
       return clients.openWindow(fullUrl);
     })
   );
@@ -365,7 +370,7 @@ self.addEventListener('push', (event) => {
         })
       );
     } catch (e) {
-      console.warn('[SW] Push event parse error:', e);
+      console.warn('[SW v5] Push event parse error:', e);
     }
   }
 });
@@ -379,7 +384,7 @@ self.addEventListener('message', (event) => {
     self.skipWaiting();
   }
   if (event.data && event.data.type === 'GET_VERSION') {
-    event.ports[0].postMessage({ version: '4.0' });
+    event.ports[0].postMessage({ version: '5.0' });
   }
 });
 

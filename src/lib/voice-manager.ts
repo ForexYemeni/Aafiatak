@@ -221,27 +221,27 @@ async function speakNow(notif: VoiceNotification): Promise<boolean> {
   isSpeaking = true
 
   try {
-    // Resume AudioContext if possible (for tone playback)
+    // Step 1: Resume AudioContext if possible (for tone playback)
     resumeAudioContext()
 
-    // Step 1: Play notification tone first
+    // Step 2: Play notification tone first (always try, even if AudioContext is suspended)
     if (settings.playToneBeforeVoice) {
       playNotificationSound(notif.type, notif.titleAr, notif.bodyAr)
       // Wait for tone to finish before speaking
       await new Promise(resolve => setTimeout(resolve, 800))
     }
 
-    // Step 2: Prepare TTS text
+    // Step 3: Prepare TTS text
     const lang = settings.language
     const title = lang === 'ar' ? notif.titleAr : notif.titleEn
     const body = lang === 'ar' ? notif.bodyAr : notif.bodyEn
     const fullText = `${title}. ${body}`
 
-    // Step 3: Create utterance
+    // Step 4: Create utterance
     const utterance = new SpeechSynthesisUtterance(fullText)
     utterance.lang = lang === 'ar' ? 'ar-SA' : 'en-US'
 
-    // Step 4: Find the best voice
+    // Step 5: Find the best voice
     const voice = findBestVoice(lang, settings.voiceGender)
     if (voice) {
       utterance.voice = voice
@@ -250,7 +250,7 @@ async function speakNow(notif: VoiceNotification): Promise<boolean> {
       console.log('🗣️ [TTS] No matching voice found, using default')
     }
 
-    // Step 5: Apply settings
+    // Step 6: Apply settings
     utterance.volume = settings.volume / 100
     utterance.rate = settings.rate
     utterance.pitch = settings.voiceGender === 'female' ? 1.1 : 0.9
@@ -264,7 +264,7 @@ async function speakNow(notif: VoiceNotification): Promise<boolean> {
       utterance.volume = Math.max(settings.volume / 150, 0.3)
     }
 
-    // Step 6: Speak
+    // Step 7: Speak — with Chrome bug workaround
     return new Promise((resolve) => {
       utterance.onstart = () => {
         console.log('🗣️ [TTS] Speaking:', title)
@@ -279,24 +279,33 @@ async function speakNow(notif: VoiceNotification): Promise<boolean> {
       }
 
       utterance.onerror = (event) => {
-        console.warn('🗣️ [TTS] Error:', event.error)
+        // Don't log "canceled" errors — they happen when we call cancel() intentionally
+        if (event.error !== 'canceled') {
+          console.warn('🗣️ [TTS] Error:', event.error)
+        }
         isSpeaking = false
         setTimeout(() => processQueue(), 300)
         resolve(false)
       }
 
-      // Chrome bug: cancel any ongoing speech before new one
+      // Cancel any ongoing speech before starting new one (Chrome bug fix)
       window.speechSynthesis.cancel()
-      window.speechSynthesis.speak(utterance)
 
-      // Chrome bug: speechSynthesis can pause randomly
+      // Small delay after cancel to let Chrome clean up
+      setTimeout(() => {
+        window.speechSynthesis.speak(utterance)
+      }, 50)
+
+      // Chrome bug: speechSynthesis can pause randomly after ~15 seconds
       // Keep it alive with a periodic resume
       const keepAlive = setInterval(() => {
         if (!window.speechSynthesis.speaking) {
           clearInterval(keepAlive)
           return
         }
-        window.speechSynthesis.resume()
+        if (window.speechSynthesis.paused) {
+          window.speechSynthesis.resume()
+        }
       }, 5000)
 
       // Safety timeout: stop after 30 seconds

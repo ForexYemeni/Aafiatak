@@ -158,9 +158,10 @@ function playWebAudio(type: string): boolean {
       ctx.resume().catch(() => {})
     }
 
-    // If still not running after resume attempt, we can't play
+    // If still not running, try HTML Audio and vibration as fallback
+    // Don't block — just return false and let other methods handle it
     if (ctx.state !== 'running') {
-      console.warn('🔊 [WebAudio] AudioContext not running, state:', ctx.state)
+      console.warn('🔊 [WebAudio] AudioContext not running, state:', ctx.state, '- trying HTML Audio fallback')
       return false
     }
 
@@ -338,16 +339,22 @@ export function playNotificationSound(
   // 2. Web Audio Oscillator — PRIMARY for web browsers
   const webAudioResult = playWebAudio(type)
 
-  // 3. HTML Audio — supplementary
-  playHtmlAudio(type)
+  // 3. HTML Audio — try even if Web Audio succeeded for richer sound
+  const htmlAudioResult = playHtmlAudio(type)
 
   // 4. Vibration — always try on mobile
   vibrate(type)
 
-  if (webAudioResult) {
-    console.log(`🔊 [Play] ✓ Web Audio played: ${type}`)
+  if (webAudioResult || htmlAudioResult) {
+    console.log(`🔊 [Play] ✓ Sound played: ${type} (webAudio=${webAudioResult}, htmlAudio=${htmlAudioResult})`)
   } else {
-    console.log(`🔊 [Play] Web Audio failed. AudioContext state: ${_ctx?.state || 'not created'}. Need user gesture to unlock.`)
+    console.log(`🔊 [Play] All sound methods failed. AudioContext state: ${_ctx?.state || 'not created'}. Will try on next user gesture.`)
+    // Schedule a retry after a short delay (in case user interacts soon)
+    setTimeout(() => {
+      if (_ctx?.state === 'running') {
+        playWebAudio(type)
+      }
+    }, 1000)
   }
 }
 
@@ -417,14 +424,18 @@ export function initSoundSystem(): void {
   // Pre-create the AudioContext so it's ready to be resumed
   getAudioContext()
 
-  // ─── On first user gesture, resume THE SAME AudioContext ───
+  // ─── On EVERY user gesture, try to resume AudioContext ───
+  // We use { once: false } because the browser can re-suspend the context
+  // after inactivity or tab switch. Each new gesture should try to unlock it.
   const gestureHandler = () => {
-    resumeAudioContext()
+    if (_ctx && _ctx.state === 'suspended') {
+      resumeAudioContext()
+    }
   }
 
   const gestureEvents = ['click', 'touchstart', 'touchend', 'keydown']
   gestureEvents.forEach(event => {
-    document.addEventListener(event, gestureHandler, { passive: true, once: true })
+    document.addEventListener(event, gestureHandler, { passive: true })
   })
 
   // ─── Auto-request Notification permission ───
@@ -460,13 +471,11 @@ export function initSoundSystem(): void {
   // ─── Handle visibility change ───
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden) {
-      // User returned to tab — re-register gesture handlers to resume AudioContext
+      // User returned to tab — try to resume AudioContext immediately
       const ctx = getAudioContext()
       if (ctx && ctx.state === 'suspended') {
-        console.log('🔊 [Visibility] AudioContext suspended after tab switch, will resume on next gesture')
-        gestureEvents.forEach(event => {
-          document.addEventListener(event, gestureHandler, { passive: true, once: true })
-        })
+        console.log('🔊 [Visibility] AudioContext suspended after tab switch, resuming...')
+        ctx.resume().catch(() => {})
       }
     }
   }, { passive: true })
