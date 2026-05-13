@@ -137,22 +137,6 @@
     box-shadow: 0 12px 48px rgba(0, 0, 0, 0.15);
   }
 
-  /* Solid glass with color */
-  .glass-beneficiary {
-    @apply bg-beneficiary-50/70 backdrop-blur-xl border border-beneficiary-200/30;
-    box-shadow: 0 8px 32px rgba(20, 184, 166, 0.15);
-  }
-
-  .glass-nurse {
-    @apply bg-nurse-50/70 backdrop-blur-xl border border-nurse-200/30;
-    box-shadow: 0 8px 32px rgba(59, 130, 246, 0.15);
-  }
-
-  .glass-admin {
-    @apply bg-admin-50/70 backdrop-blur-xl border border-admin-200/30;
-    box-shadow: 0 8px 32px rgba(225, 29, 72, 0.15);
-  }
-
   /* Gradient text */
   .text-gradient {
     @apply bg-clip-text text-transparent;
