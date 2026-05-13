@@ -8,7 +8,7 @@ import {
   Calendar, Star, Filter, MessageSquare, ChevronDown, ChevronUp,
   Mail, Shield, Award, Navigation, Info, Sparkles, AlertTriangle,
   Briefcase, Check, DollarSign, Camera, Upload, Plus, Trash2, Send, Wallet,
-  XCircle, Wrench
+  XCircle, Wrench, Users
 } from 'lucide-react'
 import { useAppStore, formatPrice, getStatusLabel, getStatusColor } from '@/lib/store'
 import { openInMaps, getGPSLocation, searchLocation, extractCoordinates, getDisplayLocation, getMapEmbedUrl, getDirectionsUrl } from '@/lib/location-utils'
