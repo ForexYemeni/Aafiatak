@@ -417,7 +417,6 @@ export default function LandingPage() {
       bgAccent: 'bg-violet-50',
       borderAccent: 'border-violet-200',
       glowColor: 'shadow-violet-500/25',
-      accentColor: 'violet' as const,
     },
     nurse: {
       icon: Stethoscope, label: 'ممرض',
@@ -427,7 +426,6 @@ export default function LandingPage() {
       bgAccent: 'bg-blue-50',
       borderAccent: 'border-blue-200',
       glowColor: 'shadow-blue-500/25',
-      accentColor: 'blue' as const,
     },
     admin: {
       icon: Shield, label: 'مدير',
@@ -437,7 +435,6 @@ export default function LandingPage() {
       bgAccent: 'bg-amber-50',
       borderAccent: 'border-amber-200',
       glowColor: 'shadow-amber-500/25',
-      accentColor: 'amber' as const,
     },
   }
 
