@@ -31,6 +31,7 @@ const AdminChangePassword = dynamic(() => import('@/components/AdminChangePasswo
 const FirebaseSetup = dynamic(() => import('@/components/FirebaseSetup'), { ssr: false, loading: LoadingSpinner })
 const NurseDashboard = dynamic(() => import('@/components/NurseDashboard'), { ssr: false, loading: LoadingSpinner })
 const BeneficiaryDashboard = dynamic(() => import('@/components/BeneficiaryDashboard'), { ssr: false, loading: LoadingSpinner })
+const AssignmentSystem = dynamic(() => import('@/components/AssignmentSystem'), { ssr: false, loading: LoadingSpinner })
 
 const viewComponents: Record<AppView, React.ComponentType> = {
   landing: LandingPage,
@@ -39,6 +40,7 @@ const viewComponents: Record<AppView, React.ComponentType> = {
   'firebase-setup': FirebaseSetup,
   'nurse-dashboard': NurseDashboard,
   'beneficiary-dashboard': BeneficiaryDashboard,
+  assignments: AssignmentSystem,
 }
 
 // ─── Pull-to-Refresh Component ───

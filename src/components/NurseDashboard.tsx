@@ -118,7 +118,7 @@ function getDateKey(timestamp: any): string {
 
 // ==================== Types ====================
 
-type Tab = 'assignments' | 'schedule' | 'ratings' | 'profile' | 'notifications' | 'help' | 'portfolio' | 'earnings'
+type Tab = 'assignments' | 'schedule' | 'tklefat' | 'ratings' | 'profile' | 'notifications' | 'help' | 'portfolio' | 'earnings'
 
 interface Assignment {
   id: string
@@ -214,6 +214,7 @@ interface PortfolioData {
 const tabs: { key: Tab; label: string; icon: any }[] = [
   { key: 'assignments', label: 'المهام', icon: ClipboardList },
   { key: 'schedule', label: 'الجدول', icon: Calendar },
+  { key: 'tklefat', label: 'التكليفات', icon: Users },
   { key: 'portfolio', label: 'ملفي الاحترافي', icon: Briefcase },
   { key: 'earnings', label: 'الأرباح', icon: Wallet },
   { key: 'ratings', label: 'التقييمات', icon: Star },
@@ -691,6 +692,8 @@ export default function NurseDashboard() {
       fetchPortfolio()
     } else if (activeTab === 'earnings') {
       fetchAssignments()
+    } else if (activeTab === 'tklefat') {
+      // Will use AssignmentSystem component - no need to fetch
     }
   }, [activeTab, fetchAssignments, fetchProfile, fetchRatings, fetchAdminSettings, fetchPortfolio])
 
@@ -2837,6 +2840,14 @@ export default function NurseDashboard() {
 
   // ==================== Help Tab ====================
 
+  // ==================== Tklefat Tab (التكليفات) ====================
+
+  const TklefatTab = () => {
+    const AssignmentSystem = require('@/components/AssignmentSystem').default
+    
+    return <AssignmentSystem />
+  }
+
   const HelpTab = () => (
     <div className="space-y-6">
       <div>
@@ -2944,15 +2955,16 @@ export default function NurseDashboard() {
 
   const renderTabContent = () => {
     switch (activeTab) {
-      case 'assignments': return AssignmentsTab()
-      case 'schedule': return ScheduleTab()
-      case 'ratings': return RatingsTab()
-      case 'profile': return ProfileTab()
-      case 'notifications': return NotificationsTab()
-      case 'help': return HelpTab()
-      case 'portfolio': return PortfolioTab()
-      case 'earnings': return EarningsTab()
-      default: return AssignmentsTab()
+      case 'assignments': return <AssignmentsTab />
+      case 'schedule': return <ScheduleTab />
+      case 'ratings': return <RatingsTab />
+      case 'profile': return <ProfileTab />
+      case 'notifications': return <NotificationsTab />
+      case 'help': return <HelpTab />
+      case 'portfolio': return <PortfolioTab />
+      case 'earnings': return <EarningsTab />
+      case 'tklefat': return <TklefatTab />
+      default: return <AssignmentsTab />
     }
   }
 

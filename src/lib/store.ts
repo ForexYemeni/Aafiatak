@@ -10,6 +10,7 @@ export type AppView =
   | 'firebase-setup'
   | 'nurse-dashboard'
   | 'beneficiary-dashboard'
+  | 'assignments'
 
 interface AdminUser {
   id: string
