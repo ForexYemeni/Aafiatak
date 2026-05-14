@@ -121,8 +121,8 @@ export async function POST(request: NextRequest) {
       offeredAmount
     } = body;
 
-    // Validation
-    if (!requesterId || !requesterName || !type || !department || !shiftHours || !gender || !requirements) {
+    // Validation - requirements is now optional
+    if (!requesterId || !requesterName || !type || !department || !shiftHours || !gender) {
       return NextResponse.json({ success: false, error: 'Missing required fields' }, { status: 400 });
     }
 

@@ -68,6 +68,7 @@ export default function AssignmentSystem() {
     notes: '',
     offeredAmount: 10000,
   })
+  const [formErrors, setFormErrors] = useState<string[]>([])
 
   useEffect(() => {
     const user = localStorage.getItem('aafiatak_user')
@@ -98,6 +99,19 @@ export default function AssignmentSystem() {
     e.preventDefault()
     if (!currentUser) return
     
+    // Validation errors
+    const errors: string[] = []
+    if (!form.department) errors.push('يرجى اختيار القسم')
+    if (!form.shiftHours) errors.push('يرجى اختيار ساعات العمل')
+    if (!form.gender) errors.push('يرجى اختيار الجنس المفضل')
+    if (!form.offeredAmount || form.offeredAmount < 5000) errors.push('المبلغ يجب أن يكون 5000 ريال أو أكثر')
+    
+    if (errors.length > 0) {
+      setFormErrors(errors)
+      return
+    }
+    
+    setFormErrors([])
     setSubmitting(true)
     try {
       const res = await fetch('/api/assignments', {
@@ -320,13 +334,28 @@ export default function AssignmentSystem() {
                 </div>
 
                 <form onSubmit={handleSubmit} className="space-y-4">
+                  {/* Validation Errors */}
+                  {formErrors.length > 0 && (
+                    <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                      <ul className="text-sm text-red-600 space-y-1">
+                        {formErrors.map((err, i) => (
+                          <li key={i} className="flex items-center gap-2">
+                            <AlertCircle className="w-4 h-4 shrink-0" />
+                            {err}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">القسم</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">القسم <span className="text-red-500">*</span></label>
                     <select
                       value={form.department}
                       onChange={(e) => setForm({ ...form, department: e.target.value, type: e.target.value.toLowerCase() })}
                       className="w-full p-3 border border-gray-300 rounded-lg input-focus"
                     >
+                      <option value="">اختر القسم...</option>
                       {DEPARTMENTS.map((dept) => (
                         <option key={dept.value} value={dept.value}>
                           {dept.label}
@@ -336,12 +365,13 @@ export default function AssignmentSystem() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">ساعات العمل</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">ساعات العمل <span className="text-red-500">*</span></label>
                     <select
                       value={form.shiftHours}
                       onChange={(e) => setForm({ ...form, shiftHours: parseInt(e.target.value) })}
                       className="w-full p-3 border border-gray-300 rounded-lg input-focus"
                     >
+                      <option value={0}>اختر الساعات...</option>
                       {SHIFT_HOURS.map((shift) => (
                         <option key={shift.value} value={shift.value}>
                           {shift.label}
@@ -351,7 +381,7 @@ export default function AssignmentSystem() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">الجنس المفضل</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">الجنس المفضل <span className="text-red-500">*</span></label>
                     <select
                       value={form.gender}
                       onChange={(e) => setForm({ ...form, gender: e.target.value })}
@@ -366,19 +396,22 @@ export default function AssignmentSystem() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">المطلوبات</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      المطلوبات <span className="text-gray-400 text-xs">(اختياري)</span>
+                    </label>
                     <textarea
                       value={form.requirements}
                       onChange={(e) => setForm({ ...form, requirements: e.target.value })}
-                      placeholder="مثال: خبرة في تركيب القسطرة، رعاية حديثي الولادة..."
+                      placeholder="أي متطلبات خاصة أو خبرات مطلوبة..."
                       rows={3}
                       className="w-full p-3 border border-gray-300 rounded-lg input-focus"
-                      required
                     />
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">ملاحظات</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      ملاحظات <span className="text-gray-400 text-xs">(اختياري)</span>
+                    </label>
                     <textarea
                       value={form.notes}
                       onChange={(e) => setForm({ ...form, notes: e.target.value })}
